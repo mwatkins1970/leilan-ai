@@ -1,0 +1,62 @@
+---
+// WallPanel.astro — one face of the hexagonal prism
+// Props:
+//   wall       — wall number 1–6 (required)
+//   archway    — whether to render the archway SVG (default: false)
+//   bg         — background image src (default: /images/wall-bg.jpg)
+
+interface Props {
+    wall: number;
+    archway?: boolean;
+    bg?: string;
+    bgOverlay?: string;
+    showBorder?: boolean;
+    bgFit?: 'contain' | 'cover';
+}
+
+const { wall, archway = false, bg, bgOverlay, showBorder = true, bgFit = 'contain' } = Astro.props;
+---
+
+<div class="wall-panel" data-wall={wall}>
+    {bg && <img class="wall-bg" src={bg} alt="" loading="eager" decoding="async" style={bgFit === 'cover' ? 'object-fit:cover;object-position:center center' : ''} />}
+    {bgOverlay && <img class="wall-bg-overlay" src={bgOverlay} alt="" loading="eager" decoding="async" />}
+
+    <!-- Per-wall content injected via slot -->
+    <slot />
+
+    {showBorder && <img class="wall-border-overlay" src="/images/wall-border.png" alt="" loading="eager" decoding="async" />}
+
+    {archway && (
+        <svg class="wall-archway" viewBox="0 0 100 100" preserveAspectRatio="xMidYMax meet" xmlns="http://www.w3.org/2000/svg">
+            <path d="M 39.5,100 L 39.5,79.25 A 10.5,10.5 0 0,1 60.5,79.25 L 60.5,100 Z" fill="rgba(2,1,5,0.92)" stroke="url(#serpGrad)" stroke-width="0.5"/>
+        </svg>
+    )}
+
+    <svg class="wall-crenellations" viewBox="0 -100 1600 220" preserveAspectRatio="xMidYMax meet" xmlns="http://www.w3.org/2000/svg">
+        <!--
+            Rim geometry: 5 hex per wall side, but the 2 corner hexes are shared with adjacent walls
+            and rendered as separate corner elements. Each wall renders only the 3 full wedges (middle section).
+            Full wedge W = 1600/3.5 ≈ 457.14.
+            Wedge 1: 114.29–571.43 (peak 342.86)
+            Wedge 2: 571.43–1028.57 (peak 800)
+            Wedge 3: 1028.57–1485.71 (peak 1257.14)
+        -->
+        <!-- Full wedge bottom triangles -->
+        <polygon points="114.29,120 342.86,90 571.43,120" fill="url(#crenTriFill)" stroke="none"/>
+        <polygon points="571.43,120 800,90 1028.57,120" fill="url(#crenTriFill)" stroke="none"/>
+        <polygon points="1028.57,120 1257.14,90 1485.71,120" fill="url(#crenTriFill)" stroke="none"/>
+        <!-- Full wedge left faces -->
+        <polygon points="114.29,120 342.86,90 342.86,-80 114.29,-80" fill="url(#crenTrapWhite)" stroke="none"/>
+        <polygon points="571.43,120 800,90 800,-80 571.43,-80" fill="url(#crenTrapSlightShadow)" stroke="none"/>
+        <polygon points="1028.57,120 1257.14,90 1257.14,-80 1028.57,-80" fill="url(#crenTrapShadow)" stroke="none"/>
+        <!-- Full wedge right faces -->
+        <polygon points="342.86,90 571.43,120 571.43,-80 342.86,-80" fill="url(#crenTrapShadow)" stroke="none"/>
+        <polygon points="798,90 1028.57,120 1028.57,-80 798,-80" fill="url(#crenTrapWhite)" stroke="none"/>
+        <polygon points="1255.14,90 1485.71,120 1485.71,-80 1255.14,-80" fill="url(#crenTrapWhite)" stroke="none"/>
+        <!-- Corner panels — extended to overlap at wall edges -->
+        <polygon points="-114.29,-95 -114.29,105 114.29,120 114.29,-80" fill="url(#crenTrapSlightShadow)" stroke="none"/>
+        <polygon points="-114.29,105 -114.29,120 114.29,120" fill="url(#crenTrapShadow)" stroke="none"/>
+        <polygon points="1485.71,-80 1485.71,120 1714.29,105 1714.29,-95" fill="url(#crenTrapSlightShadow)" stroke="none"/>
+        <polygon points="1485.71,120 1714.29,120 1714.29,105" fill="url(#crenTrapShadow)" stroke="none"/>
+    </svg>
+</div>

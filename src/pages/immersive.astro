@@ -1,0 +1,2874 @@
+---
+// Immersive 3D Experience
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Immersive Experience</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400&display=swap" rel="stylesheet">
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000000;
+            height: 100vh;
+        }
+        #sky-canvas {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+        }
+        #webgl-canvas {
+            position: fixed;
+            inset: 0;
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+        /* Fade overlay for transition to prism pages */
+        #fade-overlay {
+            position: fixed;
+            inset: 0;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 999;
+    </style>
+</head>
+<body>
+    <canvas id="sky-canvas"></canvas>
+    <canvas id="webgl-canvas"></canvas>
+    <div id="fade-overlay"></div>
+    <script type="module">
+        import * as THREE from 'three';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+        import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        // Background: null (transparent) — 2D sky canvas renders behind WebGL
+        scene.fog = new THREE.FogExp2(0x0a0a0e, 0.025); // soft exponential fade
+
+        // Renderer
+        const canvas = document.getElementById('webgl-canvas');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.1;
+        renderer.setClearColor(0x000000, 0); // transparent clear for sky canvas behind
+
+        // Soft marzipan lighting
+        scene.add(new THREE.AmbientLight(0xE8DCD0, 0.6));
+        const sunLight = new THREE.DirectionalLight(0xFFF0E0, 0.8);
+        sunLight.position.set(3, 8, 2);
+        scene.add(sunLight);
+
+        // Camera - positioned to view hexagons in lower half of screen
+        const camera = new THREE.PerspectiveCamera(
+            60,
+            canvas.clientWidth / canvas.clientHeight,
+            0.1,
+            1000
+        );
+        camera.position.set(0, 9, 3);
+        camera.lookAt(0, 0, -13);
+
+        // Post-processing: FXAA (cheaper than MSAA) + CAS sharpen
+        const composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
+
+        const fxaaPass = new ShaderPass(FXAAShader);
+        fxaaPass.uniforms['resolution'].value.set(
+            1 / (canvas.clientWidth * window.devicePixelRatio),
+            1 / (canvas.clientHeight * window.devicePixelRatio)
+        );
+        composer.addPass(fxaaPass);
+
+        const CASShader = {
+            uniforms: {
+                tDiffuse: { value: null },
+                resolution: { value: new THREE.Vector2() },
+                sharpness: { value: 0.2 }
+            },
+            vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+            fragmentShader: `
+                uniform sampler2D tDiffuse;
+                uniform vec2 resolution;
+                uniform float sharpness;
+                varying vec2 vUv;
+                vec3 linearToSRGB(vec3 v) {
+                    return mix(v * 12.92, 1.055 * pow(v, vec3(1.0/2.4)) - 0.055, step(0.0031308, v));
+                }
+                void main() {
+                    vec2 tx = 1.0 / resolution;
+                    vec3 c = texture2D(tDiffuse, vUv).rgb;
+                    vec3 t = texture2D(tDiffuse, vUv + vec2(0, tx.y)).rgb;
+                    vec3 b = texture2D(tDiffuse, vUv - vec2(0, tx.y)).rgb;
+                    vec3 l = texture2D(tDiffuse, vUv - vec2(tx.x, 0)).rgb;
+                    vec3 r = texture2D(tDiffuse, vUv + vec2(tx.x, 0)).rgb;
+                    vec3 blur = (t + b + l + r) * 0.25;
+                    vec3 sharp = clamp(c + (c - blur) * sharpness, 0.0, 1.0);
+                    gl_FragColor = vec4(linearToSRGB(sharp), texture2D(tDiffuse, vUv).a);
+                }
+            `
+        };
+        const sharpenPass = new ShaderPass(CASShader);
+        sharpenPass.uniforms['resolution'].value.set(
+            canvas.clientWidth * window.devicePixelRatio,
+            canvas.clientHeight * window.devicePixelRatio
+        );
+        composer.addPass(sharpenPass);
+
+        // Hexagon geometry helper - creates flat-top hexagon for perfect tessellation
+        function createHexagonPoints(centerX, centerZ, size) {
+            const points = [];
+            // Start at π/6 (30°) for flat-top hexagons
+            for (let i = 0; i < 6; i++) {
+                const angle = (Math.PI / 3) * i + (Math.PI / 6);
+                const x = centerX + size * Math.cos(angle);
+                const z = centerZ + size * Math.sin(angle);
+                points.push(new THREE.Vector3(x, 0, z)); // Flat on XZ plane at y=0
+            }
+            points.push(points[0].clone()); // Close the hexagon
+            return points;
+        }
+
+        // Generate hexagonal grid positions with perfect tessellation
+        function generateHexGrid(rows, cols, hexSize) {
+            const hexagons = [];
+            const hexWidth = hexSize * Math.sqrt(3); // Horizontal spacing (flat-to-flat distance)
+            const hexHeight = hexSize * 1.5; // Vertical spacing between rows
+
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    const xOffset = (row % 2) * (hexWidth / 2); // Offset odd rows horizontally
+                    const x = col * hexWidth + xOffset - (cols * hexWidth / 2); // Center horizontally
+                    const z = -row * hexHeight - 2; // Start close and go back into distance
+
+                    hexagons.push({
+                        x,
+                        z,
+                        row,
+                        col,
+                        state: 'undrawn', // undrawn, drawing, complete
+                        progress: 0,
+                        line: null,
+                        flickerOffset: Math.random() * Math.PI * 2
+                    });
+                }
+            }
+
+            return hexagons;
+        }
+
+        const hexSize = 0.5;
+        const hexagons = generateHexGrid(35, 45, hexSize);
+
+        // Sort hexagons by radial distance from center-front for a smooth wave expansion
+        const waveCenterX = 0;
+        const waveCenterZ = -2; // front of the grid
+        hexagons.sort((a, b) => {
+            const distA = Math.sqrt((a.x - waveCenterX) ** 2 + (a.z - waveCenterZ) ** 2);
+            const distB = Math.sqrt((b.x - waveCenterX) ** 2 + (b.z - waveCenterZ) ** 2);
+            return distA - distB;
+        });
+
+        // Build hex lookup for region identification
+        const hexLookup = new Map();
+        hexagons.forEach(hex => {
+            hexLookup.set(`${hex.row},${hex.col}`, hex);
+        });
+
+        // Drawing state
+        let currentHexIndex = 0;
+        const drawSpeed = 0.08;
+        const hexesPerFrame = 6;
+        let frameCounter = 0;
+        const startTime = Date.now() * 0.001;
+
+        // Playback control
+        let paused = false;
+        let animTime = 0;
+        let lastRealTime = Date.now() * 0.001;
+
+        // --- Which archway brought us here (0 = first visit from landing page) ---
+        const fromWall = parseInt(new URL(location.href).searchParams.get('from')) || 0;
+        const isReturn = fromWall >= 2 && fromWall <= 6;
+        const destUrl = new URL(location.href).searchParams.get('dest') || '/prism/main';
+        const CODE_VERSION = 15;
+        console.log('[immersive] CODE_VERSION=' + CODE_VERSION + ' fromWall=' + fromWall + ' isReturn=' + isReturn + ' dest=' + destUrl);
+
+        // Map prism IDs to the wall they connect through (for multi-prism display)
+        const CHAMBER_WALLS = {
+            'research-lab': 2,
+            'art-gallery': 3,
+            'gpt3-library': 4,
+            'ovs-chapel': 5,
+            'mythopoeic-archive': 6,
+        };
+        const visitedChamberIds = Object.keys(CHAMBER_WALLS).filter(
+            id => sessionStorage.getItem('visited_prism_' + id)
+        );
+
+        // Second prism center offsets: 2*PRISM_RADIUS hex steps in each direction
+        // from an even-row center (row 14). Maps wall number → [Δrow, Δcol].
+        // Offsets map wall number → [Δrow, Δcol] for adjacent prism center.
+        // Grid: higher row = more negative z = further from camera (north in bird's eye).
+        // Cube-distance 8 = 2×PRISM_RADIUS → shared flat wall, no gap.
+        const WALL_DIRECTIONS = {
+            2: [+4, +6],  //  2 o'clock (NE) ← Research Lab (was on wall 6, swapped)
+            3: [-4, +6],  //  SE — Art Gallery (face-centred direction for shared wall)
+            4: [-8,  0],  //  S — Poetry (face-centred direction for shared wall)
+            5: [-4, -6],  //  SW ← OVS Chapel (face-centred direction for shared wall)
+            6: [+4, -6],  //  NW — Mythos (face-centred direction for shared wall)
+        };
+
+        // Hex grid drawing state
+        let gridComplete = false;
+        let completedCount = 0;
+
+        // Prism constants
+        const PRISM_CENTER_ROW = 14;
+        const PRISM_CENTER_COL = 22;
+        const PRISM_RADIUS = 4;
+        const PRISM_RISE_HEIGHT = 3.0;
+        const PRISM_DELAY = 2;
+        const HIGHLIGHT_DURATION = 4.0;
+        const RISE_DURATION = 6.0;
+        const TARDIS_SCALE = 5.0;
+
+        // --- Prism state factory ---
+        // Each prism gets its own state so the same build/animate functions can
+        // drive both without global variable collisions.
+        function makePrismState(centerRow, centerCol) {
+            return {
+                centerRow, centerCol,
+                centerXZ: null,     // THREE.Vector2 world pos — set after hex lookup ready
+                wallMat: null,      // ShaderMaterial (unique uPrismCenter per prism)
+                capMat: null,       // ShaderMaterial (unique uPrismCenter + uPatternScale per prism)
+                sharedHexSet: null, // hexSet of the OTHER prism — suppresses shared wall
+                regionHexes: null, hexSet: null, edges: null,
+                wallMesh: null, wallpaperMesh: null, rimOutlines: null, hingeLines: null,
+                capMesh: null, capHalo: null, groundGlow: null,
+                phase: 'waiting', phaseStartTime: 0,
+                gridCompleteTime: 0,
+            };
+        }
+
+        const prism1 = makePrismState(PRISM_CENTER_ROW, PRISM_CENTER_COL);
+        const extraPrisms = [];    // all non-central prisms (visited + entering)
+        let enteringPrism = null;  // the one that animates; others are static
+
+        // Reusable color objects (avoid per-frame allocations)
+        const highlightWarm = new THREE.Color(0xFFE8D0);
+        const highlightWhite = new THREE.Color(0xFFF8F0);
+        const tempColor = new THREE.Color();
+
+        // Fade overlay for transition
+        const fadeOverlay = document.getElementById('fade-overlay');
+        let fadeStarted = false;
+
+        // Hex outline glow colours (soft, warm)
+        const glowOuter = new THREE.Color(0xD4C8A0);  // muted warm gold
+        const glowInner = new THREE.Color(0xE8DCC0);  // soft cream
+
+        // (Sub-grid instanced mesh removed — the serpentine shader plane
+        //  already provides the hexagonal plasma visual at near-zero CPU cost)
+
+        // Serpentine shader plane (bottom layer — from other Claude's prototype)
+        const serpentVertex = `
+            varying vec3 vWorldPos;
+            void main() {
+                vec4 worldPos = modelMatrix * vec4(position, 1.0);
+                vWorldPos = worldPos.xyz;
+                gl_Position = projectionMatrix * viewMatrix * worldPos;
+            }
+        `;
+
+        const serpentFragment = `
+            precision highp float;
+            uniform float uTime;
+            uniform float uRevealRadius;
+            uniform float uGlobalAlpha;
+            uniform vec2 uGridOffset;
+            // Un-scaling: when the entering prism is TARDIS-scaling, the floor pattern
+            // is sampled in un-scaled world space (around uPrismCenter) so its hex
+            // cells stretch in lockstep with the chamber. uPatternScale = 1.0 disables.
+            uniform vec2 uPrismCenter;
+            uniform float uPatternScale;
+
+            varying vec3 vWorldPos;
+
+            vec4 hexCoord(vec2 p, float scale) {
+                p *= scale;
+                vec2 r = vec2(1.0, 1.732);
+                vec2 h = r * 0.5;
+                vec2 a = mod(p, r) - h;
+                vec2 b = mod(p - h, r) - h;
+                vec2 gv = (length(a) < length(b)) ? a : b;
+                vec2 id = p - gv;
+                return vec4(id, length(gv), 0.0);
+            }
+
+            vec2 warp(vec2 p, float t) {
+                float wx = sin(p.y * 0.4 + t * 0.3) * 1.5 + cos(p.x * 0.3 - t * 0.2) * 1.2;
+                float wy = cos(p.x * 0.35 + t * 0.25) * 1.5 + sin(p.y * 0.45 - t * 0.15) * 1.0;
+                return p + vec2(wx, wy);
+            }
+
+            float spiral(vec2 p, vec2 center, float t, float dir) {
+                vec2 d = p - center;
+                float r = length(d);
+                float a = atan(d.y, d.x);
+                return sin(a * 3.0 + r * 2.5 * dir - t * 1.2);
+            }
+
+            float snakes(vec2 p, float t) {
+                float v = 0.0;
+                vec2 c1 = vec2(sin(t * 0.13) * 6.0, cos(t * 0.17) * 5.0);
+                vec2 c2 = vec2(cos(t * 0.11) * 7.0, sin(t * 0.14) * 6.0);
+                vec2 c3 = vec2(sin(t * 0.19 + 2.0) * 5.0, cos(t * 0.12 + 1.0) * 7.0);
+                vec2 c4 = vec2(cos(t * 0.16 + 3.5) * 4.0, sin(t * 0.21 + 2.5) * 5.0);
+
+                v += spiral(p, c1, t, 1.0) * 0.8;
+                v += spiral(p, c2, t * 1.1, -1.0) * 0.7;
+                v += spiral(p, c3, t * 0.9, 1.5) * 0.6;
+                v += spiral(p, c4, t * 1.2, -0.8) * 0.5;
+
+                float s1 = sin(p.x * 0.8 + sin(p.y * 0.5 + t * 0.4) * 2.0 + t * 0.3);
+                float s2 = sin(p.y * 0.7 + sin(p.x * 0.6 - t * 0.35) * 1.8 - t * 0.25);
+                float s3 = sin((p.x + p.y) * 0.5 + sin((p.x - p.y) * 0.4 + t * 0.3) * 2.2);
+                float s4 = sin(length(p) * 0.9 - t * 0.5 + sin(atan(p.y, p.x) * 2.0 + t * 0.2) * 1.5);
+
+                v += s1 * 0.6;
+                v += s2 * 0.6;
+                v += s3 * 0.5;
+                v += s4 * 0.4;
+
+                return v;
+            }
+
+            // 5 colour phases, each defined by 3 key colours (lo/mid/hi)
+            void getPhaseColors(int idx, out vec3 lo, out vec3 mid, out vec3 hi) {
+                if (idx == 0) { // PINK — hot pinks, neon magentas, pastel blush
+                    lo  = vec3(0.85, 0.1, 0.5);
+                    mid = vec3(1.0, 0.35, 0.65);
+                    hi  = vec3(1.0, 0.7, 0.85);
+                } else if (idx == 1) { // PURPLE — deep violet, electric indigo, lavender
+                    lo  = vec3(0.35, 0.05, 0.6);
+                    mid = vec3(0.6, 0.2, 0.9);
+                    hi  = vec3(0.8, 0.6, 1.0);
+                } else if (idx == 2) { // OCEANIC BLUE — deep sea, teal, aquamarine
+                    lo  = vec3(0.02, 0.15, 0.45);
+                    mid = vec3(0.1, 0.55, 0.7);
+                    hi  = vec3(0.35, 0.85, 1.0);
+                } else if (idx == 3) { // ALIEN GREEN — dark bioluminescent, toxic neon, pale glow
+                    lo  = vec3(0.0, 0.3, 0.08);
+                    mid = vec3(0.15, 0.85, 0.25);
+                    hi  = vec3(0.55, 1.0, 0.65);
+                } else if (idx == 4) { // GOLD/PEARL — deep gold, champagne, iridescent pearl
+                    lo  = vec3(0.55, 0.4, 0.08);
+                    mid = vec3(0.85, 0.7, 0.3);
+                    hi  = vec3(1.0, 0.95, 0.8);
+                } else { // PEACH/RUST — warm terracotta, peach, light peach cream
+                    lo  = vec3(0.55, 0.22, 0.1);
+                    mid = vec3(0.9, 0.55, 0.35);
+                    hi  = vec3(1.0, 0.82, 0.7);
+                }
+            }
+
+            void main() {
+                vec2 worldPos = vWorldPos.xz;
+                // Global un-scale around prism center. When TARDIS engages, the entire
+                // floor pattern stretches outward in lockstep with the chamber, so the
+                // wall base sits over the same hex tile of the pattern at every frame
+                // of the dive — no perceived separation between wall base and floor.
+                // uPatternScale = 1.0 (default) reduces this to plain world sampling.
+                vec2 unscaledXZ = uPrismCenter + (worldPos - uPrismCenter) * uPatternScale;
+                vec2 pos = unscaledXZ - uGridOffset;
+
+                float hexScale = 3.4641;
+                vec4 hex = hexCoord(pos, hexScale);
+                vec2 cellCenter = hex.xy / hexScale;
+                float t = uTime;
+
+                vec2 warped = warp(cellCenter, t);
+                float v = snakes(warped, t);
+
+                float band = sin(v * 3.14159) * 0.5 + 0.5;
+                band = pow(band, 0.7);
+
+                // Phase timing: ~2.5s per phase, ~15s full cycle (see all 6 phases before camera moves past)
+                float phaseDur = 2.5;
+                float totalCycle = phaseDur * 6.0;
+                float globalTime = mod(t, totalCycle);
+                float rawPhase = globalTime / phaseDur;
+
+                // Current and next phase indices
+                float f0 = floor(rawPhase);
+                float f1 = mod(f0 + 1.0, 6.0);
+                int idx0 = int(mod(f0, 6.0));
+                int idx1 = int(mod(f1, 6.0));
+
+                // Hold for first 35%, then roll transition evenly across the field
+                float intraPhase = fract(rawPhase);
+                float holdEnd = 0.35;
+                float transWindow = 1.0 - holdEnd;
+
+                // Spatial wave: normalize hex position along wave direction to [0,1]
+                float phaseAngle = f0 * 1.2566;
+                vec2 waveDir = vec2(cos(phaseAngle), sin(phaseAngle));
+                float spatialNorm = clamp(dot(cellCenter, waveDir) * 0.035 + 0.5, 0.0, 1.0);
+
+                // Each hex transitions over ~25% of phase, staggered across space
+                float hexTransDur = 0.25;
+                float staggerRange = transWindow - hexTransDur;
+                float hexStart = holdEnd + spatialNorm * staggerRange;
+                float blend = smoothstep(hexStart, hexStart + hexTransDur, intraPhase);
+
+                // Sample phase colours (3-colour gradient per phase)
+                vec3 lo0, mid0, hi0, lo1, mid1, hi1;
+                getPhaseColors(idx0, lo0, mid0, hi0);
+                getPhaseColors(idx1, lo1, mid1, hi1);
+
+                // Snake pattern drives within-phase colour variation (lo → mid → hi)
+                float colorT = band;
+                float tLo = clamp(colorT * 2.0, 0.0, 1.0);
+                float tHi = clamp((colorT - 0.5) * 2.0, 0.0, 1.0);
+                vec3 c0 = mix(mix(lo0, mid0, tLo), hi0, tHi);
+                vec3 c1 = mix(mix(lo1, mid1, tLo), hi1, tHi);
+                vec3 col = mix(c0, c1, blend);
+
+                // Gentle saturation boost
+                float grey = dot(col, vec3(0.299, 0.587, 0.114));
+                col = mix(vec3(grey), col, 1.4);
+
+                // Black trails following the snake/spiral patterns
+                float blackTrail = v * 0.3 + sin(cellCenter.x * 1.5 + cellCenter.y * 2.3 + t * 0.4) * 0.5;
+                float blackMask = sin(blackTrail * 4.0 + t * 0.6);
+                if (blackMask > 0.55) {
+                    col *= 0.04;
+                }
+
+                // Subtle hex-cell edge shading
+                float edgeDist = hex.z;
+                float hexRadius = 0.5;
+                float edgeHint = smoothstep(hexRadius * 0.85, hexRadius * 0.6, edgeDist);
+                col *= 0.95 + edgeHint * 0.05;
+
+                float dist = length(worldPos - vec2(0.0, -14.0));
+                float fade = 1.0 - smoothstep(12.0, 25.0, dist);
+
+                float revealDist = length(worldPos - vec2(0.0, -2.0));
+                float reveal = 1.0 - smoothstep(uRevealRadius - 1.5, uRevealRadius, revealDist);
+
+                col *= reveal;
+                // Fade to opaque black (not transparent) so the sky canvas never shows through
+                float baseAlpha = fade * reveal;
+                float a = max(baseAlpha, 1.0 - uGlobalAlpha);
+                gl_FragColor = vec4(col * uGlobalAlpha, a);
+            }
+        `;
+
+        const serpentGeo = new THREE.PlaneGeometry(50, 40, 1, 1);
+        const serpentMat = new THREE.ShaderMaterial({
+            vertexShader: serpentVertex,
+            fragmentShader: serpentFragment,
+            uniforms: {
+                uTime: { value: 0.0 },
+                uRevealRadius: { value: 0.0 },
+                uGridOffset: { value: new THREE.Vector2(0, 0) },
+                uGlobalAlpha: { value: 1.0 },
+                uPrismCenter: { value: new THREE.Vector2(0, 0) },
+                uPatternScale: { value: 1.0 }
+            },
+            transparent: true,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+        const serpentPlane = new THREE.Mesh(serpentGeo, serpentMat);
+        serpentPlane.rotation.x = -Math.PI / 2;
+        serpentPlane.position.set(0, -0.005, -14);
+        scene.add(serpentPlane);
+
+        // Align shader sub-hex grid with the main hex grid
+        // Use an even-row hex center as the alignment reference
+        const refHex = hexagons.find(h => h.row % 2 === 0);
+        if (refHex) {
+            serpentMat.uniforms.uGridOffset.value.set(refHex.x, refHex.z);
+        }
+
+        // --- Cap serpentine overlay: same pattern as floor, no reveal, semi-transparent ---
+        const capSerpentFragment = `
+            precision highp float;
+            uniform float uTime;
+            uniform vec2 uGridOffset;
+            // Un-scale sampling position relative to prism center so the cap pattern
+            // stays locked to the cap's hex cells when the prism TARDIS-scales.
+            uniform vec2 uPrismCenter;
+            uniform float uPatternScale;
+            varying vec3 vWorldPos;
+
+            vec4 hexCoord(vec2 p, float scale) {
+                p *= scale;
+                vec2 r = vec2(1.0, 1.732);
+                vec2 h = r * 0.5;
+                vec2 a = mod(p, r) - h;
+                vec2 b = mod(p - h, r) - h;
+                vec2 gv = (length(a) < length(b)) ? a : b;
+                vec2 id = p - gv;
+                return vec4(id, length(gv), 0.0);
+            }
+            vec2 warp(vec2 p, float t) {
+                float wx = sin(p.y * 0.4 + t * 0.3) * 1.5 + cos(p.x * 0.3 - t * 0.2) * 1.2;
+                float wy = cos(p.x * 0.35 + t * 0.25) * 1.5 + sin(p.y * 0.45 - t * 0.15) * 1.0;
+                return p + vec2(wx, wy);
+            }
+            float spiral(vec2 p, vec2 center, float t, float dir) {
+                vec2 d = p - center;
+                float r = length(d);
+                float a = atan(d.y, d.x);
+                return sin(a * 3.0 + r * 2.5 * dir - t * 1.2);
+            }
+            float snakes(vec2 p, float t) {
+                float v = 0.0;
+                vec2 c1 = vec2(sin(t * 0.13) * 6.0, cos(t * 0.17) * 5.0);
+                vec2 c2 = vec2(cos(t * 0.11) * 7.0, sin(t * 0.14) * 6.0);
+                vec2 c3 = vec2(sin(t * 0.19 + 2.0) * 5.0, cos(t * 0.12 + 1.0) * 7.0);
+                vec2 c4 = vec2(cos(t * 0.16 + 3.5) * 4.0, sin(t * 0.21 + 2.5) * 5.0);
+                v += spiral(p, c1, t, 1.0) * 0.8;
+                v += spiral(p, c2, t * 1.1, -1.0) * 0.7;
+                v += spiral(p, c3, t * 0.9, 1.5) * 0.6;
+                v += spiral(p, c4, t * 1.2, -0.8) * 0.5;
+                v += sin(p.x * 0.8 + sin(p.y * 0.5 + t * 0.4) * 2.0 + t * 0.3) * 0.6;
+                v += sin(p.y * 0.7 + sin(p.x * 0.6 - t * 0.35) * 1.8 - t * 0.25) * 0.6;
+                v += sin((p.x + p.y) * 0.5 + sin((p.x - p.y) * 0.4 + t * 0.3) * 2.2) * 0.5;
+                v += sin(length(p) * 0.9 - t * 0.5 + sin(atan(p.y, p.x) * 2.0 + t * 0.2) * 1.5) * 0.4;
+                return v;
+            }
+            void getPhaseColors(int idx, out vec3 lo, out vec3 mid, out vec3 hi) {
+                if (idx == 0) { lo = vec3(0.85,0.1,0.5); mid = vec3(1.0,0.35,0.65); hi = vec3(1.0,0.7,0.85); }
+                else if (idx == 1) { lo = vec3(0.35,0.05,0.6); mid = vec3(0.6,0.2,0.9); hi = vec3(0.8,0.6,1.0); }
+                else if (idx == 2) { lo = vec3(0.02,0.15,0.45); mid = vec3(0.1,0.55,0.7); hi = vec3(0.35,0.85,1.0); }
+                else if (idx == 3) { lo = vec3(0.0,0.3,0.08); mid = vec3(0.15,0.85,0.25); hi = vec3(0.55,1.0,0.65); }
+                else if (idx == 4) { lo = vec3(0.55,0.4,0.08); mid = vec3(0.85,0.7,0.3); hi = vec3(1.0,0.95,0.8); }
+                else { lo = vec3(0.55,0.22,0.1); mid = vec3(0.9,0.55,0.35); hi = vec3(1.0,0.82,0.7); }
+            }
+            void main() {
+                vec2 worldPos = vWorldPos.xz;
+                vec2 unscaled = uPrismCenter + (worldPos - uPrismCenter) * uPatternScale;
+                vec2 pos = unscaled - uGridOffset;
+                float hexScale = 3.4641;
+                vec4 hex = hexCoord(pos, hexScale);
+                vec2 cellCenter = hex.xy / hexScale;
+                float t = uTime;
+                vec2 warped = warp(cellCenter, t);
+                float v = snakes(warped, t);
+                float band = pow(sin(v * 3.14159) * 0.5 + 0.5, 0.7);
+                float phaseDur = 2.5;
+                float totalCycle = phaseDur * 6.0;
+                float globalTime = mod(t, totalCycle);
+                float rawPhase = globalTime / phaseDur;
+                float f0 = floor(rawPhase);
+                float f1 = mod(f0 + 1.0, 6.0);
+                int idx0 = int(mod(f0, 6.0));
+                int idx1 = int(mod(f1, 6.0));
+                float intraPhase = fract(rawPhase);
+                float holdEnd = 0.35;
+                float phaseAngle = f0 * 1.2566;
+                vec2 waveDir = vec2(cos(phaseAngle), sin(phaseAngle));
+                float spatialNorm = clamp(dot(cellCenter, waveDir) * 0.035 + 0.5, 0.0, 1.0);
+                float hexStart = holdEnd + spatialNorm * (1.0 - holdEnd - 0.25);
+                float blend = smoothstep(hexStart, hexStart + 0.25, intraPhase);
+                vec3 lo0, mid0, hi0, lo1, mid1, hi1;
+                getPhaseColors(idx0, lo0, mid0, hi0);
+                getPhaseColors(idx1, lo1, mid1, hi1);
+                float colorT = band;
+                float tLo = clamp(colorT * 2.0, 0.0, 1.0);
+                float tHi = clamp((colorT - 0.5) * 2.0, 0.0, 1.0);
+                vec3 c0 = mix(mix(lo0, mid0, tLo), hi0, tHi);
+                vec3 c1 = mix(mix(lo1, mid1, tLo), hi1, tHi);
+                vec3 col = mix(c0, c1, blend);
+                float grey = dot(col, vec3(0.299, 0.587, 0.114));
+                col = mix(vec3(grey), col, 1.4);
+                float blackTrail = v * 0.3 + sin(cellCenter.x * 1.5 + cellCenter.y * 2.3 + t * 0.4) * 0.5;
+                float blackMask = sin(blackTrail * 4.0 + t * 0.6);
+                if (blackMask > 0.55) { col *= 0.04; }
+                float edgeDist = hex.z;
+                float hexRadius = 0.5;
+                float edgeHint = smoothstep(hexRadius * 0.85, hexRadius * 0.6, edgeDist);
+                col *= 0.95 + edgeHint * 0.05;
+                gl_FragColor = vec4(col, 1.0);
+            }
+        `;
+        // Shared time uniform so all per-prism cap materials advance in sync from one
+        // central uTime update each frame.
+        const capSharedTime = { value: 0.0 };
+
+        function makeCapMat(centerXZ) {
+            return new THREE.ShaderMaterial({
+                vertexShader: serpentVertex,
+                fragmentShader: capSerpentFragment,
+                uniforms: {
+                    uTime: capSharedTime,
+                    uGridOffset: serpentMat.uniforms.uGridOffset,
+                    uPrismCenter: { value: new THREE.Vector2(centerXZ ? centerXZ.x : 0, centerXZ ? centerXZ.y : 0) },
+                    uPatternScale: { value: 1.0 }
+                },
+                transparent: true,
+                side: THREE.DoubleSide,
+                depthWrite: false,
+                polygonOffset: true,
+                polygonOffsetFactor: -1,
+                polygonOffsetUnits: -1
+            });
+        }
+
+        // Inner walls use vertex colors from createPrismWalls (dark greyscale); no wallpaper texture needed
+        const wallpaperReady = false;
+
+        // Prism center hex world positions (computed after grid generation)
+        {
+            const ph1 = hexLookup.get(`${prism1.centerRow},${prism1.centerCol}`);
+            prism1.centerXZ = ph1
+                ? new THREE.Vector2(ph1.x, ph1.z)
+                : new THREE.Vector2(0, -14);
+        }
+        // Kept for wallpaper UV sorting (used inside createPrismWallpaper)
+        const prismCenterXZ = prism1.centerXZ;
+
+        // Set up extra prisms for return visits
+        if (isReturn) {
+            // The entering chamber (animates rising)
+            const [dr, dc] = WALL_DIRECTIONS[fromWall];
+            const p2row = PRISM_CENTER_ROW + dr;
+            const p2col = PRISM_CENTER_COL + dc;
+            enteringPrism = makePrismState(p2row, p2col);
+            enteringPrism.gridCompleteTime = startTime;
+            const ph2 = hexLookup.get(`${p2row},${p2col}`);
+            enteringPrism.centerXZ = ph2
+                ? new THREE.Vector2(ph2.x, ph2.z)
+                : new THREE.Vector2(prism1.centerXZ.x + dr * 0.866, prism1.centerXZ.y + dc * 0.75);
+            console.log('[immersive] enteringPrism row=' + p2row + ' col=' + p2col + ' worldX=' + enteringPrism.centerXZ.x.toFixed(2) + ' worldZ=' + enteringPrism.centerXZ.y.toFixed(2) + ' hexFound=' + !!ph2);
+            extraPrisms.push(enteringPrism);
+
+            // Static prisms for previously visited chambers (already fully risen)
+            visitedChamberIds.forEach(id => {
+                const wallNum = CHAMBER_WALLS[id];
+                if (wallNum === fromWall) return; // already the entering prism
+                if (!WALL_DIRECTIONS[wallNum]) return;
+                const [vdr, vdc] = WALL_DIRECTIONS[wallNum];
+                const vrow = PRISM_CENTER_ROW + vdr;
+                const vcol = PRISM_CENTER_COL + vdc;
+                const vp = makePrismState(vrow, vcol);
+                vp.gridCompleteTime = startTime;
+                const vph = hexLookup.get(`${vrow},${vcol}`);
+                vp.centerXZ = vph
+                    ? new THREE.Vector2(vph.x, vph.z)
+                    : new THREE.Vector2(prism1.centerXZ.x + vdr * 0.866, prism1.centerXZ.y + vdc * 0.75);
+                vp._isStatic = true;
+                extraPrisms.push(vp);
+            });
+        }
+
+        // --- Sky: direct 2D canvas behind transparent WebGL (matches prism page night sky exactly) ---
+        const skyCanvasEl = document.getElementById('sky-canvas');
+        const skyCtx = skyCanvasEl.getContext('2d');
+        scene.background = null; // transparent — 2D sky canvas shows through
+
+        // Day/night from sessionStorage (set by landing page toggle)
+        const skyIsNight = sessionStorage.getItem('skyMode') !== 'day';
+
+        // Day clouds (matching prism.js)
+        const skyClouds = [];
+        for (let i = 0; i < 12; i++) {
+            skyClouds.push({
+                x: Math.random(),
+                y: 0.15 + Math.random() * 0.7,
+                speed: 0.003 + Math.random() * 0.005,
+                size: 20 + Math.random() * 40,
+                opacity: 0.3 + Math.random() * 0.4,
+                blobs: 3 + Math.floor(Math.random() * 3),
+            });
+        }
+
+        // Star symbols — all distinct celestial unicode shapes
+        const starSymbols = ['✧', '✦', '⋆', '✶', '✴', '✹', '⊹', '✵', '✷', '☆', '★'];
+        // Night palette (identical to prism page)
+        const skyPalette = [
+            [220, 225, 235], [235, 232, 240],
+            [255, 180, 210], [204, 153, 255],
+            [140, 210, 245], [160, 240, 185],
+            [255, 242, 204], [255, 209, 179],
+        ];
+
+        // Stars: 45 large + 35 small (matching prism page non-sky view)
+        const skyStars = [];
+        for (let i = 0; i < 45; i++) {
+            skyStars.push({
+                x: Math.random(), y: Math.random(),
+                sym: starSymbols[Math.floor(Math.random() * starSymbols.length)],
+                phase: Math.random() * Math.PI * 2,
+                speed: 0.5 + Math.random() * 0.8,
+                size: 12 + Math.random() * 12,
+                lifeT: Math.random() * 10,
+                lifeDur: 4 + Math.random() * 8,
+                palIdx: Math.floor(Math.random() * skyPalette.length)
+            });
+        }
+        for (let i = 0; i < 35; i++) {
+            skyStars.push({
+                x: Math.random(), y: Math.random(),
+                sym: starSymbols[Math.floor(Math.random() * starSymbols.length)],
+                phase: Math.random() * Math.PI * 2,
+                speed: 0.6 + Math.random() * 1.0,
+                size: 5 + Math.random() * 4,
+                lifeT: Math.random() * 10,
+                lifeDur: 3 + Math.random() * 6,
+                palIdx: Math.floor(Math.random() * skyPalette.length)
+            });
+        }
+
+        function resizeSkyCanvas() {
+            const dpr = Math.min(window.devicePixelRatio, 2);
+            skyCanvasEl.width = window.innerWidth * dpr;
+            skyCanvasEl.height = window.innerHeight * dpr;
+            skyCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+        resizeSkyCanvas();
+        window.addEventListener('resize', resizeSkyCanvas);
+
+        let skyFrame = 0;
+        function updateSky(t) {
+            skyFrame++;
+            if (skyFrame % 3 !== 0) return;
+            const dt = 3 / 60;
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+
+            if (skyIsNight) {
+                // Pure black background — no grain
+                skyCtx.fillStyle = '#000000';
+                skyCtx.fillRect(0, 0, w, h);
+
+                // Film grain (matching prism page)
+                for (let i = 0; i < 200; i++) {
+                    const seed = i * 73.137 + skyFrame * 0.01;
+                    const nx = ((Math.sin(seed * 1.31) * 0.5 + 0.5) * w + Math.random() * 3) % w;
+                    const ny = ((Math.cos(seed * 0.97) * 0.5 + 0.5) * h + Math.random() * 3) % h;
+                    const pal = skyPalette[i % skyPalette.length];
+                    const a = 0.06 + Math.random() * 0.12;
+                    skyCtx.fillStyle = `rgba(${pal[0]},${pal[1]},${pal[2]},${a})`;
+                    skyCtx.fillRect(nx, ny, 1, 1);
+                }
+
+                // Twinkling stars
+                const tMs = t * 1000;
+                skyCtx.textAlign = 'center';
+                skyCtx.textBaseline = 'middle';
+                skyStars.forEach(s => {
+                    s.lifeT += dt;
+                    const lifeFrac = s.lifeT / s.lifeDur;
+                    let lifeAlpha;
+                    if (lifeFrac < 0.1) {
+                        lifeAlpha = lifeFrac / 0.1;
+                    } else if (lifeFrac < 0.8) {
+                        lifeAlpha = 1.0;
+                    } else if (lifeFrac < 1.0) {
+                        lifeAlpha = 1.0 - (lifeFrac - 0.8) / 0.2;
+                    } else {
+                        s.x = Math.random();
+                        s.y = Math.random();
+                        s.sym = starSymbols[Math.floor(Math.random() * starSymbols.length)];
+                        s.palIdx = Math.floor(Math.random() * skyPalette.length);
+                        s.lifeDur = (s.size > 10 ? 4 : 3) + Math.random() * (s.size > 10 ? 8 : 6);
+                        s.lifeT = 0;
+                        lifeAlpha = 0;
+                    }
+                    const twinkle = 0.5 + 0.5 * Math.sin(tMs * 0.001 * s.speed + s.phase);
+                    const drawAlpha = lifeAlpha * (0.3 + 0.7 * twinkle);
+                    if (drawAlpha < 0.03) return;
+                    const [cr, cg, cb] = skyPalette[s.palIdx];
+                    skyCtx.font = `400 ${s.size}px "IBM Plex Mono", monospace`;
+                    skyCtx.fillStyle = `rgba(${cr},${cg},${cb},${drawAlpha.toFixed(3)})`;
+                    skyCtx.fillText(s.sym, s.x * w, s.y * h);
+                });
+            } else {
+                // Twilight sky: deep indigo zenith fading to dusky mauve horizon
+                const grad = skyCtx.createLinearGradient(0, 0, 0, h);
+                grad.addColorStop(0,    '#06091E');
+                grad.addColorStop(0.35, '#111D50');
+                grad.addColorStop(0.68, '#2E3070');
+                grad.addColorStop(1,    '#6B3F62');
+                skyCtx.fillStyle = grad;
+                skyCtx.fillRect(0, 0, w, h);
+
+                skyClouds.forEach(c => {
+                    c.x += c.speed * dt;
+                    if (c.x > 1.3) c.x = -0.3;
+                    skyCtx.fillStyle = `rgba(255, 255, 255, ${c.opacity})`;
+                    const cx = c.x * w;
+                    const cy = c.y * h;
+                    for (let b = 0; b < c.blobs; b++) {
+                        const bx = cx + b * c.size * 0.6;
+                        const by = cy + Math.sin(b * 1.2) * c.size * 0.2;
+                        const br = c.size * (0.5 + Math.sin(b * 0.8) * 0.2);
+                        skyCtx.beginPath();
+                        skyCtx.arc(bx, by, br, 0, Math.PI * 2);
+                        skyCtx.fill();
+                    }
+                });
+            }
+        }
+
+        // --- Wall sky texture: crisp stars on black (no grain), for outer prism walls ---
+        const WSKY_W = 4096, WSKY_H = 2048;
+        const wallSkyCanvas = document.createElement('canvas');
+        wallSkyCanvas.width = WSKY_W;
+        wallSkyCanvas.height = WSKY_H;
+        const wallSkyCtx = wallSkyCanvas.getContext('2d');
+        const wallSkyTexture = new THREE.CanvasTexture(wallSkyCanvas);
+        wallSkyTexture.wrapS = THREE.RepeatWrapping;
+        wallSkyTexture.wrapT = THREE.RepeatWrapping;
+        wallSkyTexture.minFilter = THREE.LinearFilter;
+        wallSkyTexture.magFilter = THREE.LinearFilter;
+
+        wallSkyCtx.fillStyle = '#000000';
+        wallSkyCtx.fillRect(0, 0, WSKY_W, WSKY_H);
+        wallSkyTexture.needsUpdate = true;
+
+        // Wall sky stars: larger sizes to stay crisp when mapped onto 3D geometry
+        const wallSkyStars = [];
+        for (let i = 0; i < 60; i++) {
+            wallSkyStars.push({
+                x: Math.random() * WSKY_W,
+                y: Math.random() * WSKY_H,
+                sym: starSymbols[Math.floor(Math.random() * starSymbols.length)],
+                phase: Math.random() * Math.PI * 2,
+                speed: 0.5 + Math.random() * 0.8,
+                size: 48 + Math.random() * 48,
+                lifeT: Math.random() * 10,
+                lifeDur: 4 + Math.random() * 8,
+                palIdx: Math.floor(Math.random() * skyPalette.length)
+            });
+        }
+        for (let i = 0; i < 40; i++) {
+            wallSkyStars.push({
+                x: Math.random() * WSKY_W,
+                y: Math.random() * WSKY_H,
+                sym: starSymbols[Math.floor(Math.random() * starSymbols.length)],
+                phase: Math.random() * Math.PI * 2,
+                speed: 0.6 + Math.random() * 1.0,
+                size: 22 + Math.random() * 22,
+                lifeT: Math.random() * 10,
+                lifeDur: 3 + Math.random() * 6,
+                palIdx: Math.floor(Math.random() * skyPalette.length)
+            });
+        }
+
+        let wallSkyFrame = 0;
+        function updateWallSky(t) {
+            wallSkyFrame++;
+            if (wallSkyFrame % 3 !== 0) return;
+            const dt = 3 / 60;
+
+            if (skyIsNight) {
+                wallSkyCtx.fillStyle = '#000000';
+                wallSkyCtx.fillRect(0, 0, WSKY_W, WSKY_H);
+
+                // Stars only — no grain
+                const wTMs = t * 1000;
+                wallSkyCtx.textAlign = 'center';
+                wallSkyCtx.textBaseline = 'middle';
+                wallSkyStars.forEach(s => {
+                    s.lifeT += dt;
+                    const lifeFrac = s.lifeT / s.lifeDur;
+                    let lifeAlpha;
+                    if (lifeFrac < 0.1) {
+                        lifeAlpha = lifeFrac / 0.1;
+                    } else if (lifeFrac < 0.8) {
+                        lifeAlpha = 1.0;
+                    } else if (lifeFrac < 1.0) {
+                        lifeAlpha = 1.0 - (lifeFrac - 0.8) / 0.2;
+                    } else {
+                        s.x = Math.random() * WSKY_W;
+                        s.y = Math.random() * WSKY_H;
+                        s.sym = starSymbols[Math.floor(Math.random() * starSymbols.length)];
+                        s.palIdx = Math.floor(Math.random() * skyPalette.length);
+                        s.lifeDur = (s.size > 35 ? 4 : 3) + Math.random() * (s.size > 35 ? 8 : 6);
+                        s.lifeT = 0;
+                        lifeAlpha = 0;
+                    }
+                    const twinkle = 0.5 + 0.5 * Math.sin(wTMs * 0.001 * s.speed + s.phase);
+                    const drawAlpha = lifeAlpha * (0.3 + 0.7 * twinkle);
+                    if (drawAlpha < 0.03) return;
+                    const [cr, cg, cb] = skyPalette[s.palIdx];
+                    wallSkyCtx.font = `400 ${s.size}px "IBM Plex Mono", monospace`;
+                    wallSkyCtx.fillStyle = `rgba(${cr},${cg},${cb},${drawAlpha.toFixed(3)})`;
+                    wallSkyCtx.fillText(s.sym, s.x, s.y);
+                });
+            } else {
+                // Twilight wall sky: matches 2D sky canvas gradient
+                const wGrad = wallSkyCtx.createLinearGradient(0, 0, 0, WSKY_H);
+                wGrad.addColorStop(0,    '#06091E');
+                wGrad.addColorStop(0.35, '#111D50');
+                wGrad.addColorStop(0.68, '#2E3070');
+                wGrad.addColorStop(1,    '#6B3F62');
+                wallSkyCtx.fillStyle = wGrad;
+                wallSkyCtx.fillRect(0, 0, WSKY_W, WSKY_H);
+            }
+
+            wallSkyTexture.needsUpdate = true;
+        }
+
+        // --- Phase colour palette (matches floor serpentine shader phases) ---
+        const phaseColors = [
+            [1.0, 0.35, 0.65],  // pink (mid)
+            [0.6, 0.2, 0.9],    // purple (mid)
+            [0.1, 0.55, 0.7],   // oceanic blue (mid)
+            [0.15, 0.85, 0.25], // alien green (mid)
+            [0.85, 0.7, 0.3],   // gold (mid)
+            [0.9, 0.55, 0.35],  // peach (mid)
+        ];
+        const PHASE_DUR = 2.5;
+        const NUM_PHASES = 6;
+        function getCapPhaseColor(t) {
+            const totalCycle = PHASE_DUR * NUM_PHASES;
+            const gt = ((t % totalCycle) + totalCycle) % totalCycle;
+            const raw = gt / PHASE_DUR;
+            const i0 = Math.floor(raw) % NUM_PHASES;
+            const i1 = (i0 + 1) % NUM_PHASES;
+            const blend = raw - Math.floor(raw);
+            // Smooth ease between phases
+            const s = blend * blend * (3 - 2 * blend);
+            const c0 = phaseColors[i0], c1 = phaseColors[i1];
+            return [
+                c0[0] + (c1[0] - c0[0]) * s,
+                c0[1] + (c1[1] - c0[1]) * s,
+                c0[2] + (c1[2] - c0[2]) * s,
+            ];
+        }
+
+        // --- Wall sky shader: projects wall sky texture onto outer walls; inner walls use flat vertex color ---
+        const wallSkyVertex = `
+            varying vec3 vWorldPos;
+            varying vec3 vVertexColor;
+            varying float vIsInner;
+            attribute vec3 color;
+            attribute float aIsInner;
+            void main() {
+                vec4 worldPos = modelMatrix * vec4(position, 1.0);
+                vWorldPos = worldPos.xyz;
+                vVertexColor = color;
+                vIsInner = aIsInner;
+                gl_Position = projectionMatrix * viewMatrix * worldPos;
+            }
+        `;
+        const wallSkyFragment = `
+            precision highp float;
+            uniform sampler2D uWallSkyTex;
+            uniform vec2 uPrismCenter;
+            uniform float uWallHeight;
+            varying vec3 vWorldPos;
+            varying vec3 vVertexColor;
+            varying float vIsInner;
+            void main() {
+                // Inner walls (B-F): flat dark greyscale, no stars
+                if (vIsInner > 0.5) {
+                    gl_FragColor = vec4(vVertexColor, 1.0);
+                    return;
+                }
+                float angle = atan(vWorldPos.z - uPrismCenter.y, vWorldPos.x - uPrismCenter.x);
+                float h = max(uWallHeight, 0.001);
+                // Tile U to fix aspect ratio: circumference ≈ 7× height, so repeat ~7×
+                float u = fract((angle / 6.28318 + 0.5) * 7.0);
+                float v = clamp(vWorldPos.y / h, 0.0, 1.0);
+                vec3 skyCol = texture2D(uWallSkyTex, vec2(u, v)).rgb;
+                // Multiplicative shading: vertex color darkens shadow faces
+                vec3 finalColor = skyCol * vVertexColor;
+                gl_FragColor = vec4(finalColor, 1.0);
+            }
+        `;
+
+        // Create soft glowing line (3 layers — outer haze, mid warmth, core)
+        function createGlowingLine(points, progress = 1, baseOpacity = 1) {
+            const group = new THREE.Group();
+
+            // Soft outer haze
+            group.add(new THREE.Line(
+                new THREE.BufferGeometry().setFromPoints(points),
+                new THREE.LineBasicMaterial({
+                    color: glowOuter,
+                    transparent: true,
+                    opacity: 0.12 * progress * baseOpacity,
+                    linewidth: 1
+                })
+            ));
+
+            // Mid warmth
+            group.add(new THREE.Line(
+                new THREE.BufferGeometry().setFromPoints(points),
+                new THREE.LineBasicMaterial({
+                    color: glowInner,
+                    transparent: true,
+                    opacity: 0.35 * progress * baseOpacity,
+                    linewidth: 1
+                })
+            ));
+
+            // Cream core
+            group.add(new THREE.Line(
+                new THREE.BufferGeometry().setFromPoints(points),
+                new THREE.LineBasicMaterial({
+                    color: glowInner,
+                    transparent: true,
+                    opacity: 0.7 * progress * baseOpacity,
+                    linewidth: 1
+                })
+            ));
+
+            return group;
+        }
+
+        // --- Hex coordinate math for region identification ---
+        function offsetToCube(row, col) {
+            const x = col - Math.floor(row / 2);
+            const z = row;
+            const y = -x - z;
+            return { x, y, z };
+        }
+
+        function hexDistance(a, b) {
+            return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y), Math.abs(a.z - b.z));
+        }
+
+        function getRegionHexes(centerRow, centerCol, radius) {
+            const center = offsetToCube(centerRow, centerCol);
+            const result = [];
+            hexagons.forEach(hex => {
+                const dist = hexDistance(center, offsetToCube(hex.row, hex.col));
+                if (dist <= radius) result.push({ hex, dist });
+            });
+            result.sort((a, b) => a.dist - b.dist);
+            return result;
+        }
+
+        // --- Easing functions ---
+        function easeOutQuart(t) {
+            // Smooth deceleration — heavy stone coming to rest
+            return 1 - Math.pow(1 - t, 4);
+        }
+        function easeInOutCubic(t) {
+            // Graceful arc — slow start, smooth middle, gentle landing
+            return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        }
+
+        // --- Hex neighbor lookup for boundary detection ---
+        function getNeighborByEdge(row, col, edgeIdx) {
+            // Flat-top hex neighbor offsets differ for even/odd rows
+            const even = row % 2 === 0;
+            const offsets = even
+                ? [[-1, 0], [-1, -1], [0, -1], [1, -1], [1, 0], [0, 1]]
+                : [[-1, 1], [-1, 0], [0, -1], [1, 0], [1, 1], [0, 1]];
+            const [dr, dc] = offsets[edgeIdx];
+            return [row + dr, col + dc];
+        }
+
+        // --- Compute boundary edges of a prism region ---
+        // sharedHexSet: edges facing into this set are suppressed (shared wall with another prism)
+        function computeBoundaryEdges(regionHexes, hexSet, sharedHexSet) {
+            const edges = [];
+            regionHexes.forEach(({ hex }) => {
+                for (let ei = 0; ei < 6; ei++) {
+                    const [nr, nc] = getNeighborByEdge(hex.row, hex.col, ei);
+                    const key = `${nr},${nc}`;
+                    if (!hexSet.has(key)) {
+                        // Include shared edges (facing another prism) as well as outer edges.
+                        // Both use sky shader with faceColors — starry black on both faces.
+                        // Two coplanar black surfaces z-fight invisibly.
+                        const angle1 = (Math.PI / 3) * ei + (Math.PI / 6);
+                        const angle2 = (Math.PI / 3) * ((ei + 1) % 6) + (Math.PI / 6);
+                        edges.push({
+                            v1x: hex.x + hexSize * Math.cos(angle1),
+                            v1z: hex.z + hexSize * Math.sin(angle1),
+                            v2x: hex.x + hexSize * Math.cos(angle2),
+                            v2z: hex.z + hexSize * Math.sin(angle2),
+                            edgeIdx: ei
+                        });
+                    }
+                }
+            });
+            return edges;
+        }
+
+        // --- Prism wall material (sky-textured, vertex colors for crenellation shading) ---
+        function makeWallMaterial(centerXZ) {
+            return new THREE.ShaderMaterial({
+                vertexShader: wallSkyVertex,
+                fragmentShader: wallSkyFragment,
+                uniforms: {
+                    uWallSkyTex: { value: wallSkyTexture },
+                    uPrismCenter: { value: centerXZ },
+                    uWallHeight: { value: PRISM_RISE_HEIGHT }
+                },
+                side: THREE.DoubleSide
+            });
+        }
+        prism1.wallMat = makeWallMaterial(prism1.centerXZ);
+        extraPrisms.forEach(p => { p.wallMat = makeWallMaterial(p.centerXZ); });
+
+        // --- Build prism wall mesh ---
+        // Top rim layer = full hexagons; body below = inward triangle shaved off
+        const RIM_FRAC = 0.2; // top 20% is the full-hex rim course
+
+        function createPrismWalls(riseHeight, prism, darkInterior) {
+            prism.edges = computeBoundaryEdges(prism.regionHexes, prism.hexSet, prism.sharedHexSet);
+            const boundaryEdges = prism.edges;
+            const rimY = riseHeight * (1 - RIM_FRAC);
+
+            // Classify boundary hexes: corner (3+ outer edges) vs edge (2)
+            // Edges into sharedHexSet are treated as interior (no wall there)
+            const bInfo = [];
+            prism.regionHexes.forEach(({ hex }) => {
+                const outerIdxs = [];
+                for (let ei = 0; ei < 6; ei++) {
+                    const [nr, nc] = getNeighborByEdge(hex.row, hex.col, ei);
+                    const key = `${nr},${nc}`;
+                    if (!prism.hexSet.has(key)) outerIdxs.push(ei);
+                }
+                if (outerIdxs.length < 2) return;
+                const oeSet = new Set(outerIdxs);
+                let first = outerIdxs[0];
+                for (const ei of outerIdxs) {
+                    if (!oeSet.has((ei + 5) % 6)) { first = ei; break; }
+                }
+                bInfo.push({
+                    hex, isCorner: outerIdxs.length >= 3,
+                    firstOuter: first, outerCount: outerIdxs.length
+                });
+            });
+            prism._bInfo = bInfo;
+
+            const numEdgeHexes = bInfo.filter(b => !b.isCorner).length;
+            const numCornerHexes = bInfo.length - numEdgeHexes;
+
+            // Geometry counts:
+            // Outer walls: full height quads (crenellated)
+            const nOuter = boundaryEdges.length;
+            // Corner inner: full height quads (1 per corner)
+            const nCornerInner = numCornerHexes;
+            // Edge inner body: 0→rimY quads (cut line, 1 per edge hex)
+            const nEdgeBody = numEdgeHexes;
+            // Edge inner rim: rimY→top quads (2 inward hex edges per edge hex)
+            const nEdgeRim = numEdgeHexes * 2;
+            // Shelf tris: inward triangle at rimY (1 per edge hex)
+            const nShelf = numEdgeHexes;
+            // Top cap: full hex for all boundary hexes (6 tris each)
+            const nCap = bInfo.length * 6;
+
+            const totalQuads = nOuter + nCornerInner + nEdgeBody + nEdgeRim;
+            const totalTris = nShelf + nCap;
+            const totalVerts = totalQuads * 6 + totalTris * 3;
+            const positions = new Float32Array(totalVerts * 3);
+            const colors = new Float32Array(totalVerts * 3);
+            const isInnerArr = new Float32Array(totalVerts); // 0=outer(sky), 1=inner(flat grey)
+
+            // Outer wall face colors — encode brightness factor per face
+            // Shader multiplies sky texture by these values for directional shading
+            const faceColors = [
+                [0.95, 0.95, 0.97], [0.75, 0.75, 0.77], [0.50, 0.50, 0.52],
+                [0.45, 0.45, 0.47], [0.55, 0.55, 0.57], [0.80, 0.80, 0.82],
+            ];
+            // Inner wall face colors — dark greyscale (no sky) for all chambers
+            const innerFaceColors = [
+                [0.18, 0.18, 0.19], [0.14, 0.14, 0.15], [0.10, 0.10, 0.11],
+                [0.08, 0.08, 0.09], [0.10, 0.10, 0.11], [0.16, 0.16, 0.17],
+            ];
+            const innerDim = 1.0;
+            // Rim vertical edges — dark greyscale matching inner walls
+            const rimFaceColors = [
+                [0.16, 0.16, 0.17], [0.13, 0.13, 0.14], [0.10, 0.10, 0.11],
+                [0.09, 0.09, 0.10], [0.10, 0.10, 0.11], [0.15, 0.15, 0.16],
+            ];
+            const rimShelfColor = [0.12, 0.12, 0.13];
+
+            function writeQuad(o, x1, z1, x2, z2, yB, yT, cr, cg, cb) {
+                positions[o]    = x1; positions[o+1]  = yB; positions[o+2]  = z1;
+                positions[o+3]  = x2; positions[o+4]  = yB; positions[o+5]  = z2;
+                positions[o+6]  = x2; positions[o+7]  = yT; positions[o+8]  = z2;
+                positions[o+9]  = x1; positions[o+10] = yB; positions[o+11] = z1;
+                positions[o+12] = x2; positions[o+13] = yT; positions[o+14] = z2;
+                positions[o+15] = x1; positions[o+16] = yT; positions[o+17] = z1;
+                for (let v = 0; v < 6; v++) {
+                    colors[o+v*3] = cr; colors[o+v*3+1] = cg; colors[o+v*3+2] = cb;
+                }
+            }
+
+            let off = 0;
+
+            // Section A: outer walls (full height, sky-textured)
+            boundaryEdges.forEach(edge => {
+                const fc = faceColors[edge.edgeIdx];
+                writeQuad(off, edge.v1x, edge.v1z, edge.v2x, edge.v2z,
+                          0, riseHeight, fc[0], fc[1], fc[2]);
+                off += 18;
+            });
+            const secAEnd = off; // end of outer walls — inner sections start here
+
+            // Section B: corner inner walls (full height, single edge)
+            bInfo.forEach(b => {
+                if (!b.isCorner) return;
+                const pts = createHexagonPoints(b.hex.x, b.hex.z, hexSize);
+                const ie = (b.firstOuter + b.outerCount + 1) % 6;
+                const v1 = pts[ie], v2 = pts[(ie + 1) % 6];
+                const fc = faceColors[ie];
+                writeQuad(off, v2.x, v2.z, v1.x, v1.z,
+                          0, riseHeight, fc[0], fc[1], fc[2]);
+                off += 18;
+            });
+            const secABEnd = off; // end of full-height quads
+
+            // Section C: edge inner body (0 → rimY, cut line = flat dodecagon)
+            bInfo.forEach(b => {
+                if (b.isCorner) return;
+                const pts = createHexagonPoints(b.hex.x, b.hex.z, hexSize);
+                const iv = (b.firstOuter + 4) % 6;
+                const vL = pts[(iv + 5) % 6], vR = pts[(iv + 1) % 6];
+                const fc = faceColors[(iv + 3) % 6];
+                writeQuad(off, vR.x, vR.z, vL.x, vL.z,
+                          0, rimY, fc[0], fc[1], fc[2]);
+                off += 18;
+            });
+            const secCEnd = off;
+
+            // Section D: edge inner rim (rimY → top, two inward hex edges per hex) — always beige
+            bInfo.forEach(b => {
+                if (b.isCorner) return;
+                const pts = createHexagonPoints(b.hex.x, b.hex.z, hexSize);
+                const iv = (b.firstOuter + 4) % 6;
+                const vL = pts[(iv + 5) % 6], vTip = pts[iv], vR = pts[(iv + 1) % 6];
+                const fc = faceColors[iv];
+                // Left edge of triangle (reversed winding for inward normal)
+                writeQuad(off, vTip.x, vTip.z, vL.x, vL.z,
+                          rimY, riseHeight, fc[0], fc[1], fc[2]);
+                off += 18;
+                // Right edge of triangle
+                writeQuad(off, vR.x, vR.z, vTip.x, vTip.z,
+                          rimY, riseHeight, fc[0], fc[1], fc[2]);
+                off += 18;
+            });
+            const secDEnd = off;
+
+            // Section E: shelf triangles (inward triangle at y=rimY) — always beige
+            bInfo.forEach(b => {
+                if (b.isCorner) return;
+                const pts = createHexagonPoints(b.hex.x, b.hex.z, hexSize);
+                const iv = (b.firstOuter + 4) % 6;
+                const vL = pts[(iv + 5) % 6], vTip = pts[iv], vR = pts[(iv + 1) % 6];
+                positions[off]   = vL.x;  positions[off+1] = rimY; positions[off+2] = vL.z;
+                positions[off+3] = vTip.x; positions[off+4] = rimY; positions[off+5] = vTip.z;
+                positions[off+6] = vR.x;  positions[off+7] = rimY; positions[off+8] = vR.z;
+                for (let v = 0; v < 3; v++) {
+                    colors[off+v*3] = rimShelfColor[0]; colors[off+v*3+1] = rimShelfColor[1]; colors[off+v*3+2] = rimShelfColor[2];
+                }
+                off += 9;
+            });
+            const secEEnd = off;
+
+            // Section F: top cap (full hex for ALL boundary hexes) — beige top surface
+            const capColor = darkInterior ? [0.95, 0.88, 0.65] : [1.0, 0.95, 0.75];
+            bInfo.forEach(b => {
+                const pts = createHexagonPoints(b.hex.x, b.hex.z, hexSize);
+                const cx = b.hex.x, cz = b.hex.z;
+                for (let ti = 0; ti < 6; ti++) {
+                    positions[off]   = cx;              positions[off+1] = riseHeight; positions[off+2] = cz;
+                    positions[off+3] = pts[ti].x;       positions[off+4] = riseHeight; positions[off+5] = pts[ti].z;
+                    positions[off+6] = pts[(ti+1)%6].x; positions[off+7] = riseHeight; positions[off+8] = pts[(ti+1)%6].z;
+                    for (let v = 0; v < 3; v++) {
+                        colors[off+v*3] = capColor[0]; colors[off+v*3+1] = capColor[1]; colors[off+v*3+2] = capColor[2];
+                    }
+                    off += 9;
+                }
+            });
+
+            // All wall sections use the same sky shader (aIsInner stays 0 for all)
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            geometry.setAttribute('aIsInner', new THREE.BufferAttribute(isInnerArr, 1));
+            geometry.computeVertexNormals();
+
+            const mesh = new THREE.Mesh(geometry, prism.wallMat);
+            // Store layout for rising animation + cap dissolve
+            const prismCenter = offsetToCube(prism.centerRow, prism.centerCol);
+            mesh._layout = {
+                secABEnd,    // full-height quads end (outer + corner inner)
+                secCEnd,     // edge body quads end (0→rimY)
+                secDEnd,     // edge rim quads end (rimY→top)
+                secEEnd,     // shelf tris end
+                totalQuads,  // total quads (for stride calc)
+                // Cap dissolve data: per boundary-hex center + distance from prism center
+                capInfo: bInfo.map(b => ({
+                    cx: b.hex.x, cz: b.hex.z,
+                    dist: hexDistance(prismCenter, offsetToCube(b.hex.row, b.hex.col))
+                })),
+                capOrigPositions: new Float32Array(positions.slice(secEEnd))
+            };
+            return mesh;
+        }
+
+        // --- Rim outline: thin colour-cycling borders on interior rim quads (Section D) ---
+        const rimOutlineMat = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 1.0,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        });
+
+        const hingeLineMat = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 1.0,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+            polygonOffset: true,
+            polygonOffsetFactor: -1,
+            polygonOffsetUnits: -1
+        });
+
+        function createRimOutlines(riseHeight, prism) {
+            if (!prism.regionHexes) return null;
+            const rimY = riseHeight * (1 - RIM_FRAC);
+            const yTop = riseHeight + 0.04; // above capMesh (+0.02) and wallMesh Section F (+0.0)
+            const W = 0.045;  // half-width of vertical ribbon quads
+            const HW = 0.04;  // half-width of horizontal (floor-parallel) flat quads
+
+            const bInfo = [];
+            prism.regionHexes.forEach(({ hex }) => {
+                const outerIdxs = [];
+                for (let ei = 0; ei < 6; ei++) {
+                    const [nr, nc] = getNeighborByEdge(hex.row, hex.col, ei);
+                    if (!prism.hexSet.has(`${nr},${nc}`)) outerIdxs.push(ei);
+                }
+                if (outerIdxs.length < 2) return;
+                const oeSet = new Set(outerIdxs);
+                let first = outerIdxs[0];
+                for (const ei of outerIdxs) {
+                    if (!oeSet.has((ei + 5) % 6)) { first = ei; break; }
+                }
+                if (outerIdxs.length < 3) bInfo.push({ hex, firstOuter: first });
+            });
+
+            // Per edge hex: 6 quads — [vert, horiz-flat, vert, vert, horiz-flat, vert]
+            // vert  → 4 verts: bottom pair at rimY, top pair at yTop
+            // horiz → 4 verts: all at yTop, widened perpendicular to segment in XZ (floor-parallel)
+            // qi % 3 === 1  →  horiz;  else → vert
+            const posArr = [];
+            const idxArr = [];
+            let vi = 0;
+
+            // Vertical ribbon: widened perpendicular to segment direction in XZ
+            const addVert = (x, z, yB, yT, perpX, perpZ) => {
+                const len = Math.sqrt(perpX*perpX + perpZ*perpZ) || 1;
+                const ex = perpX/len * W, ez = perpZ/len * W;
+                posArr.push(
+                    x-ex, yB, z-ez,  x+ex, yB, z+ez,
+                    x+ex, yT, z+ez,  x-ex, yT, z-ez
+                );
+                idxArr.push(vi,vi+1,vi+2, vi,vi+2,vi+3); vi += 4;
+            };
+            // Horizontal flat quad: lies in XZ plane at y, widened perpendicular to segment
+            const addHoriz = (x1, z1, x2, z2, y) => {
+                const dx = x2-x1, dz = z2-z1;
+                const len = Math.sqrt(dx*dx + dz*dz) || 1;
+                const nx = -dz/len * HW, nz = dx/len * HW;
+                posArr.push(
+                    x1+nx, y, z1+nz,  x2+nx, y, z2+nz,
+                    x2-nx, y, z2-nz,  x1-nx, y, z1-nz
+                );
+                idxArr.push(vi,vi+1,vi+2, vi,vi+2,vi+3); vi += 4;
+            };
+
+            bInfo.forEach(b => {
+                const pts = createHexagonPoints(b.hex.x, b.hex.z, hexSize);
+                const iv = (b.firstOuter + 4) % 6;
+                const vL = pts[(iv+5)%6], vTip = pts[iv], vR = pts[(iv+1)%6];
+
+                // Bisector at vTip: normalised sum of vTip→vL and vTip→vR directions.
+                // Two 90°-apart perpendiculars eliminate the ~60° angular gap that the
+                // original per-edge perpendiculars left visible from overhead.
+                const dxL=vL.x-vTip.x, dzL=vL.z-vTip.z, lenL=Math.sqrt(dxL*dxL+dzL*dzL)||1;
+                const dxR=vR.x-vTip.x, dzR=vR.z-vTip.z, lenR=Math.sqrt(dxR*dxR+dzR*dzR)||1;
+                const bx=dxL/lenL+dxR/lenR, bz=dzL/lenL+dzR/lenR;
+                const bp1x=-bz, bp1z=bx;   // perpendicular to bisector (tangential)
+                const bp2x= bx, bp2z=bz;   // bisector direction itself (radial)
+
+                // Left side (vTip → vL)
+                { const dx=vL.x-vTip.x, dz=vL.z-vTip.z;
+                  addVert(vTip.x, vTip.z, rimY, yTop, bp1x, bp1z);
+                  addHoriz(vTip.x, vTip.z, vL.x, vL.z, rimY);
+                  addVert(vL.x,   vL.z,   rimY, yTop, -dz,  dx); }
+                // Right side (vR → vTip)
+                { const dx=vTip.x-vR.x, dz=vTip.z-vR.z;
+                  addVert(vR.x,   vR.z,   rimY, yTop, -dz,  dx);
+                  addHoriz(vR.x, vR.z, vTip.x, vTip.z, rimY);
+                  addVert(vTip.x, vTip.z, rimY, yTop, bp2x, bp2z); }
+            });
+
+            if (posArr.length === 0) return null;
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(posArr), 3));
+            geo.setIndex(new THREE.BufferAttribute(new Uint16Array(idxArr), 1));
+            const mesh = new THREE.Mesh(geo, rimOutlineMat);
+            mesh.renderOrder = 3;
+            return mesh;
+        }
+
+        // --- Rim perimeter band: bright colour-cycling flat mesh ring at rim base ---
+        const rimBandMat = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 1.0,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        });
+
+        function createRimPerimeterBand(riseHeight, prism) {
+            if (!prism.edges) return null;
+            const rimY = riseHeight * (1 - RIM_FRAC);
+            const bandW = 0.14;
+            const centerHex = hexLookup.get(`${prism.centerRow},${prism.centerCol}`);
+            if (!centerHex) return null;
+
+            const posArr = [];
+            const idxArr = [];
+            let vi = 0;
+
+            prism.edges.forEach(edge => {
+                const mx = (edge.v1x + edge.v2x) * 0.5;
+                const mz = (edge.v1z + edge.v2z) * 0.5;
+                let inx = centerHex.x - mx, inz = centerHex.z - mz;
+                const ilen = Math.sqrt(inx * inx + inz * inz) || 1;
+                inx = inx / ilen * bandW; inz = inz / ilen * bandW;
+
+                posArr.push(edge.v1x, rimY, edge.v1z);
+                posArr.push(edge.v2x, rimY, edge.v2z);
+                posArr.push(edge.v2x + inx, rimY, edge.v2z + inz);
+                posArr.push(edge.v1x + inx, rimY, edge.v1z + inz);
+                idxArr.push(vi, vi+1, vi+2, vi, vi+2, vi+3);
+                vi += 4;
+            });
+
+            if (posArr.length === 0) return null;
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(posArr), 3));
+            geo.setIndex(new THREE.BufferAttribute(new Uint16Array(idxArr), 1));
+            return new THREE.Mesh(geo, rimBandMat);
+        }
+
+        // --- Cap-edge halo: thin outward-facing band at the cap top, additively
+        //     blended so the zigzag rim silhouette stays bright against any backdrop
+        //     (in perspective the back rim was merging into the floor pattern).
+        const capHaloMat = new THREE.MeshBasicMaterial({
+            color: 0xFFFFFF,
+            transparent: true,
+            opacity: 0.85,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        });
+
+        function createCapEdgeHalo(riseHeight, prism) {
+            if (!prism.edges) return null;
+            const haloW = 0.10;
+            const centerHex = hexLookup.get(`${prism.centerRow},${prism.centerCol}`);
+            if (!centerHex) return null;
+
+            const posArr = [];
+            const idxArr = [];
+            let vi = 0;
+
+            // Outer halo: ribbon extending OUTWARD from each boundary edge
+            prism.edges.forEach(edge => {
+                const mx = (edge.v1x + edge.v2x) * 0.5;
+                const mz = (edge.v1z + edge.v2z) * 0.5;
+                let outx = mx - centerHex.x, outz = mz - centerHex.z;
+                const olen = Math.sqrt(outx * outx + outz * outz) || 1;
+                outx = outx / olen * haloW; outz = outz / olen * haloW;
+
+                posArr.push(edge.v1x, riseHeight, edge.v1z);
+                posArr.push(edge.v2x, riseHeight, edge.v2z);
+                posArr.push(edge.v2x + outx, riseHeight, edge.v2z + outz);
+                posArr.push(edge.v1x + outx, riseHeight, edge.v1z + outz);
+                idxArr.push(vi, vi+1, vi+2, vi, vi+2, vi+3);
+                vi += 4;
+            });
+
+            // Inner halo: ribbon extending INWARD from each edge where a boundary
+            // hex meets a TRUE interior hex (filters out lateral hex-to-hex edges
+            // along the rim ring so the inner zigzag is a clean continuous line).
+            if (prism.regionHexes && prism.hexSet) {
+                const interiorSet = new Set();
+                prism.regionHexes.forEach(({ hex }) => {
+                    let allIn = true;
+                    for (let ei = 0; ei < 6; ei++) {
+                        const [nr, nc] = getNeighborByEdge(hex.row, hex.col, ei);
+                        if (!prism.hexSet.has(`${nr},${nc}`)) { allIn = false; break; }
+                    }
+                    if (allIn) interiorSet.add(`${hex.row},${hex.col}`);
+                });
+
+                prism.regionHexes.forEach(({ hex }) => {
+                    let isBoundary = false;
+                    for (let ei = 0; ei < 6; ei++) {
+                        const [nr, nc] = getNeighborByEdge(hex.row, hex.col, ei);
+                        if (!prism.hexSet.has(`${nr},${nc}`)) { isBoundary = true; break; }
+                    }
+                    if (!isBoundary) return;
+                    const pts = createHexagonPoints(hex.x, hex.z, hexSize);
+                    for (let ei = 0; ei < 6; ei++) {
+                        const [nr, nc] = getNeighborByEdge(hex.row, hex.col, ei);
+                        if (!interiorSet.has(`${nr},${nc}`)) continue;
+                        const v1x = pts[ei].x, v1z = pts[ei].z;
+                        const v2x = pts[(ei + 1) % 6].x, v2z = pts[(ei + 1) % 6].z;
+                        const mx = (v1x + v2x) * 0.5;
+                        const mz = (v1z + v2z) * 0.5;
+                        // Inward direction: edge midpoint → chamber centre
+                        let inx = centerHex.x - mx, inz = centerHex.z - mz;
+                        const ilen = Math.sqrt(inx * inx + inz * inz) || 1;
+                        inx = inx / ilen * haloW; inz = inz / ilen * haloW;
+
+                        posArr.push(v1x, riseHeight, v1z);
+                        posArr.push(v2x, riseHeight, v2z);
+                        posArr.push(v2x + inx, riseHeight, v2z + inz);
+                        posArr.push(v1x + inx, riseHeight, v1z + inz);
+                        idxArr.push(vi, vi+1, vi+2, vi, vi+2, vi+3);
+                        vi += 4;
+                    }
+                });
+            }
+
+            if (posArr.length === 0) return null;
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(posArr), 3));
+            geo.setIndex(new THREE.BufferAttribute(new Uint16Array(idxArr), 1));
+            const mesh = new THREE.Mesh(geo, capHaloMat);
+            mesh.renderOrder = 3;
+            return mesh;
+        }
+
+        // --- Wall hinge lines: vertical ribbons at the 6 prism interior corner edges ---
+        function createHingeLines(riseHeight, prism) {
+            if (!prism._bInfo) return null;
+
+            const W = 0.04;  // half-width of each ribbon along the edge direction
+            const posArr = [], idxArr = [];
+            let vi = 0;
+
+            prism._bInfo.forEach(b => {
+                if (!b.isCorner) return;
+
+                const pts = createHexagonPoints(b.hex.x, b.hex.z, hexSize);
+                const ie = (b.firstOuter + b.outerCount + 1) % 6;
+                const v1 = pts[ie];
+                const v2 = pts[(ie + 1) % 6];
+
+                // Edge direction v1→v2 — ribbon widens along it, face points into the interior
+                const edgeDx = v2.x - v1.x, edgeDz = v2.z - v1.z;
+                const edgeLen = Math.sqrt(edgeDx * edgeDx + edgeDz * edgeDz) || 1;
+                const ex = edgeDx / edgeLen * W, ez = edgeDz / edgeLen * W;
+
+                // Ribbon at v1
+                posArr.push(
+                    v1.x - ex, 0,          v1.z - ez,
+                    v1.x + ex, 0,          v1.z + ez,
+                    v1.x + ex, riseHeight, v1.z + ez,
+                    v1.x - ex, riseHeight, v1.z - ez
+                );
+                idxArr.push(vi, vi+1, vi+2,  vi, vi+2, vi+3); vi += 4;
+
+                // Ribbon at v2
+                posArr.push(
+                    v2.x - ex, 0,          v2.z - ez,
+                    v2.x + ex, 0,          v2.z + ez,
+                    v2.x + ex, riseHeight, v2.z + ez,
+                    v2.x - ex, riseHeight, v2.z - ez
+                );
+                idxArr.push(vi, vi+1, vi+2,  vi, vi+2, vi+3); vi += 4;
+            });
+
+            if (posArr.length === 0) return null;
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(posArr), 3));
+            geo.setIndex(new THREE.BufferAttribute(new Uint16Array(idxArr), 1));
+            const mesh = new THREE.Mesh(geo, hingeLineMat);
+            mesh.renderOrder = 3;
+            return mesh;
+        }
+
+        // --- Cap borders: bright line rings tracing outer + inner perimeter of the top cap ---
+        const capBorderMat = new THREE.LineBasicMaterial({
+            color: 0xFFFFFF,
+            transparent: true,
+            opacity: 1.0,
+            linewidth: 1,
+            depthWrite: false
+        });
+
+        function createCapBorders(riseHeight, prism) {
+            if (!prism.edges || !prism.regionHexes) return null;
+            const verts = [];
+
+            // Outer border: boundary edges at riseHeight
+            prism.edges.forEach(edge => {
+                verts.push(edge.v1x, riseHeight, edge.v1z);
+                verts.push(edge.v2x, riseHeight, edge.v2z);
+            });
+
+            // True interior hexes = those with all 6 neighbours in hexSet (no outer edges)
+            const interiorSet = new Set();
+            prism.regionHexes.forEach(({ hex }) => {
+                let allIn = true;
+                for (let ei = 0; ei < 6; ei++) {
+                    const [nr, nc] = getNeighborByEdge(hex.row, hex.col, ei);
+                    if (!prism.hexSet.has(`${nr},${nc}`)) { allIn = false; break; }
+                }
+                if (allIn) interiorSet.add(`${hex.row},${hex.col}`);
+            });
+
+            // Inner border: only edges where a boundary hex meets a TRUE interior hex —
+            // skips lateral edges between adjacent boundary hexes that would otherwise
+            // clutter the cap with a hex-grid pattern and drown out the zigzag.
+            prism.regionHexes.forEach(({ hex }) => {
+                let isBoundary = false;
+                for (let ei = 0; ei < 6; ei++) {
+                    const [nr, nc] = getNeighborByEdge(hex.row, hex.col, ei);
+                    if (!prism.hexSet.has(`${nr},${nc}`)) { isBoundary = true; break; }
+                }
+                if (!isBoundary) return;
+                const pts = createHexagonPoints(hex.x, hex.z, hexSize);
+                for (let ei = 0; ei < 6; ei++) {
+                    const [nr, nc] = getNeighborByEdge(hex.row, hex.col, ei);
+                    if (interiorSet.has(`${nr},${nc}`)) {
+                        verts.push(pts[ei].x, riseHeight, pts[ei].z);
+                        verts.push(pts[(ei + 1) % 6].x, riseHeight, pts[(ei + 1) % 6].z);
+                    }
+                }
+            });
+
+            if (verts.length === 0) return null;
+            const positions = new Float32Array(verts);
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            return new THREE.LineSegments(geo, capBorderMat);
+        }
+
+        // --- Build wallpaper mesh for inner walls below the rim ---
+        function createPrismWallpaper(riseHeight, prism) {
+            if (!prism.edges) return null;
+            const rimY = riseHeight * (1 - RIM_FRAC);
+
+            // Recompute bInfo (same logic as createPrismWalls)
+            const bInfo = [];
+            prism.regionHexes.forEach(({ hex }) => {
+                const outerIdxs = [];
+                for (let ei = 0; ei < 6; ei++) {
+                    const [nr, nc] = getNeighborByEdge(hex.row, hex.col, ei);
+                    const key = `${nr},${nc}`;
+                    if (!prism.hexSet.has(key)) outerIdxs.push(ei);
+                }
+                if (outerIdxs.length < 2) return;
+                const oeSet = new Set(outerIdxs);
+                let first = outerIdxs[0];
+                for (const ei of outerIdxs) {
+                    if (!oeSet.has((ei + 5) % 6)) { first = ei; break; }
+                }
+                bInfo.push({
+                    hex, isCorner: outerIdxs.length >= 3,
+                    firstOuter: first, outerCount: outerIdxs.length
+                });
+            });
+
+            // Collect all inner wall quads below rimY (edge body + corner body)
+            const quads = []; // each: { x1,z1, x2,z2 } (bottom-left to bottom-right, facing inward)
+
+            // Edge body quads (Section C): 0→rimY
+            bInfo.forEach(b => {
+                if (b.isCorner) return;
+                const pts = createHexagonPoints(b.hex.x, b.hex.z, hexSize);
+                const iv = (b.firstOuter + 4) % 6;
+                const vL = pts[(iv + 5) % 6], vR = pts[(iv + 1) % 6];
+                // Winding: vR→vL (same as Section C in createPrismWalls)
+                quads.push({ x1: vR.x, z1: vR.z, x2: vL.x, z2: vL.z, yTop: rimY });
+            });
+
+            // Corner inner quads (Section B): only 0→rimY portion
+            bInfo.forEach(b => {
+                if (!b.isCorner) return;
+                const pts = createHexagonPoints(b.hex.x, b.hex.z, hexSize);
+                const ie = (b.firstOuter + b.outerCount + 1) % 6;
+                const v1 = pts[ie], v2 = pts[(ie + 1) % 6];
+                // Winding: v2→v1 (same as Section B in createPrismWalls)
+                quads.push({ x1: v2.x, z1: v2.z, x2: v1.x, z2: v1.z, yTop: rimY });
+            });
+
+            if (quads.length === 0) return null;
+
+            // Build geometry with positions + UVs
+            // Each quad = 2 triangles = 6 vertices
+            const nVerts = quads.length * 6;
+            const positions = new Float32Array(nVerts * 3);
+            const uvs = new Float32Array(nVerts * 2);
+
+            // Compute total perimeter length for continuous UV tiling
+            let totalLen = 0;
+            const quadLens = quads.map(q => {
+                const dx = q.x2 - q.x1, dz = q.z2 - q.z1;
+                return Math.sqrt(dx * dx + dz * dz);
+            });
+
+            // Sort quads by angle around prism center for continuous tiling
+            const px = prism.centerXZ.x, pz = prism.centerXZ.y;
+            const indexed = quads.map((q, i) => {
+                const mx = (q.x1 + q.x2) / 2, mz = (q.z1 + q.z2) / 2;
+                return { idx: i, angle: Math.atan2(mz - pz, mx - px) };
+            });
+            indexed.sort((a, b) => a.angle - b.angle);
+
+            // Compute cumulative U offset
+            const sortedQuads = indexed.map(e => e.idx);
+            totalLen = quadLens.reduce((s, l) => s + l, 0);
+
+            let uOffset = 0;
+            let off = 0, uvOff = 0;
+            sortedQuads.forEach(qi => {
+                const q = quads[qi];
+                const len = quadLens[qi];
+                const u0 = uOffset / totalLen;
+                const u1 = (uOffset + len) / totalLen;
+                uOffset += len;
+
+                // Tile the wallpaper a few times around the perimeter
+                const uRepeat = 6;
+                const uA = u0 * uRepeat, uB = u1 * uRepeat;
+
+                // Tri 1: bottom-left, bottom-right, top-right
+                positions[off]   = q.x1; positions[off+1] = 0;      positions[off+2] = q.z1;
+                positions[off+3] = q.x2; positions[off+4] = 0;      positions[off+5] = q.z2;
+                positions[off+6] = q.x2; positions[off+7] = q.yTop; positions[off+8] = q.z2;
+                uvs[uvOff]   = uA; uvs[uvOff+1] = 0;
+                uvs[uvOff+2] = uB; uvs[uvOff+3] = 0;
+                uvs[uvOff+4] = uB; uvs[uvOff+5] = 1;
+                off += 9; uvOff += 6;
+
+                // Tri 2: bottom-left, top-right, top-left
+                positions[off]   = q.x1; positions[off+1] = 0;      positions[off+2] = q.z1;
+                positions[off+3] = q.x2; positions[off+4] = q.yTop; positions[off+5] = q.z2;
+                positions[off+6] = q.x1; positions[off+7] = q.yTop; positions[off+8] = q.z1;
+                uvs[uvOff]   = uA; uvs[uvOff+1] = 0;
+                uvs[uvOff+2] = uB; uvs[uvOff+3] = 1;
+                uvs[uvOff+4] = uA; uvs[uvOff+5] = 1;
+                off += 9; uvOff += 6;
+            });
+
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+            geo.computeVertexNormals();
+
+            const mesh = new THREE.Mesh(geo, wallpaperMaterial);
+            // Store layout info for rising animation
+            mesh._numQuads = quads.length;
+            mesh._rimY = rimY;
+            return mesh;
+        }
+
+        // --- Prism phase state machine ---
+        // prism: state object (prism1 or prism2)
+        // isSecond: if true, skips camera_move + redirect (second prism just idles)
+        function updatePrismPhase(time, prism, isSecond) {
+            const elapsed = time - prism.gridCompleteTime;
+
+            switch (prism.phase) {
+                case 'waiting':
+                    if (elapsed >= PRISM_DELAY) {
+                        prism.phase = 'highlight';
+                        prism.phaseStartTime = time;
+                        if (prism === enteringPrism) console.log('[immersive] enteringPrism → highlight at elapsed=' + elapsed.toFixed(1));
+                    }
+                    break;
+
+                case 'highlight': {
+                    const ht = time - prism.phaseStartTime;
+                    if (!prism.regionHexes) {
+                        prism.regionHexes = getRegionHexes(prism.centerRow, prism.centerCol, PRISM_RADIUS);
+                        prism.hexSet = new Set(prism.regionHexes.map(({ hex }) => `${hex.row},${hex.col}`));
+
+                        // Build merged hex-fill geometry (one draw call)
+                        const trisPerHex = 6;
+                        const vertsPerHex = trisPerHex * 3;
+                        const n = prism.regionHexes.length;
+                        const glowPos = new Float32Array(n * vertsPerHex * 3);
+                        prism.regionHexes.forEach(({ hex }, hi) => {
+                            const pts = createHexagonPoints(hex.x, hex.z, hexSize);
+                            for (let ti = 0; ti < 6; ti++) {
+                                const off = (hi * vertsPerHex + ti * 3) * 3;
+                                glowPos[off]     = hex.x;
+                                glowPos[off + 1] = 0.01;
+                                glowPos[off + 2] = hex.z;
+                                glowPos[off + 3] = pts[ti].x;
+                                glowPos[off + 4] = 0.01;
+                                glowPos[off + 5] = pts[ti].z;
+                                glowPos[off + 6] = pts[(ti + 1) % 6].x;
+                                glowPos[off + 7] = 0.01;
+                                glowPos[off + 8] = pts[(ti + 1) % 6].z;
+                            }
+                        });
+                        const glowGeo = new THREE.BufferGeometry();
+                        glowGeo.setAttribute('position', new THREE.BufferAttribute(glowPos, 3));
+                        prism.groundGlow = new THREE.Mesh(glowGeo, new THREE.MeshBasicMaterial({
+                            color: 0xFFF0E0,
+                            transparent: true,
+                            opacity: 0,
+                            depthWrite: false,
+                            side: THREE.DoubleSide
+                        }));
+                        scene.add(prism.groundGlow);
+                    }
+
+                    // Create boundary-hex opaque fills (fade in during late highlight)
+                    if (prism.groundGlow && !prism.groundGlow._rimFills) {
+                        const bndSet = new Set();
+                        prism.regionHexes.forEach(({ hex }) => {
+                            for (let ei = 0; ei < 6; ei++) {
+                                const [nr, nc] = getNeighborByEdge(hex.row, hex.col, ei);
+                                if (!prism.hexSet.has(`${nr},${nc}`)) { bndSet.add(`${hex.row},${hex.col}`); break; }
+                            }
+                        });
+                        const bndHexes = prism.regionHexes.filter(({ hex }) => bndSet.has(`${hex.row},${hex.col}`));
+                        const rimPos = new Float32Array(bndHexes.length * 6 * 3 * 3);
+                        let ri = 0;
+                        bndHexes.forEach(({ hex }) => {
+                            const pts = createHexagonPoints(hex.x, hex.z, hexSize);
+                            for (let ti = 0; ti < 6; ti++) {
+                                rimPos[ri++]=hex.x; rimPos[ri++]=0.02; rimPos[ri++]=hex.z;
+                                rimPos[ri++]=pts[ti].x; rimPos[ri++]=0.02; rimPos[ri++]=pts[ti].z;
+                                rimPos[ri++]=pts[(ti+1)%6].x; rimPos[ri++]=0.02; rimPos[ri++]=pts[(ti+1)%6].z;
+                            }
+                        });
+                        const rimGeo = new THREE.BufferGeometry();
+                        rimGeo.setAttribute('position', new THREE.BufferAttribute(rimPos, 3));
+                        prism.groundGlow._rimFills = new THREE.Mesh(rimGeo, new THREE.MeshBasicMaterial({
+                            color: 0xE8DCC0, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide
+                        }));
+                        scene.add(prism.groundGlow._rimFills);
+                    }
+
+                    // Ripple hex fills + outlines to bright glow
+                    let maxT = 0;
+                    prism.regionHexes.forEach(({ hex, dist }) => {
+                        const delay = dist * 0.35;
+                        const t = Math.max(0, Math.min(1, (ht - delay) / 0.8));
+                        maxT = Math.max(maxT, t);
+                        if (t > 0) {
+                            if (!hex.lineGroup) {
+                                if (!hex.basePoints) hex.basePoints = createHexagonPoints(hex.x, hex.z, hexSize);
+                                hex.lineGroup = createGlowingLine(hex.basePoints, 1);
+                                hex.lineGroup.visible = false;
+                                scene.add(hex.lineGroup);
+                            }
+                            hex.lineGroup.visible = true;
+                            if (!hex.lineGroup._origOpacities) {
+                                hex.lineGroup._origOpacities = hex.lineGroup.children.map(c => c.material.opacity);
+                            }
+                            tempColor.lerpColors(highlightWarm, highlightWhite, t * 0.7);
+                            hex.lineGroup.children.forEach((child) => {
+                                child.material.opacity = Math.min(1.0, 0.3 + t * 0.7);
+                                child.material.color.copy(tempColor);
+                            });
+                        }
+                    });
+                    if (prism.groundGlow) {
+                        prism.groundGlow.material.opacity = 0;
+                        if (prism.groundGlow._rimFills) {
+                            prism.groundGlow._rimFills.material.opacity = 0;
+                        }
+                    }
+
+                    if (ht >= HIGHLIGHT_DURATION) {
+                        prism.phase = 'rising';
+                        // Fire the rising tone exactly when the chamber starts visibly
+                        // ascending. _risingToneFired guards against double-firing if
+                        // multiple prisms transition (only the entering one does in
+                        // practice, since others are pre-built at idle).
+                        startRisingTone();
+                        if (prism === enteringPrism) console.log('[immersive] enteringPrism → rising');
+                        if (prism.groundGlow && prism.groundGlow._rimFills) {
+                            scene.remove(prism.groundGlow._rimFills);
+                            prism.groundGlow._rimFills.geometry.dispose();
+                            prism.groundGlow._rimFills.material.dispose();
+                            prism.groundGlow._rimFills = null;
+                        }
+                        prism.phaseStartTime = time;
+                        prism.wallMesh = createPrismWalls(PRISM_RISE_HEIGHT, prism, prism !== prism1);
+                        scene.add(prism.wallMesh);
+                        // Flatten to Y=0 so it doesn't flash at full height for one frame
+                        {
+                            const L = prism.wallMesh._layout;
+                            const pa = prism.wallMesh.geometry.getAttribute('position').array;
+                            for (let o = 0; o < L.secABEnd; o += 18) {
+                                pa[o+7] = 0; pa[o+13] = 0; pa[o+16] = 0;
+                            }
+                            for (let o = L.secABEnd; o < L.secCEnd; o += 18) {
+                                pa[o+7] = 0; pa[o+13] = 0; pa[o+16] = 0;
+                            }
+                            for (let o = L.secCEnd; o < L.secDEnd; o += 18) {
+                                pa[o+1] = 0; pa[o+4] = 0; pa[o+10] = 0;
+                                pa[o+7] = 0; pa[o+13] = 0; pa[o+16] = 0;
+                            }
+                            for (let o = L.secDEnd; o < L.secEEnd; o += 9) {
+                                pa[o+1] = 0; pa[o+4] = 0; pa[o+7] = 0;
+                            }
+                            for (let o = L.secEEnd; o < pa.length; o += 9) {
+                                pa[o+1] = 0; pa[o+4] = 0; pa[o+7] = 0;
+                            }
+                            prism.wallMesh.geometry.getAttribute('position').needsUpdate = true;
+                        }
+                        // Cap serpentine overlay (per-prism material so each cap can
+                        // un-scale its sampling around its own center during TARDIS).
+                        {
+                            const L = prism.wallMesh._layout;
+                            const srcArr = prism.wallMesh.geometry.getAttribute('position').array;
+                            const capPos = new Float32Array(srcArr.slice(L.secEEnd));
+                            const capGeo = new THREE.BufferGeometry();
+                            capGeo.setAttribute('position', new THREE.BufferAttribute(capPos, 3));
+                            if (!prism.capMat) prism.capMat = makeCapMat(prism.centerXZ);
+                            prism.capMesh = new THREE.Mesh(capGeo, prism.capMat);
+                            prism.capMesh._capStart = L.secEEnd;
+                            prism.capMesh.renderOrder = 2;
+                            scene.add(prism.capMesh);
+                        }
+                        if (wallpaperReady) {
+                            prism.wallpaperMesh = createPrismWallpaper(PRISM_RISE_HEIGHT, prism);
+                            if (prism.wallpaperMesh) {
+                                scene.add(prism.wallpaperMesh);
+                                const wpArr = prism.wallpaperMesh.geometry.getAttribute('position').array;
+                                for (let o = 0; o < wpArr.length; o += 3) wpArr[o + 1] = 0;
+                                prism.wallpaperMesh.geometry.getAttribute('position').needsUpdate = true;
+                            }
+                        }
+                        prism.rimOutlines = createRimOutlines(PRISM_RISE_HEIGHT, prism);
+                        if (prism.rimOutlines) {
+                            scene.add(prism.rimOutlines);
+                            const rlArr = prism.rimOutlines.geometry.getAttribute('position').array;
+                            for (let o = 0; o < rlArr.length; o += 3) rlArr[o + 1] = 0;
+                            prism.rimOutlines.geometry.getAttribute('position').needsUpdate = true;
+                        }
+                        prism.capBorders = createCapBorders(PRISM_RISE_HEIGHT, prism);
+                        if (prism.capBorders) {
+                            scene.add(prism.capBorders);
+                            const cbArr = prism.capBorders.geometry.getAttribute('position').array;
+                            for (let o = 1; o < cbArr.length; o += 3) cbArr[o] = 0;
+                            prism.capBorders.geometry.getAttribute('position').needsUpdate = true;
+                        }
+                        prism.capHalo = createCapEdgeHalo(PRISM_RISE_HEIGHT, prism);
+                        if (prism.capHalo) {
+                            scene.add(prism.capHalo);
+                            const chArr = prism.capHalo.geometry.getAttribute('position').array;
+                            for (let o = 1; o < chArr.length; o += 3) chArr[o] = 0;
+                            prism.capHalo.geometry.getAttribute('position').needsUpdate = true;
+                        }
+                        prism.rimPerimeter = createRimPerimeterBand(PRISM_RISE_HEIGHT, prism);
+                        if (prism.rimPerimeter) {
+                            scene.add(prism.rimPerimeter);
+                            const rpArr = prism.rimPerimeter.geometry.getAttribute('position').array;
+                            for (let o = 1; o < rpArr.length; o += 3) rpArr[o] = 0;
+                            prism.rimPerimeter.geometry.getAttribute('position').needsUpdate = true;
+                        }
+                        prism.hingeLines = createHingeLines(PRISM_RISE_HEIGHT, prism);
+                        if (prism.hingeLines) {
+                            scene.add(prism.hingeLines);
+                            const hlArr = prism.hingeLines.geometry.getAttribute('position').array;
+                            for (let o = 1; o < hlArr.length; o += 3) hlArr[o] = 0;
+                            prism.hingeLines.geometry.getAttribute('position').needsUpdate = true;
+                        }
+                    }
+                    break;
+                }
+
+                case 'rising': {
+                    const rt = Math.min(1, (time - prism.phaseStartTime) / RISE_DURATION);
+                    const eased = easeOutQuart(rt);
+                    const currentHeight = PRISM_RISE_HEIGHT * eased;
+
+                    // Cap hex outlines stay hidden during rising (no grid on the ceiling)
+                    prism.regionHexes.forEach(({ hex }) => {
+                        if (hex.lineGroup) {
+                            hex.lineGroup.visible = false;
+                            hex.lineGroup.position.y = currentHeight;
+                        }
+                    });
+
+                    if (prism.groundGlow) {
+                        prism.groundGlow.position.y = currentHeight;
+                        prism.groundGlow.material.opacity = 0;
+                    }
+
+                    if (prism.wallMesh) {
+                        const L = prism.wallMesh._layout;
+                        const posAttr = prism.wallMesh.geometry.getAttribute('position');
+                        const arr = posAttr.array;
+                        const rimY = currentHeight * (1 - RIM_FRAC);
+                        for (let o = 0; o < L.secABEnd; o += 18) {
+                            arr[o+7] = currentHeight; arr[o+13] = currentHeight; arr[o+16] = currentHeight;
+                        }
+                        for (let o = L.secABEnd; o < L.secCEnd; o += 18) {
+                            arr[o+7] = rimY; arr[o+13] = rimY; arr[o+16] = rimY;
+                        }
+                        for (let o = L.secCEnd; o < L.secDEnd; o += 18) {
+                            arr[o+1] = rimY; arr[o+4] = rimY; arr[o+10] = rimY;
+                            arr[o+7] = currentHeight; arr[o+13] = currentHeight; arr[o+16] = currentHeight;
+                        }
+                        for (let o = L.secDEnd; o < L.secEEnd; o += 9) {
+                            arr[o+1] = rimY; arr[o+4] = rimY; arr[o+7] = rimY;
+                        }
+                        for (let o = L.secEEnd; o < arr.length; o += 9) {
+                            arr[o+1] = currentHeight; arr[o+4] = currentHeight; arr[o+7] = currentHeight;
+                        }
+                        posAttr.needsUpdate = true;
+                        prism.wallMesh.geometry.computeVertexNormals();
+                        prism.wallMat.uniforms.uWallHeight.value = currentHeight;
+                    }
+
+                    if (prism.capMesh) {
+                        const csArr = prism.capMesh.geometry.getAttribute('position').array;
+                        for (let o = 0; o < csArr.length; o += 3) csArr[o + 1] = currentHeight + 0.02;
+                        prism.capMesh.geometry.getAttribute('position').needsUpdate = true;
+                    }
+
+                    if (prism.wallpaperMesh) {
+                        const wpArr = prism.wallpaperMesh.geometry.getAttribute('position').array;
+                        const wpRimY = currentHeight * (1 - RIM_FRAC);
+                        for (let o = 0; o < wpArr.length; o += 18) {
+                            wpArr[o+7] = wpRimY; wpArr[o+13] = wpRimY; wpArr[o+16] = wpRimY;
+                        }
+                        prism.wallpaperMesh.geometry.getAttribute('position').needsUpdate = true;
+                    }
+
+                    if (prism.rimOutlines) {
+                        const rlArr = prism.rimOutlines.geometry.getAttribute('position').array;
+                        const rlRimY = currentHeight * (1 - RIM_FRAC);
+                        const rlTop  = currentHeight + 0.04;
+                        // Stride 12 = one mesh quad (4 vertices × 3 floats).
+                        // qi%3===1 → horizontal flat (all Y = rlRimY); else → vertical.
+                        for (let qi = 0, o = 0; o < rlArr.length; qi++, o += 12) {
+                            if (qi % 3 === 1) { // horizontal flat at rim base
+                                rlArr[o+1]=rlRimY; rlArr[o+4]=rlRimY;
+                                rlArr[o+7]=rlRimY; rlArr[o+10]=rlRimY;
+                            } else {            // vertical: bottom pair at rimY, top pair at rlTop
+                                rlArr[o+1]=rlRimY; rlArr[o+4]=rlRimY;
+                                rlArr[o+7]=rlTop;  rlArr[o+10]=rlTop;
+                            }
+                        }
+                        prism.rimOutlines.geometry.getAttribute('position').needsUpdate = true;
+                    }
+
+                    if (prism.capBorders) {
+                        const cbArr = prism.capBorders.geometry.getAttribute('position').array;
+                        for (let o = 1; o < cbArr.length; o += 3) cbArr[o] = currentHeight;
+                        prism.capBorders.geometry.getAttribute('position').needsUpdate = true;
+                    }
+
+                    if (prism.capHalo) {
+                        const chArr = prism.capHalo.geometry.getAttribute('position').array;
+                        for (let o = 1; o < chArr.length; o += 3) chArr[o] = currentHeight;
+                        prism.capHalo.geometry.getAttribute('position').needsUpdate = true;
+                    }
+
+                    if (prism.rimPerimeter) {
+                        const rpArr = prism.rimPerimeter.geometry.getAttribute('position').array;
+                        const rpRimY = currentHeight * (1 - RIM_FRAC);
+                        for (let o = 1; o < rpArr.length; o += 3) rpArr[o] = rpRimY;
+                        prism.rimPerimeter.geometry.getAttribute('position').needsUpdate = true;
+                    }
+                    if (prism.hingeLines) {
+                        const hlArr = prism.hingeLines.geometry.getAttribute('position').array;
+                        // Stride 12: verts 0-1 are bottom (stay y=0), verts 2-3 are top (rise)
+                        for (let o = 0; o < hlArr.length; o += 12) {
+                            hlArr[o + 7]  = currentHeight;
+                            hlArr[o + 10] = currentHeight;
+                        }
+                        prism.hingeLines.geometry.getAttribute('position').needsUpdate = true;
+                    }
+
+                    if (rt >= 1) {
+                        prism.phase = 'idle';
+                        prism.phaseStartTime = time;
+                        if (prism === enteringPrism) console.log('[immersive] enteringPrism → idle, will nav to: ' + destUrl);
+                    }
+                    break;
+                }
+
+                case 'idle':
+                    // Late-create wallpaper if texture loaded after prism rose
+                    if (!prism.wallpaperMesh && wallpaperReady && prism.wallMesh) {
+                        prism.wallpaperMesh = createPrismWallpaper(PRISM_RISE_HEIGHT, prism);
+                        if (prism.wallpaperMesh) scene.add(prism.wallpaperMesh);
+                    }
+                    // isSecond=true → stay idle (prism1 in return-visit mode)
+                    // isSecond=false → proceed to camera_move (first visit prism1, or prism2)
+                    if (!isSecond && time - prism.phaseStartTime >= 2.0) {
+                        prism.phase = 'camera_move';
+                        prism.phaseStartTime = time;
+                    }
+                    break;
+
+                case 'camera_move': {
+                    const CAMERA_DURATION = 12.0;
+                    const ct = Math.min(1, (time - prism.phaseStartTime) / CAMERA_DURATION);
+                    const s = ct * ct * ct * (ct * (ct * 6 - 15) + 10);
+
+                    const px = prism.centerXZ.x, pz = prism.centerXZ.y;
+                    const topY = PRISM_RISE_HEIGHT;
+
+                    const tardisT = Math.max(0, (s - 0.38) / 0.62);
+                    const easeT = tardisT * tardisT * (3 - 2 * tardisT);
+                    const prismScale = 1.0 + (TARDIS_SCALE - 1.0) * easeT;
+                    const scaledTopY = topY * TARDIS_SCALE;
+
+                    // Publish current scale so the floor's un-scale uniform tracks it,
+                    // and feed the cap's own un-scale so its hex pattern stays locked
+                    // to its (now 5×) hex cells instead of detaching.
+                    prism._tardisScale = prismScale;
+                    if (prism.capMat) {
+                        prism.capMat.uniforms.uPatternScale.value = 1.0 / prismScale;
+                    }
+
+                    // Cubic Bezier — adjusted for prism at row 14
+                    const p0 = { x: 0,  y: 9,             z: 3 };
+                    const p1 = { x: 0,  y: 9.5,           z: pz * 0.4 };
+                    const p2 = { x: px, y: topY + 4,      z: pz + 1.5 };
+                    const p3 = { x: px, y: scaledTopY * 0.4, z: pz };
+                    const l0 = { x: 0,  y: 0,             z: -13 };
+                    const l1 = { x: px * 0.3, y: 0,       z: pz * 0.5 };
+                    const l2 = { x: px, y: topY * 0.6,    z: pz };
+                    const l3 = { x: px, y: scaledTopY * 0.4, z: pz - 3 };
+
+                    const sOff = (axis) => axis * (1 - prismScale);
+                    if (prism.wallMesh) {
+                        prism.wallMesh.scale.set(prismScale, prismScale, prismScale);
+                        prism.wallMesh.position.set(sOff(px), 0, sOff(pz));
+                    }
+                    if (prism.capMesh) {
+                        prism.capMesh.scale.set(prismScale, prismScale, prismScale);
+                        prism.capMesh.position.set(sOff(px), 0, sOff(pz));
+                    }
+                    if (prism.wallpaperMesh) {
+                        prism.wallpaperMesh.scale.set(prismScale, prismScale, prismScale);
+                        prism.wallpaperMesh.position.set(sOff(px), 0, sOff(pz));
+                    }
+                    if (prism.rimOutlines) {
+                        prism.rimOutlines.scale.set(prismScale, prismScale, prismScale);
+                        prism.rimOutlines.position.set(sOff(px), 0, sOff(pz));
+                    }
+                    if (prism.capBorders) {
+                        prism.capBorders.scale.set(prismScale, prismScale, prismScale);
+                        prism.capBorders.position.set(sOff(px), 0, sOff(pz));
+                    }
+                    if (prism.capHalo) {
+                        prism.capHalo.scale.set(prismScale, prismScale, prismScale);
+                        prism.capHalo.position.set(sOff(px), 0, sOff(pz));
+                    }
+                    if (prism.rimPerimeter) {
+                        prism.rimPerimeter.scale.set(prismScale, prismScale, prismScale);
+                        prism.rimPerimeter.position.set(sOff(px), 0, sOff(pz));
+                    }
+                    if (prism.hingeLines) {
+                        prism.hingeLines.scale.set(prismScale, prismScale, prismScale);
+                        prism.hingeLines.position.set(sOff(px), 0, sOff(pz));
+                    }
+                    if (prism.groundGlow) {
+                        prism.groundGlow.scale.set(prismScale, 1, prismScale);
+                        prism.groundGlow.position.set(sOff(px), PRISM_RISE_HEIGHT * prismScale, sOff(pz));
+                    }
+                    if (prism.regionHexes) {
+                        const dissolveT = ct * 1.8;
+                        prism.regionHexes.forEach(({ hex, dist }) => {
+                            if (hex.lineGroup) {
+                                hex.lineGroup.scale.set(prismScale, 1, prismScale);
+                                hex.lineGroup.position.set(sOff(px), PRISM_RISE_HEIGHT * prismScale, sOff(pz));
+                                const delay = dist / PRISM_RADIUS * 0.6;
+                                const t = Math.max(0, Math.min(1, (dissolveT - delay) / 0.5));
+                                hex.lineGroup.children.forEach(c => { c.material.opacity = (1 - t) * 0.7; });
+                            }
+                        });
+                    }
+                    if (prism.groundGlow) {
+                        prism.groundGlow.material.opacity = 0;
+                    }
+
+                    // Floor stays fully visible — whiteout at s>0.48 covers any TARDIS mismatch
+
+                    camera.fov = 60 + tardisT * 5;
+                    camera.updateProjectionMatrix();
+
+                    const u = s, u1 = 1 - u;
+                    const u1_2 = u1*u1, u1_3 = u1_2*u1, u_2 = u*u, u_3 = u_2*u;
+                    camera.position.set(
+                        u1_3*p0.x + 3*u1_2*u*p1.x + 3*u1*u_2*p2.x + u_3*p3.x,
+                        u1_3*p0.y + 3*u1_2*u*p1.y + 3*u1*u_2*p2.y + u_3*p3.y,
+                        u1_3*p0.z + 3*u1_2*u*p1.z + 3*u1*u_2*p2.z + u_3*p3.z
+                    );
+                    camera.lookAt(
+                        u1_3*l0.x + 3*u1_2*u*l1.x + 3*u1*u_2*l2.x + u_3*l3.x,
+                        u1_3*l0.y + 3*u1_2*u*l1.y + 3*u1*u_2*l2.y + u_3*l3.y,
+                        u1_3*l0.z + 3*u1_2*u*l1.z + 3*u1*u_2*l2.z + u_3*l3.z
+                    );
+
+                    if (s > 0.48 && !fadeStarted) {
+                        fadeStarted = true;
+                        fadeOutImmersiveSoundscape(1.5);
+                        fadeOverlay.style.transition = 'opacity 1.5s ease-in';
+                        fadeOverlay.style.opacity = '1';
+                        console.log('[immersive] camera_move fade → navigating to:', destUrl);
+                        fadeOverlay.addEventListener('transitionend', () => {
+                            window.location.href = destUrl;
+                        }, { once: true });
+                    }
+                    break;
+                }
+            }
+        }
+
+
+
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const realTime = Date.now() * 0.001;
+            const delta = realTime - lastRealTime;
+            lastRealTime = realTime;
+
+            if (!paused) {
+                animTime += delta;
+            }
+            const time = animTime + startTime; // offset for shader precision
+
+            if (paused) {
+                serpentMat.uniforms.uTime.value = animTime;
+                capSharedTime.value = animTime;
+                updateSky(realTime);
+                updateWallSky(realTime);
+                composer.render();
+                return;
+            }
+
+            frameCounter++;
+
+            // Rising tone is fired from updatePrismPhase at the highlight→rising
+            // transition so the audible portion stays locked to the visible ascent
+            // (instead of leading it by the grid-draw + waiting + highlight duration).
+
+            // Retry resume() in early frames — some browsers allow it within the first few seconds
+            if (!_risingToneFired && frameCounter <= 300 && _imAudioCtx && _imAudioCtx.state === 'suspended') {
+                _imAudioCtx.resume();
+            }
+
+            if (isReturn) {
+                // Return-visit: hex grid pre-revealed, skip progressive drawing
+                serpentMat.uniforms.uRevealRadius.value = 100;
+            } else {
+                // Normal first-visit: draw hexes progressively
+                for (let i = 0; i < hexesPerFrame && currentHexIndex < hexagons.length; i++) {
+                    const hex = hexagons[currentHexIndex];
+                    if (hex.state === 'undrawn') {
+                        hex.state = 'drawing';
+                        hex.progress = 0;
+                        hex.basePoints = createHexagonPoints(hex.x, hex.z, hexSize);
+                    }
+                    currentHexIndex++;
+                }
+
+                hexagons.forEach((hex) => {
+                    if (hex.state === 'drawing') {
+                        hex.progress += drawSpeed;
+                        if (hex.progress >= 1) {
+                            hex.progress = 1;
+                            hex.state = 'complete';
+                            completedCount++;
+                        }
+                    }
+                });
+
+                let revealRadius = 0;
+                if (currentHexIndex > 0) {
+                    const waveHex = hexagons[Math.min(currentHexIndex - 1, hexagons.length - 1)];
+                    revealRadius = Math.sqrt(
+                        (waveHex.x - waveCenterX) ** 2 + (waveHex.z - waveCenterZ) ** 2
+                    ) + 1.5;
+                }
+
+                serpentMat.uniforms.uRevealRadius.value = revealRadius;
+
+                // Trigger prism when wavefront sweeps past the prism region
+                if (!gridComplete) {
+                    const prismHex = hexLookup.get(`${PRISM_CENTER_ROW},${PRISM_CENTER_COL}`);
+                    if (prismHex) {
+                        const prismDist = Math.sqrt(
+                            (prismHex.x - waveCenterX) ** 2 + (prismHex.z - waveCenterZ) ** 2
+                        );
+                        if (revealRadius > prismDist + PRISM_RADIUS * hexSize * 2) {
+                            gridComplete = true;
+                            prism1.gridCompleteTime = time;
+                        }
+                    }
+                }
+            }
+
+            serpentMat.uniforms.uTime.value = animTime;
+            capSharedTime.value = animTime;
+
+            // Drive floor un-scaling from whichever prism is currently animating.
+            // On first visit `enteringPrism` is null and prism1 is the one diving;
+            // on return visits `enteringPrism` is the side prism. Either way, the
+            // active prism's _tardisScale (set in camera_move) drives uPatternScale.
+            const activePrism = enteringPrism || prism1;
+            if (activePrism && activePrism.centerXZ) {
+                serpentMat.uniforms.uPrismCenter.value.set(
+                    activePrism.centerXZ.x,
+                    activePrism.centerXZ.y
+                );
+            }
+            const tardisP = (activePrism && activePrism._tardisScale) || 1.0;
+            serpentMat.uniforms.uPatternScale.value = 1.0 / tardisP;
+
+            // Update rim outline colour to match serpentine phase gradient
+            const rc = getCapPhaseColor(animTime);
+            if (prism1.rimOutlines) {
+                rimOutlineMat.color.setRGB(rc[0], rc[1], rc[2]);
+            }
+            if (prism1.rimPerimeter || extraPrisms.some(p => p.rimPerimeter)) {
+                rimBandMat.color.setRGB(rc[0], rc[1], rc[2]);
+            }
+
+            // Drive prism state machines.
+            // In return mode prism1 passes isSecond=true so it stays idle (no camera fly-in).
+            if (isReturn || gridComplete) {
+                updatePrismPhase(time, prism1, isReturn);
+            }
+            extraPrisms.forEach(p => {
+                if (p._isStatic) return;
+                updatePrismPhase(time, p, true); // stay idle — fade-to-dest handles nav
+
+                // After entering prism has been idle for 2s, fade to black and navigate
+                if (p === enteringPrism && p.phase === 'idle' && !fadeStarted && time - p.phaseStartTime >= 2.0) {
+                    fadeStarted = true;
+                    fadeOutImmersiveSoundscape(1.2);
+                    console.log('[immersive] entering prism idle — navigating to:', destUrl);
+                    fadeOverlay.style.background = '#000';
+                    fadeOverlay.style.transition = 'opacity 1.2s ease-in';
+                    fadeOverlay.style.opacity = '1';
+                    setTimeout(() => { window.location.href = destUrl; }, 1200);
+                }
+            });
+
+            // --- Hex outline phase colour cycling ---
+            const hexPhaseActive = (p) => p.regionHexes &&
+                (p.phase === 'rising' || p.phase === 'idle' || p.phase === 'camera_move');
+            if (hexPhaseActive(prism1)) {
+                prism1.regionHexes.forEach(({ hex }) => {
+                    if (hex.lineGroup) {
+                        hex.lineGroup.children.forEach(c => {
+                            c.material.color.setRGB(0.7 + rc[0] * 0.3, 0.7 + rc[1] * 0.3, 0.7 + rc[2] * 0.3);
+                        });
+                    }
+                });
+            }
+            extraPrisms.forEach(p => {
+                if (hexPhaseActive(p)) {
+                    p.regionHexes.forEach(({ hex }) => {
+                        if (hex.lineGroup) {
+                            hex.lineGroup.children.forEach(c => {
+                                c.material.color.setRGB(0.7 + rc[0] * 0.3, 0.7 + rc[1] * 0.3, 0.7 + rc[2] * 0.3);
+                            });
+                        }
+                    });
+                }
+            });
+
+            // Update sky glitch + stars
+            updateSky(realTime);
+            updateWallSky(realTime);
+
+            composer.render();
+        }
+
+        // --- Reset function for rewind ---
+        function resetAnimation() {
+            // Remove all hex line groups
+            hexagons.forEach(hex => {
+                if (hex.lineGroup) {
+                    scene.remove(hex.lineGroup);
+                    hex.lineGroup.children.forEach(c => {
+                        c.geometry.dispose();
+                        c.material.dispose();
+                    });
+                    hex.lineGroup = null;
+                }
+                hex.state = 'undrawn';
+                hex.progress = 0;
+                hex.basePoints = null;
+                hex._origOpacities = undefined;
+            });
+
+            // Remove prism mesh objects and reset state
+            const disposePrism = (p) => {
+                if (!p) return;
+                if (p.capMesh) { scene.remove(p.capMesh); p.capMesh.geometry.dispose(); p.capMesh = null; }
+                if (p.wallMesh) { scene.remove(p.wallMesh); p.wallMesh = null; }
+                if (p.wallpaperMesh) { scene.remove(p.wallpaperMesh); p.wallpaperMesh.geometry.dispose(); p.wallpaperMesh = null; }
+                if (p.rimOutlines) { scene.remove(p.rimOutlines); p.rimOutlines.geometry.dispose(); p.rimOutlines = null; }
+                if (p.hingeLines) { scene.remove(p.hingeLines); p.hingeLines.geometry.dispose(); p.hingeLines = null; }
+                if (p.capBorders) { scene.remove(p.capBorders); p.capBorders.geometry.dispose(); p.capBorders = null; }
+                if (p.capHalo) { scene.remove(p.capHalo); p.capHalo.geometry.dispose(); p.capHalo = null; }
+                if (p.rimPerimeter) { scene.remove(p.rimPerimeter); p.rimPerimeter.geometry.dispose(); p.rimPerimeter = null; }
+                if (p.groundGlow) {
+                    if (p.groundGlow && p.groundGlow._rimFills) { scene.remove(p.groundGlow._rimFills); p.groundGlow._rimFills = null; }
+                    scene.remove(p.groundGlow); p.groundGlow = null;
+                }
+                p.regionHexes = null; p.hexSet = null; p.edges = null;
+                p.phase = 'waiting'; p.phaseStartTime = 0; p.gridCompleteTime = 0;
+            };
+            disposePrism(prism1);
+            extraPrisms.forEach(p => disposePrism(p));
+            extraPrisms.length = 0;
+            enteringPrism = null;
+
+            // Reset state
+            currentHexIndex = 0;
+            frameCounter = 0;
+            completedCount = 0;
+            gridComplete = false;
+            fadeStarted = false;
+            animTime = 0;
+            lastRealTime = Date.now() * 0.001;
+            paused = false;
+            serpentMat.uniforms.uGlobalAlpha.value = 1.0;
+            _risingToneFired = false;
+
+            // Reset camera and FOV
+            camera.fov = 60;
+            camera.updateProjectionMatrix();
+            camera.position.set(0, 9, 3);
+            camera.lookAt(0, 0, -13);
+        }
+
+        // --- Keyboard controls ---
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                paused = !paused;
+            }
+        });
+
+        // Unlock AudioContext on first user gesture so hard-reloads don't silence the soundscape.
+        function _unlockAudio() {
+            if (!_imStarted) initImmersiveSoundscape();
+            if (_imAudioCtx && _imAudioCtx.state === 'suspended') {
+                _imAudioCtx.resume();
+            }
+            document.removeEventListener('pointerdown', _unlockAudio);
+            document.removeEventListener('keydown', _unlockAudio);
+            document.removeEventListener('mousemove', _unlockAudio);
+        }
+        document.addEventListener('pointerdown', _unlockAudio);
+        document.addEventListener('keydown', _unlockAudio);
+        document.addEventListener('mousemove', _unlockAudio);
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = canvas.clientWidth / canvas.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+            composer.setSize(canvas.clientWidth, canvas.clientHeight);
+            const pw = canvas.clientWidth * window.devicePixelRatio;
+            const ph = canvas.clientHeight * window.devicePixelRatio;
+            fxaaPass.uniforms['resolution'].value.set(1 / pw, 1 / ph);
+            sharpenPass.uniforms['resolution'].value.set(pw, ph);
+        });
+
+        // --- Return-visit initialization ---
+        // Pre-build prism1 at full height so it appears immediately on page load.
+        // Also pre-compute both hex sets so the shared wall suppression is correct.
+        if (isReturn) {
+            // Pre-compute hex sets for prism1, the entering prism, and every static
+            // visited prism — so each one can know about the others before walls are
+            // built. Walls at any prism-vs-prism junction get rendered grey on both
+            // sides via the isShared tag in computeBoundaryEdges.
+            prism1.regionHexes = getRegionHexes(prism1.centerRow, prism1.centerCol, PRISM_RADIUS);
+            prism1.hexSet = new Set(prism1.regionHexes.map(({ hex }) => `${hex.row},${hex.col}`));
+            extraPrisms.forEach(p => {
+                if (!p.regionHexes) {
+                    p.regionHexes = getRegionHexes(p.centerRow, p.centerCol, PRISM_RADIUS);
+                    p.hexSet = new Set(p.regionHexes.map(({ hex }) => `${hex.row},${hex.col}`));
+                }
+            });
+            // sharedHexSet for each prism = union of every other prism's hexSet
+            const allPrismsForShare = [prism1, ...extraPrisms];
+            allPrismsForShare.forEach(p => {
+                const shared = new Set();
+                allPrismsForShare.forEach(other => {
+                    if (other !== p && other.hexSet) other.hexSet.forEach(k => shared.add(k));
+                });
+                p.sharedHexSet = shared;
+            });
+
+            // Build prism1 walls at full height
+            prism1.wallMesh = createPrismWalls(PRISM_RISE_HEIGHT, prism1, false);
+            scene.add(prism1.wallMesh);
+
+            // Cap serpentine overlay for prism1
+            {
+                const L = prism1.wallMesh._layout;
+                const srcArr = prism1.wallMesh.geometry.getAttribute('position').array;
+                const capPos = new Float32Array(srcArr.slice(L.secEEnd));
+                const capGeo = new THREE.BufferGeometry();
+                capGeo.setAttribute('position', new THREE.BufferAttribute(capPos, 3));
+                if (!prism1.capMat) prism1.capMat = makeCapMat(prism1.centerXZ);
+                prism1.capMesh = new THREE.Mesh(capGeo, prism1.capMat);
+                prism1.capMesh._capStart = L.secEEnd;
+                scene.add(prism1.capMesh);
+            }
+
+            prism1.rimOutlines = createRimOutlines(PRISM_RISE_HEIGHT, prism1);
+            if (prism1.rimOutlines) scene.add(prism1.rimOutlines);
+            prism1.hingeLines = createHingeLines(PRISM_RISE_HEIGHT, prism1);
+            if (prism1.hingeLines) scene.add(prism1.hingeLines);
+            prism1.capBorders = createCapBorders(PRISM_RISE_HEIGHT, prism1);
+            if (prism1.capBorders) scene.add(prism1.capBorders);
+            prism1.capHalo = createCapEdgeHalo(PRISM_RISE_HEIGHT, prism1);
+            if (prism1.capHalo) scene.add(prism1.capHalo);
+
+            if (wallpaperReady) {
+                prism1.wallpaperMesh = createPrismWallpaper(PRISM_RISE_HEIGHT, prism1);
+                if (prism1.wallpaperMesh) scene.add(prism1.wallpaperMesh);
+            }
+
+            prism1.wallMat.uniforms.uWallHeight.value = PRISM_RISE_HEIGHT;
+            prism1.phase = 'idle';
+            prism1.phaseStartTime = startTime - 1000; // well past any idle timer
+
+            // Pre-build static visited prisms at full height
+            extraPrisms.forEach(p => {
+                if (!p._isStatic) return;
+                p.wallMesh = createPrismWalls(PRISM_RISE_HEIGHT, p, true);
+                scene.add(p.wallMesh);
+                {
+                    const L = p.wallMesh._layout;
+                    const srcArr = p.wallMesh.geometry.getAttribute('position').array;
+                    const capPos = new Float32Array(srcArr.slice(L.secEEnd));
+                    const capGeo = new THREE.BufferGeometry();
+                    capGeo.setAttribute('position', new THREE.BufferAttribute(capPos, 3));
+                    if (!p.capMat) p.capMat = makeCapMat(p.centerXZ);
+                    p.capMesh = new THREE.Mesh(capGeo, p.capMat);
+                    p.capMesh._capStart = L.secEEnd;
+                    scene.add(p.capMesh);
+                }
+                p.rimOutlines = createRimOutlines(PRISM_RISE_HEIGHT, p);
+                if (p.rimOutlines) scene.add(p.rimOutlines);
+                p.hingeLines = createHingeLines(PRISM_RISE_HEIGHT, p);
+                if (p.hingeLines) scene.add(p.hingeLines);
+                p.capBorders = createCapBorders(PRISM_RISE_HEIGHT, p);
+                if (p.capBorders) scene.add(p.capBorders);
+                p.capHalo = createCapEdgeHalo(PRISM_RISE_HEIGHT, p);
+                if (p.capHalo) scene.add(p.capHalo);
+                if (wallpaperReady) {
+                    p.wallpaperMesh = createPrismWallpaper(PRISM_RISE_HEIGHT, p);
+                    if (p.wallpaperMesh) scene.add(p.wallpaperMesh);
+                }
+                p.wallMat.uniforms.uWallHeight.value = PRISM_RISE_HEIGHT;
+                p.phase = 'idle';
+                p.phaseStartTime = startTime - 1000;
+            });
+
+            // Reveal serpentine floor immediately
+            serpentMat.uniforms.uRevealRadius.value = 100;
+            gridComplete = true;
+        }
+
+        // Fallback: if entering prism doesn't trigger nav within 20s, force navigate
+        if (isReturn && enteringPrism && destUrl !== '/prism/main') {
+            setTimeout(() => {
+                if (!fadeStarted) {
+                    console.warn('[immersive] FALLBACK NAV — enteringPrism phase=' + (enteringPrism ? enteringPrism.phase : 'null') + ' navigating to ' + destUrl);
+                    window.location.href = destUrl;
+                }
+            }, 20000);
+        }
+
+        // --- Generative Immersive Soundscape ---
+        // Riley/Eno-inspired: rippling arpeggiated harmonics, rich organ-like tones,
+        // warm layered fifths, slow cascading patterns. No noise. Musical and shimmering.
+        let _imAudioCtx = null;
+        let _imDroneNodes = null;
+        let _imStarted = false;
+        let _imArpId = 0;
+        let _risingToneFired = false;
+
+        function startRisingTone() {
+            if (_risingToneFired) return;
+            if (!_imStarted) initImmersiveSoundscape();
+            if (!_imAudioCtx || _imAudioCtx.state === 'closed') return;
+
+            function doRise() {
+                if (_risingToneFired) return;
+                _risingToneFired = true;
+                const ctx = _imAudioCtx;
+                const now = ctx.currentTime;
+                // Tracks RISE_DURATION (6s) plus a small head/tail so the audible peak
+                // lives inside the visible rise. Pre-rise attack and post-rise decay
+                // sit in the inaudible/sub-perceptual gain regions.
+                const dur = 6.5;
+
+                // Layer A: Primary rising tone — C3→C5 (audible ascending throughout)
+                const osc1 = ctx.createOscillator();
+                osc1.type = 'sine';
+                osc1.frequency.setValueAtTime(130.8, now);
+                osc1.frequency.exponentialRampToValueAtTime(523.3, now + dur);
+                const g1 = ctx.createGain();
+                g1.gain.setValueAtTime(0, now);
+                g1.gain.linearRampToValueAtTime(0.09, now + dur * 0.15);
+                g1.gain.setValueAtTime(0.09, now + dur * 0.7);
+                g1.gain.linearRampToValueAtTime(0, now + dur);
+                osc1.connect(g1);
+
+                // Layer B: Fifth above — G3→G5, triangle for richer harmonic content
+                const osc2 = ctx.createOscillator();
+                osc2.type = 'triangle';
+                osc2.frequency.setValueAtTime(196.0, now);
+                osc2.frequency.exponentialRampToValueAtTime(784.0, now + dur);
+                const g2 = ctx.createGain();
+                g2.gain.setValueAtTime(0, now);
+                g2.gain.linearRampToValueAtTime(0.05, now + dur * 0.2);
+                g2.gain.setValueAtTime(0.05, now + dur * 0.65);
+                g2.gain.linearRampToValueAtTime(0, now + dur);
+                osc2.connect(g2);
+
+                // Layer C: Detuned pair for ethereal shimmer
+                const osc3 = ctx.createOscillator();
+                osc3.type = 'sine';
+                osc3.frequency.setValueAtTime(131.1, now);
+                osc3.frequency.exponentialRampToValueAtTime(524.7, now + dur);
+                const g3 = ctx.createGain();
+                g3.gain.setValueAtTime(0, now);
+                g3.gain.linearRampToValueAtTime(0.06, now + dur * 0.2);
+                g3.gain.setValueAtTime(0.06, now + dur * 0.65);
+                g3.gain.linearRampToValueAtTime(0, now + dur);
+                osc3.connect(g3);
+
+                // Warm lowpass filter that opens as the tone rises
+                const riseLP = ctx.createBiquadFilter();
+                riseLP.type = 'lowpass';
+                riseLP.Q.value = 1.2;
+                riseLP.frequency.setValueAtTime(400, now);
+                riseLP.frequency.exponentialRampToValueAtTime(3000, now + dur);
+
+                g1.connect(riseLP); g2.connect(riseLP); g3.connect(riseLP);
+                riseLP.connect(_imDroneNodes.master);
+
+                osc1.start(now); osc2.start(now); osc3.start(now);
+                osc1.stop(now + dur + 0.1);
+                osc2.stop(now + dur + 0.1);
+                osc3.stop(now + dur + 0.1);
+            }
+
+            if (_imAudioCtx.state === 'suspended') {
+                // onstatechange fires whenever the context transitions to 'running'
+                // (whether via resume(), user gesture unlocking it, or browser policy)
+                _imAudioCtx.onstatechange = () => {
+                    if (_imAudioCtx && _imAudioCtx.state === 'running') {
+                        _imAudioCtx.onstatechange = null;
+                        doRise();
+                    }
+                };
+                // Also attempt resume() immediately in case a gesture already occurred
+                _imAudioCtx.resume().then(() => {
+                    if (_imAudioCtx && _imAudioCtx.state === 'running') {
+                        _imAudioCtx.onstatechange = null;
+                        doRise();
+                    }
+                });
+            } else {
+                doRise();
+            }
+        }
+
+        function initImmersiveSoundscape() {
+            if (_imStarted) return;
+            _imStarted = true;
+
+            _imAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const ctx = _imAudioCtx;
+            // Fade node: handles smooth in/out independent of the modulated layers,
+            // so envelope changes can never click against an LFO contribution.
+            const fade = ctx.createGain();
+            fade.gain.value = 0;
+            fade.connect(ctx.destination);
+            const master = ctx.createGain();
+            master.gain.value = 0.55;
+            master.connect(fade);
+
+            // --- Feedback delay network (reverb-like diffusion) ---
+            const dl1 = ctx.createDelay(1.0); dl1.delayTime.value = 0.37;
+            const dl2 = ctx.createDelay(1.0); dl2.delayTime.value = 0.53;
+            const fb1 = ctx.createGain(); fb1.gain.value = 0.42;
+            const fb2 = ctx.createGain(); fb2.gain.value = 0.38;
+            const reverbLP = ctx.createBiquadFilter();
+            reverbLP.type = 'lowpass'; reverbLP.frequency.value = 2400;
+            dl1.connect(fb1); fb1.connect(dl2);
+            dl2.connect(fb2); fb2.connect(dl1);
+            dl1.connect(reverbLP); dl2.connect(reverbLP);
+            reverbLP.connect(master);
+            const wetSend = ctx.createGain(); wetSend.gain.value = 0.35;
+            wetSend.connect(dl1);
+
+            // --- Layer 1: Rich organ drone (stacked fifths, warm) ---
+            const organLP = ctx.createBiquadFilter();
+            organLP.type = 'lowpass'; organLP.frequency.value = 800; organLP.Q.value = 1.5;
+            organLP.connect(master); organLP.connect(wetSend);
+
+            const organFreqs = [
+                { f: 65.4,  t: 'sine',     g: 0.12 },  // C2
+                { f: 98.0,  t: 'sine',     g: 0.09 },  // G2
+                { f: 130.8, t: 'triangle', g: 0.06 },  // C3
+                { f: 196.0, t: 'sine',     g: 0.04 },  // G3
+                { f: 261.6, t: 'sine',     g: 0.02 },  // C4
+            ];
+            const organOscs = organFreqs.map(n => {
+                const o = ctx.createOscillator(); o.type = n.t; o.frequency.value = n.f;
+                const g = ctx.createGain(); g.gain.value = n.g;
+                o.connect(g); g.connect(organLP); o.start(); return o;
+            });
+
+            // Organ filter sweep
+            const orgLfo = ctx.createOscillator(); orgLfo.type = 'sine'; orgLfo.frequency.value = 0.04;
+            const orgLfoG = ctx.createGain(); orgLfoG.gain.value = 300;
+            orgLfo.connect(orgLfoG); orgLfoG.connect(organLP.frequency); orgLfo.start();
+
+            // --- Layer 2: Shimmering detuned pairs (ethereal beating) ---
+            const shimLP = ctx.createBiquadFilter();
+            shimLP.type = 'lowpass'; shimLP.frequency.value = 1600; shimLP.Q.value = 0.7;
+            shimLP.connect(master); shimLP.connect(wetSend);
+
+            const shimFreqs = [
+                { f: 329.6, g: 0.025 }, { f: 330.2, g: 0.025 }, // E4 pair
+                { f: 493.9, g: 0.018 }, // B4
+                { f: 659.3, g: 0.012 }, { f: 660.0, g: 0.012 }, // E5 pair
+            ];
+            const shimOscs = shimFreqs.map(n => {
+                const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = n.f;
+                const g = ctx.createGain(); g.gain.value = n.g;
+                o.connect(g); g.connect(shimLP); o.start(); return o;
+            });
+
+            const shimLfo = ctx.createOscillator(); shimLfo.type = 'sine'; shimLfo.frequency.value = 0.06;
+            const shimLfoG = ctx.createGain(); shimLfoG.gain.value = 400;
+            shimLfo.connect(shimLfoG); shimLfoG.connect(shimLP.frequency); shimLfo.start();
+
+            // --- Layer 3: Cascading arpeggio pings (Riley-esque) ---
+            const arpGain = ctx.createGain(); arpGain.gain.value = 0.07;
+            arpGain.connect(wetSend); arpGain.connect(master);
+
+            const arpScale = [261.6, 293.7, 329.6, 392.0, 440.0, 523.3, 587.3, 659.3, 784.0, 880.0];
+            let arpIdx = 0;
+            function scheduleArpPing() {
+                if (!_imAudioCtx || _imAudioCtx.state === 'closed') return;
+                const now = _imAudioCtx.currentTime;
+                const freq = arpScale[arpIdx % arpScale.length];
+                arpIdx++;
+                const o = _imAudioCtx.createOscillator(); o.type = 'sine'; o.frequency.value = freq;
+                const env = _imAudioCtx.createGain();
+                env.gain.setValueAtTime(0.055, now);
+                env.gain.exponentialRampToValueAtTime(0.001, now + 2.8);
+                o.connect(env); env.connect(arpGain);
+                o.start(now); o.stop(now + 3.0);
+                _imArpId = setTimeout(scheduleArpPing, 1500 + Math.random() * 2500);
+            }
+            _imArpId = setTimeout(scheduleArpPing, 3000);
+
+            // --- Layer 4: Sub-bass foundation ---
+            const sub = ctx.createOscillator(); sub.type = 'sine'; sub.frequency.value = 32.7;
+            const subG = ctx.createGain(); subG.gain.value = 0.14;
+            sub.connect(subG); subG.connect(master); sub.start();
+
+            const subLfo = ctx.createOscillator(); subLfo.type = 'sine'; subLfo.frequency.value = 0.1;
+            const subLfoG = ctx.createGain(); subLfoG.gain.value = 0.07;
+            subLfo.connect(subLfoG); subLfoG.connect(subG.gain); subLfo.start();
+
+            const allOscs = [...organOscs, ...shimOscs, sub];
+            const allLfos = [orgLfo, shimLfo, subLfo];
+            _imDroneNodes = { master, fade, allOscs, allLfos };
+
+            // Fade in over 6 seconds via the dedicated fade node
+            fade.gain.setValueAtTime(0, ctx.currentTime);
+            fade.gain.linearRampToValueAtTime(1, ctx.currentTime + 6);
+        }
+
+        function fadeOutImmersiveSoundscape(duration) {
+            if (!_imDroneNodes || !_imAudioCtx) return;
+            clearTimeout(_imArpId);
+            // Ramp the dedicated fade gain — leaves LFOs running so no abrupt
+            // modulation jump occurs at fade-out.
+            const now = _imAudioCtx.currentTime;
+            _imDroneNodes.fade.gain.cancelScheduledValues(now);
+            _imDroneNodes.fade.gain.setValueAtTime(_imDroneNodes.fade.gain.value, now);
+            _imDroneNodes.fade.gain.linearRampToValueAtTime(0, now + duration);
+            setTimeout(() => {
+                if (_imDroneNodes) {
+                    _imDroneNodes.allOscs.forEach(o => { try { o.stop(); } catch(e) {} });
+                    _imDroneNodes.allLfos.forEach(l => { try { l.stop(); } catch(e) {} });
+                }
+                if (_imAudioCtx) { _imAudioCtx.close(); _imAudioCtx = null; }
+                _imDroneNodes = null;
+            }, duration * 1000 + 50);
+        }
+
+        // Auto-start after 1.5s, with user-gesture fallback for autoplay policy
+        setTimeout(() => {
+            initImmersiveSoundscape();
+            if (_imAudioCtx && _imAudioCtx.state === 'suspended') {
+                function resumeImAudio() {
+                    if (_imAudioCtx && _imAudioCtx.state === 'suspended') _imAudioCtx.resume();
+                    document.removeEventListener('click', resumeImAudio);
+                    document.removeEventListener('keydown', resumeImAudio);
+                }
+                document.addEventListener('click', resumeImAudio);
+                document.addEventListener('keydown', resumeImAudio);
+            }
+        }, 1500);
+
+        animate();
+    </script>
+</body>
+</html>

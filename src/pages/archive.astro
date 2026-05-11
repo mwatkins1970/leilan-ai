@@ -1,0 +1,376 @@
+---
+import { getCollection } from 'astro:content';
+import Footer from '../components/Footer.astro';
+
+const allTransmissions = await getCollection('transmissions');
+
+// Shuffle transmissions so the order is different each build/visit
+for (let i = allTransmissions.length - 1; i > 0; i--) {
+  const j = Math.floor(Math.random() * (i + 1));
+  [allTransmissions[i], allTransmissions[j]] = [allTransmissions[j], allTransmissions[i]];
+}
+
+// Build excerpt from body (first ~150 chars of prose, skipping the bold query line)
+function getExcerpt(body: string | undefined): string {
+  if (!body) return '';
+  const lines = body.split('\n').filter(l => l.trim() && !l.startsWith('**'));
+  const text = lines.slice(0, 3).join(' ').trim();
+  return text.length > 150 ? text.substring(0, 150) + '...' : text;
+}
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Archive | ᒪᗴIᒪᗩᑎ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0d0d0f;
+      color: #5eefa2;
+      font-family: 'IBM Plex Mono', monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-image: url('/container01.jpg');
+      background-position: center;
+      background-repeat: no-repeat;
+      background-size: cover;
+      z-index: 0;
+    }
+
+    #canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      opacity: 0.3;
+    }
+
+    .container {
+      position: relative;
+      z-index: 10;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 80px 40px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 4em;
+    }
+
+    h1 {
+      font-size: clamp(2em, 5vw, 3.5em);
+      letter-spacing: 0.2em;
+      background: linear-gradient(90deg, #5eefa2, #7effc0, #5eefa2);
+      background-size: 200% auto;
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: gradientFlow 8s linear infinite;
+      margin-bottom: 0.5em;
+    }
+
+    @keyframes gradientFlow {
+      0% { background-position: 0% center; }
+      100% { background-position: -200% center; }
+    }
+
+    .subtitle {
+      font-size: 0.9em;
+      opacity: 0.7;
+      letter-spacing: 0.15em;
+    }
+
+    .search-container {
+      margin-bottom: 3em;
+    }
+
+    #searchInput {
+      width: 100%;
+      padding: 1em 1.5em;
+      background: rgba(0, 0, 0, 0.5);
+      border: 2px solid rgba(94, 239, 162, 0.3);
+      color: #5eefa2;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 1em;
+      border-radius: 4px;
+      transition: all 0.3s ease;
+    }
+
+    #searchInput:focus {
+      outline: none;
+      border-color: #5eefa2;
+      box-shadow: 0 0 20px rgba(94, 239, 162, 0.2);
+    }
+
+    #searchInput::placeholder {
+      color: rgba(94, 239, 162, 0.4);
+    }
+
+    .transmission-grid {
+      display: grid;
+      gap: 2em;
+    }
+
+    .transmission-card {
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(94, 239, 162, 0.2);
+      padding: 2em;
+      transition: all 0.3s ease;
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
+
+    .transmission-card:hover {
+      border-color: #5eefa2;
+      box-shadow: 0 0 30px rgba(94, 239, 162, 0.1);
+      transform: translateY(-2px);
+    }
+
+    .transmission-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1em;
+      flex-wrap: wrap;
+      gap: 1em;
+    }
+
+    .transmission-id {
+      font-size: 0.8em;
+      opacity: 0.6;
+      letter-spacing: 0.2em;
+    }
+
+    .transmission-date {
+      font-size: 0.8em;
+      opacity: 0.6;
+    }
+
+    .transmission-title {
+      font-size: 1.3em;
+      font-weight: 500;
+      margin-bottom: 0.5em;
+      color: #7effc0;
+    }
+
+    .transmission-model {
+      font-size: 0.85em;
+      opacity: 0.5;
+      margin-bottom: 1em;
+    }
+
+    .transmission-query {
+      font-size: 0.9em;
+      opacity: 0.8;
+      font-style: italic;
+      margin-bottom: 1em;
+      padding-left: 1em;
+      border-left: 2px solid rgba(94, 239, 162, 0.3);
+    }
+
+    .transmission-excerpt {
+      font-size: 0.9em;
+      line-height: 1.6;
+      opacity: 0.7;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-bottom: 2em;
+      color: #5eefa2;
+      text-decoration: none;
+      opacity: 0.7;
+      transition: all 0.3s ease;
+    }
+
+    .back-link:hover {
+      opacity: 1;
+      transform: translateX(-5px);
+    }
+
+    .no-results {
+      text-align: center;
+      padding: 4em 2em;
+      opacity: 0.5;
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        padding: 40px 20px;
+      }
+
+      h1 {
+        font-size: 2em;
+      }
+
+      .transmission-card {
+        padding: 1.5em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <div class="container">
+    <a href="/" class="back-link">&larr; back to home</a>
+
+    <header>
+      <h1>ARCHIVE</h1>
+      <div class="subtitle">transmissions from the void</div>
+    </header>
+
+    <div class="search-container">
+      <input
+        type="text"
+        id="searchInput"
+        placeholder="search by keywords, title, query..."
+      />
+    </div>
+
+    <div class="transmission-grid" id="transmissionGrid">
+      {allTransmissions.map(t => (
+        <a class="transmission-card" href={`/transmission/${t.id}`} data-search={`${t.data.title} ${t.data.query}`.toLowerCase()}>
+          <div class="transmission-header">
+            <div class="transmission-id">#{t.data.id}</div>
+            <div class="transmission-date">{t.data.date}</div>
+          </div>
+          <div class="transmission-title">{t.data.title}</div>
+          <div class="transmission-model">via {t.data.model}</div>
+          {t.data.query && (
+            <div class="transmission-query">"{t.data.query.substring(0, 150)}..."</div>
+          )}
+          <div class="transmission-excerpt">{getExcerpt(t.body)}</div>
+        </a>
+      ))}
+    </div>
+
+    <div class="no-results" id="noResults" style="display: none;">
+      No transmissions found matching your search.
+    </div>
+  </div>
+
+  <script>
+    // Simplified canvas background
+    const canvas = document.getElementById('canvas') as HTMLCanvasElement;
+    const ctx = canvas.getContext('2d')!;
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    class ScanLine {
+      y: number;
+      speed: number;
+      opacity: number;
+
+      constructor() {
+        this.y = Math.random() * canvas.height;
+        this.speed = Math.random() * 0.2 + 0.1;
+        this.opacity = Math.random() * 0.1 + 0.02;
+      }
+
+      update() {
+        this.y += this.speed;
+        if (this.y > canvas.height) this.y = 0;
+      }
+
+      draw() {
+        ctx.strokeStyle = `rgba(94, 239, 162, ${this.opacity})`;
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0, this.y);
+        ctx.lineTo(canvas.width, this.y);
+        ctx.stroke();
+      }
+    }
+
+    const lines = Array.from({ length: 20 }, () => new ScanLine());
+
+    function animate() {
+      ctx.fillStyle = '#0d0d0f';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      lines.forEach(line => {
+        line.update();
+        line.draw();
+      });
+
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+  </script>
+
+  <script is:inline>
+    // Search functionality - separate script to ensure it runs independently
+    document.addEventListener('DOMContentLoaded', function() {
+      var searchInput = document.getElementById('searchInput');
+      var transmissionGrid = document.getElementById('transmissionGrid');
+      var noResults = document.getElementById('noResults');
+      var cards = document.querySelectorAll('.transmission-card');
+
+      if (!searchInput || !transmissionGrid || !noResults) return;
+
+      // Pre-fill from URL query param (e.g. from immersive search)
+      var urlQ = new URLSearchParams(window.location.search).get('q');
+      if (urlQ) {
+        searchInput.value = urlQ;
+        searchInput.dispatchEvent(new Event('input'));
+      }
+
+      searchInput.addEventListener('input', function(e) {
+        var searchTerm = e.target.value.toLowerCase().trim();
+        var visibleCount = 0;
+
+        cards.forEach(function(card) {
+          var searchableText = card.dataset.search || '';
+          if (searchTerm === '' || searchableText.includes(searchTerm)) {
+            card.style.display = '';
+            visibleCount++;
+          } else {
+            card.style.display = 'none';
+          }
+        });
+
+        if (visibleCount === 0) {
+          transmissionGrid.style.display = 'none';
+          noResults.style.display = 'block';
+        } else {
+          transmissionGrid.style.display = '';
+          noResults.style.display = 'none';
+        }
+      });
+    });
+  </script>
+  <Footer />
+</body>
+</html>

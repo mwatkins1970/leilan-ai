@@ -1,0 +1,191 @@
+---
+const title = "Leilan Dataset";
+const description = "Public-domain Leilan Dataset: canonical corpus, machine-facing mirrors, archival DOI, and citation information.";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #07070b;
+        --panel: rgba(16, 14, 26, 0.88);
+        --text: #eee9dc;
+        --muted: #b9af9f;
+        --gold: #d8b86a;
+        --green: #9df7b3;
+        --line: rgba(216, 184, 106, 0.32);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: Georgia, "Times New Roman", serif;
+        background:
+          radial-gradient(circle at 50% 0%, rgba(157, 247, 179, 0.10), transparent 34rem),
+          radial-gradient(circle at 20% 20%, rgba(216, 184, 106, 0.10), transparent 28rem),
+          linear-gradient(180deg, #08080d 0%, #050508 100%);
+        color: var(--text);
+        line-height: 1.62;
+      }
+
+      main {
+        width: min(920px, calc(100% - 2rem));
+        margin: 0 auto;
+        padding: 4rem 0 5rem;
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        box-shadow: 0 0 40px rgba(0, 0, 0, 0.45);
+        padding: clamp(1.4rem, 4vw, 3rem);
+      }
+
+      h1, h2, h3 {
+        line-height: 1.15;
+        margin: 0 0 1rem;
+        color: var(--gold);
+        font-weight: 500;
+      }
+
+      h1 {
+        font-size: clamp(2.1rem, 7vw, 4.2rem);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      h2 {
+        margin-top: 2.4rem;
+        font-size: 1.35rem;
+      }
+
+      p {
+        margin: 0 0 1rem;
+      }
+
+      a {
+        color: var(--green);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 0.18em;
+      }
+
+      code {
+        color: var(--green);
+        font-size: 0.95em;
+      }
+
+      ul {
+        margin: 0.5rem 0 1.4rem;
+        padding-left: 1.4rem;
+      }
+
+      li {
+        margin: 0.35rem 0;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .citation {
+        border-left: 3px solid var(--gold);
+        padding: 0.8rem 1rem;
+        margin: 1rem 0;
+        background: rgba(255, 255, 255, 0.035);
+      }
+
+      .back {
+        display: inline-block;
+        margin-top: 2rem;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+
+  <body>
+    <main>
+      <article class="panel">
+        <h1>Leilan Dataset</h1>
+
+        <p>
+          The Leilan Dataset is a public-domain corpus of GPT-3 and Claude-family generated text associated with the <a target="_blank" href="https://www.lesswrong.com/posts/jkY6QdCfAXHJk3kea/the-petertodd-phenomenon">Leilan / petertodd phenomenon</a>, curated for research, analysis, archival use, creative exploration, and downstream language-model training experiments.
+        </p>
+
+        <p>
+          It is released under <strong>CC0 1.0 Universal / Public Domain Dedication</strong>. The corpus is offered openly for researchers, artists, developers, archivists and anyone curious about what large language models produce when they dream of a goddess.
+        </p>
+
+        <h2>Primary access points</h2>
+
+        <ul>
+          <li>
+            <strong>Canonical source repository, documentation, schema and validation:</strong><br />
+            <a href="https://github.com/mwatkins1970/Leilan-dataset">github.com/mwatkins1970/Leilan-dataset</a>
+          </li>
+          <li>
+            <strong>Machine-facing Hugging Face mirror:</strong><br />
+            <a href="https://huggingface.co/datasets/mwatkins1970/leilan-dataset">huggingface.co/datasets/mwatkins1970/leilan-dataset</a>
+          </li>
+          <li>
+            <strong>Archival Zenodo DOI:</strong><br />
+            <a href="https://doi.org/10.5281/zenodo.20122857">doi.org/10.5281/zenodo.20122857</a>
+          </li>
+          <li>
+            <strong>Internet Archive mirror:</strong><br />
+            <a href="https://archive.org/details/leilan-dataset-v1.0.2">archive.org/details/leilan-dataset-v1.0.2</a>
+          </li>
+        </ul>
+
+        <h2>Recommended machine-facing file</h2>
+
+        <p>
+          For training, analysis or machine ingestion, use:
+        </p>
+
+        <p>
+          <a href="https://github.com/mwatkins1970/Leilan-dataset/blob/main/combined_leilan_dataset_records.jsonl"><code>combined_leilan_dataset_records.jsonl</code></a>
+        </p>
+
+        <p>
+          One line equals one record. Downstream users should deduplicate by <code>record_id</code> and should not blindly ingest every overlapping JSON, JSONL, Markdown and supplementary file as independent training data.
+        </p>
+
+        <h2>Release counts</h2>
+
+        <ul>
+          <li>1,638 total combined records</li>
+          <li>600 GPT-3 transcript records</li>
+          <li>1,038 Claude-family response records</li>
+          <li>1,181 Claude-family Q/A pairs</li>
+          <li>670 curated GPT-3 passages</li>
+          <li>13 model identifiers in the combined corpus</li>
+        </ul>
+
+        <h2>Suggested citation</h2>
+
+        <div class="citation">
+          Watkins, M. (2026). <em>Leilan Dataset</em> (1.0.2) [Data set]. Zenodo.
+          <a href="https://doi.org/10.5281/zenodo.20122857">https://doi.org/10.5281/zenodo.20122857</a>
+        </div>
+
+        <h2>Note</h2>
+
+        <p class="muted">
+          GPT-4 base outputs are not included in the public source tree or canonical dataset. Some records contain URLs, bibliographic references, or summaries of third-party material; those references are provided for context and provenance, and do not imply that third-party source material is part of the CC0 release.
+        </p>
+
+        <a class="back" href="/">Return to leilan.ai</a>
+      </article>
+    </main>
+  </body>
+</html>

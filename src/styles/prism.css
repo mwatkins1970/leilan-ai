@@ -1,0 +1,1711 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { overscroll-behavior: none; }
+
+body {
+    background: #000;
+    overflow: hidden;
+    height: 100vh;
+    overscroll-behavior: none;
+    width: 100vw;
+    font-family: 'IBM Plex Mono', monospace;
+}
+
+/* --- Layout --- */
+.chamber {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* Opaque curtain sits on top of everything while assets load.
+   The browser paints the scene normally behind it so all layers
+   (sky canvas, CSS backgrounds, images) are fully composited
+   before the curtain is removed — no piecemeal assembly. */
+.scene-curtain {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: #000;
+    transition: opacity 0.35s ease-out;
+    pointer-events: none;
+}
+.scene-curtain.lift {
+    opacity: 0;
+}
+
+/* Sky canvas — full viewport background layer */
+.sky-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+}
+.sky-layer canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* Wall area — perspective container for the 3D prism */
+.wall-area {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 78vh;
+    --perspective-dist: 1200px;
+    perspective: var(--perspective-dist);
+    perspective-origin: center center;
+    z-index: 1;
+    --wall-w: 77.7vh;
+    --apothem: calc(var(--wall-w) * 0.866);
+    user-select: none;
+    -webkit-user-select: none;
+}
+/* .prism-ready kept as a JS hook (no visual effect — curtain handles reveal) */
+
+/* World-tilt: passthrough preserve-3d wrapper between the perspective container
+   and the prism hub. The shrine-heavens tilt is now applied as rotateX on the
+   prism-container directly, not here. */
+#world-tilt {
+    position: absolute;
+    inset: 0;
+    transform-style: preserve-3d;
+}
+
+/* Rotating prism hub — holds all 6 wall faces */
+.prism-container {
+    position: absolute;
+    width: var(--wall-w);
+    height: 100%;
+    left: 50%;
+    top: 0;
+    transform-style: preserve-3d;
+    transition: transform 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* --- Wall panel base --- */
+.wall-panel {
+    position: absolute;
+    width: var(--wall-w);
+    height: 100%;
+    backface-visibility: hidden;
+}
+
+/* Hidden walls (behind the camera): block ALL pointer events on the panel AND
+   every descendant. Without the * selector + !important, children with explicit
+   pointer-events:auto (e.g. .wall-word, .wall-close-btn) override the parent's
+   pointer-events:none, letting Chrome's broken 3D hit-testing route clicks to
+   invisible back-facing walls. */
+.wall-panel.wall-hidden,
+.wall-panel.wall-hidden * {
+    pointer-events: none !important;
+}
+.wall-panel .wall-bg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center bottom;
+    pointer-events: none;
+}
+.wall-panel .wall-bg-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center center;
+    z-index: 0;
+    pointer-events: none;
+}
+.wall-panel .wall-border-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center bottom;
+    z-index: 2;
+    pointer-events: none;
+    filter:
+        drop-shadow( 1px  1px 1px rgba(120,100,140,0.12))
+        drop-shadow(-1px  1px 1px rgba(120,100,140,0.10))
+        drop-shadow( 1px -1px 1px rgba(120,100,140,0.10))
+        drop-shadow(-1px -1px 1px rgba(120,100,140,0.12));
+}
+
+/* Overhead-light gloss overlay — lighter top, slightly darker bottom */
+.wall-panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background: linear-gradient(
+        180deg,
+        rgba(255,255,255,0.13) 0%,
+        rgba(255,255,255,0.04) 38%,
+        rgba(0,0,0,0.0)        60%,
+        rgba(0,0,0,0.09)       100%
+    );
+}
+
+/* Serpentine-animated border on all wall panels (uniform, 1px on all sides)
+   Animation sync: Both --serp-bg and --serp-bg-v are updated in the same JS call
+   (renderSerpStrip) with identical color sequences, ensuring all four borders
+   cycle through the same color phases at the same time. */
+.wall-panel::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    background:
+        var(--serp-bg, linear-gradient(90deg, #6B8DD6, #9B6BCC)) top    / 100% 1px no-repeat,
+        var(--serp-bg, linear-gradient(90deg, #6B8DD6, #9B6BCC)) bottom / 100% 1px no-repeat,
+        var(--serp-bg-v, linear-gradient(180deg, #6B8DD6, #9B6BCC)) left   / 1px 100% no-repeat,
+        var(--serp-bg-v, linear-gradient(180deg, #6B8DD6, #9B6BCC)) right  / 1px 100% no-repeat;
+}
+
+/*
+ * INVERTED hexagonal face positioning:
+ *   Container translateZ(+apothem) moves the prism center to the viewer.
+ *   Faces translateZ(-apothem) places them BEHIND the center, facing inward.
+ *   Result: front face at z=0 (natural size), side faces CLOSER to viewer
+ *   (higher z) → correct interior/concave perspective.
+ *   backface-visibility:hidden naturally hides the 3 rear faces.
+ */
+.wall-panel[data-wall="1"] { transform: rotateY(0deg)    translateZ(calc(var(--apothem) * -1)); }
+.wall-panel[data-wall="2"] { transform: rotateY(-60deg)  translateZ(calc(var(--apothem) * -1)); }
+.wall-panel[data-wall="3"] { transform: rotateY(-120deg) translateZ(calc(var(--apothem) * -1)); }
+.wall-panel[data-wall="4"] { transform: rotateY(-180deg) translateZ(calc(var(--apothem) * -1)); }
+.wall-panel[data-wall="5"] { transform: rotateY(-240deg) translateZ(calc(var(--apothem) * -1)); }
+.wall-panel[data-wall="6"] { transform: rotateY(-300deg) translateZ(calc(var(--apothem) * -1)); }
+
+/* Crenellations — positioned above each wall face */
+.wall-crenellations {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    width: 100%;
+    z-index: 3;
+    pointer-events: none;
+}
+.wall-crenellations polygon,
+.wall-crenellations line {
+    vector-effect: non-scaling-stroke;
+}
+
+/* --- 3D rim: real triangular-prism wedges + flat half-wedges at vertices ------
+   Layout per wall (5 sections occupying full wall width):
+     [half-wedge flat | wedge | wedge | wedge | half-wedge flat]
+       12.5%        25%      25%     25%       12.5%
+   Adjacent walls' half-wedges meet at each hexagon corner forming a flat
+   vertex panel (no crease).
+   Each wedge cross-section is a 30-120-30 triangle:
+     wedge base width = wall-w / 4
+     wedge depth (inward into chamber) = base * 0.289 ≈ wall-w * 0.0723
+     each wedge face = base / sqrt(3) ≈ base * 0.577 (the hypotenuse) */
+
+.prism-rim-3d {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: var(--wall-w);
+    height: 100%;
+    transform-style: preserve-3d;
+    pointer-events: none;
+}
+/* Each rim section sits above one wall, sharing the same hex placement
+   (rotateY + translateZ) as that wall. */
+.rim-section {
+    position: absolute;
+    bottom: 100%;            /* sits above wall, same as old .wall-crenellations */
+    left: -50%;              /* re-centre after parent's left:50% */
+    width: 100%;
+    height: 9.7vh;
+    transform-style: preserve-3d;
+    backface-visibility: hidden;
+}
+.rim-section[data-rim-wall="1"] { transform: rotateY(0deg)    translateZ(calc(var(--apothem) * -1)); }
+.rim-section[data-rim-wall="2"] { transform: rotateY(-60deg)  translateZ(calc(var(--apothem) * -1)); }
+.rim-section[data-rim-wall="3"] { transform: rotateY(-120deg) translateZ(calc(var(--apothem) * -1)); }
+.rim-section[data-rim-wall="4"] { transform: rotateY(-180deg) translateZ(calc(var(--apothem) * -1)); }
+.rim-section[data-rim-wall="5"] { transform: rotateY(-240deg) translateZ(calc(var(--apothem) * -1)); }
+.rim-section[data-rim-wall="6"] { transform: rotateY(-300deg) translateZ(calc(var(--apothem) * -1)); }
+
+/* Flat half-wedge at each end of the wall — these are coplanar with the wall
+   and pair with the adjacent wall's half-wedge to form the vertex panel. */
+.rim-half-wedge {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    width: 8.33%;
+    background: linear-gradient(180deg, #DEDEDE 0%, #C8C8C8 100%);
+}
+.rim-half-wedge-start { left: 0; }
+.rim-half-wedge-end   { right: 0; }
+
+/* A wedge container occupies 27.78% of the wall width (3 wedges + 2×8.33% half-wedges = 100%). */
+.rim-wedge {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    width: 27.78%;
+    transform-style: preserve-3d;
+    background: linear-gradient(180deg, #DEDEDE 0%, #C8C8C8 100%);
+}
+.rim-wedge-face {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    width: 57.735%;          /* = 1/sqrt(3) of wedge container width */
+    backface-visibility: visible;
+}
+/* Left face: hinged at the wedge's left wall edge, rotated inward by 30°. */
+.rim-wedge-face-left {
+    left: 0;
+    transform-origin: 0% 0% 0;
+    transform: rotateY(-30deg);
+    background: linear-gradient(180deg, #FFFFFF 0%, #FAFAFA 8%, #EBEBEB 100%);
+}
+/* Right face: mirror — hinged at right edge, rotated +30°. */
+.rim-wedge-face-right {
+    right: 0;
+    transform-origin: 100% 0% 0;
+    transform: rotateY(30deg);
+    background: linear-gradient(180deg, #C4C4C4 0%, #A8A8A8 100%);
+}
+/* Bottom triangle — horizontal cap visible from below when prism tilts up.
+   No backface-visibility:hidden so it shows from both above and below. */
+.rim-wedge-bottom {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 6.23vh;          /* = face_width × sin(30°) = (57.735% × 27.78% × wall-w) × 0.5 */
+    background: linear-gradient(180deg, #BABABA 0%, #D4D4D4 100%);
+    transform-origin: 50% 100% 0;
+    transform: rotateX(-90deg);
+    /* Triangle pointing inward (apex at top after rotation = inward into chamber).
+       Before rotate, top edge will be hinged; the visible triangle has apex up. */
+    clip-path: polygon(0% 100%, 50% 0%, 100% 100%);
+}
+
+/* --- Vertex bridging panels --------------------------------------------------
+   At each of the 6 hex corners, a flat panel chamfers the corner where two
+   half-wedges meet. Geometry:
+     Vertex is at radial distance wall-w from chamber center.
+     Half-wedges run wall-w/8 along each adjacent wall from the vertex.
+     The bridging panel is a chord at radial distance wall-w * 15/16 from center,
+       width = wall-w * sqrt(3)/8 ≈ wall-w * 0.2165.
+     The underside is a 30-120-30 triangle, apex pointing OUTWARD by wall-w/16. */
+.rim-vertex {
+    position: absolute;
+    bottom: 100%;
+    left: -50%;
+    width: 100%;
+    height: 9.7vh;
+    transform-style: preserve-3d;
+    backface-visibility: hidden;
+}
+.rim-vertex[data-rim-vertex="1"] { transform: rotateY(-30deg)  translateZ(calc(var(--wall-w) * -0.958)); }
+.rim-vertex[data-rim-vertex="2"] { transform: rotateY(-90deg)  translateZ(calc(var(--wall-w) * -0.958)); }
+.rim-vertex[data-rim-vertex="3"] { transform: rotateY(-150deg) translateZ(calc(var(--wall-w) * -0.958)); }
+.rim-vertex[data-rim-vertex="4"] { transform: rotateY(-210deg) translateZ(calc(var(--wall-w) * -0.958)); }
+.rim-vertex[data-rim-vertex="5"] { transform: rotateY(-270deg) translateZ(calc(var(--wall-w) * -0.958)); }
+.rim-vertex[data-rim-vertex="6"] { transform: rotateY(-330deg) translateZ(calc(var(--wall-w) * -0.958)); }
+
+.rim-vertex-panel {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: calc(var(--wall-w) * 0.144);
+    height: 100%;
+    transform: translateX(-50%);
+    background: linear-gradient(180deg, #DEDEDE 0%, #C8C8C8 100%);
+    backface-visibility: hidden;
+}
+.rim-vertex-bottom {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: calc(var(--wall-w) * 0.144);
+    height: calc(var(--wall-w) * 0.0417);   /* outward depth = (d/2) × wall-w, d = 0.0833 */
+    background: linear-gradient(180deg, #D4D4D4 0%, #BABABA 100%);
+    transform-origin: 50% 100% 0;
+    transform: translateX(-50%) rotateX(90deg);
+    /* Apex of triangle points OUTWARD (away from chamber center) after rotation. */
+    clip-path: polygon(0% 100%, 50% 0%, 100% 100%);
+}
+
+/* Archway — dark opening on walls 2–6 (visual only). z-index 3 puts it in front of the border overlay. */
+.wall-archway {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 3;
+    pointer-events: none;
+}
+.wall-archway path {
+    vector-effect: non-scaling-stroke;
+}
+
+/* Invisible click target OUTSIDE the 3D container, positioned over the archway */
+.archway-click-overlay {
+    position: fixed;
+    z-index: 10;
+    cursor: pointer;
+    background: transparent;
+}
+
+/* Shimmer overlay — full viewport canvas for archway transition */
+.archway-shimmer {
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+    pointer-events: none;
+    opacity: 0;
+}
+.archway-shimmer canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* Vignette overlay during approach */
+.archway-vignette {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    pointer-events: none;
+    opacity: 0;
+    background: radial-gradient(ellipse at center, transparent 30%, rgba(2,1,5,0.85) 100%);
+    transition: opacity 0.3s;
+}
+
+/* Wall text — poem / inscription */
+.wall-text {
+    position: absolute;
+    left: 50%;
+    top: 34%;
+    transform: translateX(-50%);
+    z-index: 1;
+    pointer-events: none;
+    text-align: center;
+    color: #000;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 400;
+    font-size: 2.5vh;
+    line-height: 1.76;
+    letter-spacing: 0.04em;
+    text-shadow: 0 0 10px rgba(107, 141, 214, 0.4), 0 0 20px rgba(0, 0, 0, 0.6);
+    white-space: nowrap;
+}
+.wall-text .attribution {
+    display: block;
+    margin-top: 1.2em;
+    font-style: italic;
+    opacity: 0.7;
+    font-size: 0.85em;
+}
+
+/* Panel artwork hung on a wall */
+.wall-panel-img {
+    position: absolute;
+    left: 50%;
+    top: 34%;
+    transform: translateX(-50%);
+    width: 62.4%;
+    z-index: 1;
+    pointer-events: none;
+    filter:
+        drop-shadow(0 2px 6px rgba(0,0,0,0.4))
+        drop-shadow(0 0 2px rgba(0,0,0,0.2));
+}
+
+/* Random-image walls: shifted up so bottom clears the archway */
+.wall-random-img {
+    top: 27%;
+}
+
+/* Random strapline below wall image */
+.wall-strapline {
+    position: absolute;
+    left: 50%;
+    top: 59%;
+    transform: translateX(-50%);
+    z-index: 1;
+    pointer-events: none;
+    white-space: nowrap;
+    color: #1a1510;
+    font-family: 'Cormorant Garamond', 'Georgia', serif;
+    font-weight: 400;
+    font-style: italic;
+    font-size: 3vh;
+    letter-spacing: 0.06em;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.25), 0 0 12px rgba(107,141,214,0.2);
+}
+
+/* --- Navigation arrows --- */
+.nav-arrow {
+    position: fixed;
+    bottom: 24px;
+    top: auto;
+    transform: none;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 80px;
+    text-decoration: none;
+    opacity: 0.85;
+    transition: opacity 0.3s, background 0.3s, border-color 0.3s;
+    border-radius: 4px;
+}
+.nav-arrow:hover {
+    opacity: 1;
+}
+.nav-arrow.left { left: 8px; }
+.nav-arrow.right { right: 8px; }
+.nav-arrow svg {
+    width: 28px;
+    height: 28px;
+    fill: none;
+    stroke: url(#arrowGrad);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 6px rgba(107, 141, 214, 0.85))
+            drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+}
+/* Button reset for arrow buttons */
+button.nav-arrow {
+    background: rgba(8, 6, 14, 0.62);
+    border: 1px solid rgba(155, 180, 230, 0.22);
+    cursor: pointer;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+}
+button.nav-arrow:hover {
+    background: rgba(12, 10, 22, 0.78);
+    border-color: rgba(180, 200, 240, 0.40);
+}
+
+/* Up/down arrows */
+.nav-arrow.up {
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+.nav-arrow.down {
+    top: auto;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+/* Day/night toggle */
+.sky-toggle {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 200;
+    width: 36px;
+    height: 36px;
+    border: 1px solid rgba(107, 141, 214, 0.3);
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    transition: border-color 0.3s, background 0.3s;
+    color: #ddd;
+}
+.sky-toggle:hover {
+    border-color: rgba(107, 141, 214, 0.7);
+    background: rgba(0, 0, 0, 0.6);
+}
+
+/* Sky/Wall mode toggling */
+body.sky-mode .wall-area,
+body.sky-mode .nav-arrow.left,
+body.sky-mode .nav-arrow.right,
+body.sky-mode .nav-arrow.up { display: none; }
+body:not(.sky-mode) .nav-arrow.down,
+body:not(.sky-mode) .sky-toggle { display: none; }
+
+/* Page load white fade-out overlay */
+.page-fade-overlay {
+    position: fixed;
+    inset: 0;
+    background: #fff;
+    z-index: 9999;
+    pointer-events: none;
+    animation: fadeOut 1.6s ease-out 0.2s forwards;
+}
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+/* --- Word panel --- */
+
+/* Container: fills wall panel, positions word in upper portion of wall face */
+.wall-word-panel {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding-top: 41%;
+    pointer-events: auto;
+}
+
+/* The large label word */
+.wall-word {
+    font-family: 'Cormorant Garamond', 'Georgia', serif;
+    font-weight: 300;
+    font-size: 9vh;
+    color: #1a1510;
+    letter-spacing: 0.08em;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.3), 0 -1px 2px rgba(0,0,0,0.15);
+    cursor: pointer;
+    user-select: none;
+    pointer-events: auto;
+    transition: color 0.3s, text-shadow 0.3s;
+}
+.wall-word:hover {
+    color: #0d0a07;
+    text-shadow:
+        0 1px 0 rgba(255,255,255,0.35),
+        0 0 18px rgba(107,141,214,0.45),
+        0 0 36px rgba(155,107,204,0.2);
+}
+
+/* Shimmer-then-fade animation on click */
+@keyframes wordDissolve {
+    0%   { opacity: 1;   filter: blur(0px)  brightness(1);   transform: scale(1); }
+    18%  { opacity: 1;   filter: blur(0px)  brightness(2.2); transform: scale(1.06);
+           text-shadow: 0 0 24px rgba(255,230,140,1), 0 0 48px rgba(107,141,214,0.9),
+                        0 0 80px rgba(155,107,204,0.7); }
+    40%  { opacity: 0.7; filter: blur(3px)  brightness(1.5); transform: scale(1.08); }
+    100% { opacity: 0;   filter: blur(16px) brightness(1);   transform: scale(0.88); }
+}
+.wall-word.dissolving {
+    animation: wordDissolve 0.75s ease-in forwards;
+    pointer-events: none;
+}
+
+/* Scrollable text frame — hidden until word dissolves */
+.wall-text-frame {
+    position: absolute;
+    left: 50%;
+    top: 23%;
+    transform: translateX(-50%);
+    width: 65%;
+    height: 52%;
+    background: rgba(6, 4, 10, 0.86);
+    border: 1px solid rgba(107, 141, 214, 0.3);
+    box-shadow:
+        inset 0 0 48px rgba(0,0,0,0.5),
+        0 0 24px rgba(107,141,214,0.08);
+    display: none;
+    flex-direction: column;
+    z-index: 2;
+    pointer-events: auto;
+}
+.wall-text-frame.visible {
+    display: flex;
+    animation: frameFadeIn 0.45s ease forwards;
+}
+@keyframes frameFadeIn {
+    from { opacity: 0; transform: translateX(-50%) scale(0.97); }
+    to   { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+
+/* Close (×) button — top-right corner of frame */
+.wall-close-btn {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    background: none;
+    border: none;
+    color: rgba(107, 141, 214, 0.5);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 6px;
+    z-index: 1;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: color 0.2s;
+}
+.wall-close-btn:hover { color: rgba(155, 107, 204, 0.9); }
+
+/* Scroll buttons — upper-right (below ×) and lower-right */
+.wall-scroll-up,
+.wall-scroll-down {
+    position: absolute;
+    right: 6px;
+    width: 22px;
+    height: 22px;
+    background: none;
+    border: 1px solid rgba(94, 239, 162, 0.35);
+    color: rgba(94, 239, 162, 0.65);
+    font-size: 9px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 2px;
+    z-index: 2;
+    padding: 0;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: border-color 0.2s, color 0.2s;
+}
+.wall-scroll-up { top: 34px; }
+.wall-scroll-down { bottom: 44px; }
+.wall-scroll-up:hover,
+.wall-scroll-down:hover {
+    border-color: rgba(94, 239, 162, 0.8);
+    color: rgba(94, 239, 162, 1);
+}
+
+/* On archway walls (rescue door), keep text frame strictly above the arch */
+[data-has-archway="true"] .wall-text-frame {
+    height: 35%;
+}
+
+/* -----------------------------------------------------------------------
+   Centred text frame — Research Lab, OVS Chapel, Mythopoeic Archive
+   Frame is 95%×95% of the wall, centred, leaving a thin margin all round.
+   The archway SVG is z-index 3 and renders above the frame on door walls.
+   ----------------------------------------------------------------------- */
+@keyframes frameFadeInFull {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(0.97); }
+    to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+[data-prism-id="research-lab"] .wall-text-frame,
+[data-prism-id="ovs-chapel"] .wall-text-frame,
+[data-prism-id="mythopoeic-archive"] .wall-text-frame {
+    left: 50%;
+    top: 50%;
+    right: auto;
+    bottom: auto;
+    width: 95%;
+    height: 95%;
+    transform: translate(-50%, -50%);
+}
+/* Override archway-wall height constraint — archway SVG is z-index 3 and still shows */
+[data-prism-id="ovs-chapel"] [data-has-archway="true"] .wall-text-frame,
+[data-prism-id="mythopoeic-archive"] [data-has-archway="true"] .wall-text-frame {
+    height: 95%;
+}
+/* Research Lab rescue wall: top edge matches other walls, shorter to expose archway */
+[data-prism-id="research-lab"] [data-has-archway="true"] .wall-text-frame {
+    top: 33.5%;
+    height: 62%;
+}
+
+[data-prism-id="research-lab"] .wall-text-frame.visible,
+[data-prism-id="ovs-chapel"] .wall-text-frame.visible,
+[data-prism-id="mythopoeic-archive"] .wall-text-frame.visible {
+    animation: frameFadeInFull 0.45s ease forwards;
+}
+[data-prism-id="research-lab"] .wall-text-body,
+[data-prism-id="ovs-chapel"] .wall-text-body,
+[data-prism-id="mythopoeic-archive"] .wall-text-body {
+    padding-top: 21px;
+    font-size: 3.5vh;
+    line-height: 1.55;
+}
+
+/* Scrollable text body */
+.wall-text-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 36px 12px 22px;
+    color: rgba(230, 220, 200, 0.88);
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 300;
+    font-size: 2.12vh;
+    line-height: 1.48;
+    letter-spacing: 0.02em;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(107,141,214,0.25) transparent;
+    scroll-behavior: smooth;
+    overscroll-behavior: contain;
+}
+.wall-text-body::-webkit-scrollbar { width: 10px; }
+.wall-text-body::-webkit-scrollbar-track { background: rgba(40,40,50,0.3); border-radius: 5px; }
+.wall-text-body::-webkit-scrollbar-thumb { background: rgba(107,141,214,0.35); border-radius: 5px; }
+.wall-text-body::-webkit-scrollbar-thumb:hover { background: rgba(107,141,214,0.55); cursor: grab; }
+.wall-text-body p { margin-bottom: 0.7em; }
+.wall-text-body p:last-child { margin-bottom: 0; }
+.wall-text-body em { font-style: italic; opacity: 0.9; }
+.wall-text-body a { color: #e8d44d; text-decoration: underline; text-underline-offset: 2px; }
+.wall-text-body a:hover { color: #f5e87a; }
+
+/* Inactive video button — set into bottom edge of frame */
+.wall-video-btn {
+    flex-shrink: 0;
+    align-self: center;
+    margin: 16px 0 1px;
+    padding: 10px 28px;
+    background: none;
+    border: 1px solid rgba(107, 141, 214, 0.6);
+    color: rgba(107, 141, 214, 0.75);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 2.2vh;
+    letter-spacing: 0.1em;
+    cursor: not-allowed;
+    border-radius: 2px;
+}
+.wall-video-btn:not(.wall-video-disabled) {
+    border-color: rgba(255, 245, 200, 1);
+    color: rgba(255, 255, 240, 1);
+    cursor: pointer;
+    background: rgba(255, 220, 100, 0.08);
+    text-shadow: 0 0 6px rgba(255, 245, 160, 1), 0 0 16px rgba(255, 220, 100, 1);
+    box-shadow: 0 0 14px rgba(255, 220, 120, 0.7), inset 0 0 8px rgba(255, 220, 120, 0.15);
+}
+.wall-video-btn:not(.wall-video-disabled):hover {
+    border-color: rgba(255, 255, 230, 1);
+    color: rgba(255, 255, 255, 1);
+    background: rgba(255, 235, 170, 0.14);
+    text-shadow: 0 0 10px rgba(255, 235, 160, 1);
+    box-shadow: 0 0 12px rgba(255, 220, 120, 0.6), inset 0 0 8px rgba(255, 220, 120, 0.12);
+}
+
+/* --- Video overlay (replaces text frame) --- */
+.wall-video-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.92);
+    z-index: 20;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+}
+.wall-video-overlay.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+.wall-video-overlay video {
+    max-width: 88%;
+    max-height: 72%;
+    border: 1px solid rgba(180, 160, 100, 0.3);
+    border-radius: 3px;
+    background: #000;
+}
+.wall-video-close {
+    position: absolute;
+    top: 6%; right: 8%;
+    font-size: 2.8vh;
+    color: rgba(220, 195, 120, 0.8);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+    z-index: 25;
+}
+.wall-video-close:hover { color: rgba(240, 215, 140, 1); }
+
+/* --- Steampunk hourglass loader --- */
+.wall-video-loader {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5vh;
+}
+.hourglass {
+    width: 5vh;
+    height: 8vh;
+    position: relative;
+    animation: hourglassSpin 2.4s ease-in-out infinite;
+}
+.hourglass::before,
+.hourglass::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-style: solid;
+}
+.hourglass::before {
+    top: 0;
+    transform: translateX(-50%);
+    border-width: 3.5vh 2vh 0 2vh;
+    border-color: rgba(180, 140, 60, 0.7) transparent transparent transparent;
+}
+.hourglass::after {
+    bottom: 0;
+    transform: translateX(-50%);
+    border-width: 0 2vh 3.5vh 2vh;
+    border-color: transparent transparent rgba(180, 140, 60, 0.35) transparent;
+}
+@keyframes hourglassSpin {
+    0%   { transform: rotate(0deg); }
+    40%  { transform: rotate(180deg); }
+    50%  { transform: rotate(180deg); }
+    90%  { transform: rotate(360deg); }
+    100% { transform: rotate(360deg); }
+}
+.hourglass-label {
+    color: rgba(180, 140, 60, 0.6);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.4vh;
+    letter-spacing: 0.15em;
+}
+
+/* --- Minimap --- */
+.prism-minimap {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    width: 64px;
+    height: 64px;
+    z-index: 100;
+    opacity: 0.35;
+    transition: opacity 0.3s;
+}
+.prism-minimap:hover {
+    opacity: 0.9;
+}
+.prism-minimap svg {
+    width: 100%;
+    height: 100%;
+}
+.minimap-edge {
+    stroke: rgba(107, 141, 214, 0.3);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    transition: stroke 0.3s, stroke-width 0.3s;
+}
+.minimap-edge.active {
+    stroke: rgba(155, 107, 204, 0.9);
+    stroke-width: 2.5;
+}
+.minimap-wedge {
+    fill: transparent;
+    cursor: pointer;
+}
+.minimap-wedge:hover {
+    fill: rgba(107, 141, 214, 0.15);
+}
+#minimap-indicator {
+    stroke: url(#arrowGrad);
+    stroke-width: 2;
+    stroke-linecap: round;
+    transition: x2 0.3s, y2 0.3s;
+}
+
+/* ============================================================
+   OVS Star (wall-4 of ovs-chapel, above the archway door)
+   ============================================================ */
+
+.wall-ovs-star {
+    position: absolute;
+    top: 16%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 44%;
+    /* stays above the archway which begins at ~79% from top */
+}
+
+.ovs-star-svg {
+    width: 100%;
+    height: auto;
+    display: block;
+    animation: ovsBreath 5s ease-in-out infinite;
+    transform-origin: center center;
+}
+
+.ovs-letter-text {
+    font-family: 'Cinzel', 'Cormorant Garamond', serif;
+    font-size: 17px;
+    font-weight: 700;
+    fill: #2E004F;
+    letter-spacing: 0.08em;
+}
+
+@keyframes ovsBreath {
+    0%, 100% {
+        opacity: 0.72;
+        transform: scale(0.97);
+        filter: brightness(0.85) drop-shadow(0 0 6px rgba(196,18,48,0.5))
+                                 drop-shadow(0 0 14px rgba(196,18,48,0.25));
+    }
+    50% {
+        opacity: 1.0;
+        transform: scale(1.03);
+        filter: brightness(1.1) drop-shadow(0 0 12px rgba(196,18,48,0.9))
+                                drop-shadow(0 0 28px rgba(196,18,48,0.55))
+                                drop-shadow(0 0 48px rgba(196,18,48,0.2));
+    }
+}
+
+/* ============================================================
+   Shrine + Search (wall-1 of main prism)
+   ============================================================ */
+
+.wall-shrine-search {
+    position: absolute;
+    inset: 0;
+    pointer-events: auto;
+    z-index: 3; /* in front of the border overlay (z-index: 2) */
+}
+
+/* --- Search section --- */
+.wall-search-wrap {
+    position: absolute;
+    top: 32%;
+    left: 15%;
+    width: 70%;
+    transform: translateY(-5%);
+}
+
+.wall-search-input {
+    width: 100%;
+    background: rgba(10, 8, 5, 0.72);
+    border: 1px solid rgba(107, 141, 214, 0.45);
+    border-radius: 2px 2px 0 0;
+    color: #d8d2c8;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 2.0vh;
+    padding: 1.2vh 0.8vh;
+    outline: none;
+    box-sizing: border-box;
+}
+.wall-search-input::placeholder {
+    color: rgba(180, 170, 155, 0.45);
+    font-style: italic;
+}
+.wall-search-input:focus {
+    border-color: rgba(107, 141, 214, 0.8);
+    background: rgba(10, 8, 5, 0.88);
+}
+
+/* Wrapper gives relative context for the scroll buttons */
+.wall-search-results-frame {
+    position: relative;
+}
+
+/* Fixed-height dark frame — always visible, shows results when typing */
+.wall-search-results {
+    height: 28vh;
+    overflow-y: auto;
+    background: rgba(5, 3, 2, 0.82);
+    border: 1px solid rgba(107, 141, 214, 0.3);
+    border-top: none;
+    border-radius: 0 0 3px 3px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(107, 141, 214, 0.3) transparent;
+}
+
+/* Green scroll buttons in results frame, upper-right / lower-right */
+.results-scroll-up,
+.results-scroll-down {
+    position: absolute;
+    right: 0.5vh;
+    background: none;
+    border: none;
+    color: #5eefa2;
+    font-size: 1.3vh;
+    line-height: 1;
+    padding: 0.3vh 0.5vh;
+    cursor: pointer;
+    pointer-events: auto;
+    opacity: 0.7;
+    z-index: 2;
+    font-family: inherit;
+}
+.results-scroll-up  { top: 0.4vh; }
+.results-scroll-down { bottom: 0.4vh; }
+.results-scroll-up:hover,
+.results-scroll-down:hover { opacity: 1; }
+
+.wall-search-result {
+    padding: 0.5vh 0.8vh;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 2.0vh;
+    font-weight: 300;
+    color: #8fa0bb;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    white-space: nowrap;
+    overflow: hidden;
+    transition: color 0.15s, background 0.15s;
+    pointer-events: auto;
+}
+.wall-search-result span {
+    display: inline-block;
+}
+@keyframes scrollSearchText {
+    from { transform: translateX(0); }
+    to   { transform: translateX(var(--scroll-dist, 0)); }
+}
+.wall-search-result:last-child { border-bottom: none; }
+.wall-search-result:hover,
+.wall-search-result.hovered {
+    color: #b8ccdd;
+    background: rgba(107, 141, 214, 0.1);
+}
+
+/* --- Shrine section (bottom of wall; wall 1 has no archway so full panel usable) --- */
+.wall-shrine {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.shrine-backdrop {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: auto;
+    pointer-events: none;
+}
+
+.shrine-candles {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: 3vh;
+}
+
+.shrine-candle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    position: absolute;
+    bottom: 0;
+    transform: translateX(-50%);
+    padding: 1vh 0 0;
+    pointer-events: auto;
+}
+
+.candle-body {
+    width: 0.85vh;
+    /* height set dynamically by JS */
+    background: linear-gradient(to right, #e2dace 0%, #ede5d8 45%, #d6cec0 100%);
+    border-radius: 0.12vh 0.12vh 0 0;
+    box-shadow: inset 0 0 0.25vh rgba(0, 0, 0, 0.18);
+}
+
+.candle-flame {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0.75vh;
+    height: 1.3vh;
+    border-radius: 50% 50% 35% 35% / 60% 60% 40% 40%;
+    background: radial-gradient(ellipse at 50% 60%, #fff 0%, #fff9c0 18%, #ffe066 38%, #ffaa30 62%, rgba(255,80,0,0.25) 85%, transparent 100%);
+    opacity: 0;
+    pointer-events: none;
+    filter: blur(0.03vh);
+}
+
+.shrine-candle.lit .candle-flame {
+    opacity: 1;
+    animation: candleFlicker 0.13s ease-in-out infinite alternate;
+}
+
+.shrine-candle.lit .candle-flame::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -40%);
+    width: 3.5vh;
+    height: 3.5vh;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 55%,
+        rgba(255, 220, 100, 0.45) 0%,
+        rgba(255, 160, 40, 0.18) 35%,
+        rgba(255, 100, 10, 0.06) 65%,
+        transparent 100%);
+    pointer-events: none;
+}
+
+.shrine-candle.lit .candle-body {
+    box-shadow: inset 0 0 0.25vh rgba(0,0,0,0.18),
+                0 0 0.5vh 0.12vh rgba(255, 200, 80, 0.32);
+}
+
+@keyframes candleFlicker {
+    from { transform: translateX(-50%) scaleY(0.87) scaleX(1.13); opacity: 0.9; }
+    to   { transform: translateX(-50%) scaleY(1.13) scaleX(0.87); opacity: 1; }
+}
+
+/* ===== Poetry passage walls (GPT-3 Library) ===== */
+
+.wall-poetry-passage {
+    position: absolute;
+    inset: 8% 8% 14% 8%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.wall-poetry-passage[data-has-archway] {
+    inset: 8% 8% 50% 8%;
+    align-items: center;
+}
+
+.poetry-card {
+    width: 80%;
+    max-height: 100%;
+    padding: calc(2 * 1.32em) 0 0;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.poetry-text {
+    font-family: 'Crimson Pro', serif;
+    font-weight: 300;
+    font-style: italic;
+    font-size: clamp(0.75rem, 1.50vw, 1.12rem);
+    line-height: 1.32;
+    color: rgba(15, 8, 3, 0.90);
+    text-shadow: none;
+}
+
+.poetry-attribution {
+    font-family: 'Cinzel', serif;
+    font-weight: 400;
+    font-size: clamp(0.76rem, 1.36vw, 1.1rem);
+    color: rgba(15, 8, 3, 0.60);
+    text-align: right;
+    margin-top: 6%;
+    letter-spacing: 0.06em;
+    text-shadow: none;
+}
+
+/* ===== Chamber-specific word sizing ===== */
+
+.chamber[data-prism-id="ovs-chapel"] .wall-word,
+.chamber[data-prism-id="mythopoeic-archive"] .wall-word,
+.chamber[data-prism-id="research-lab"] .wall-word {
+    font-size: 7.65vh; /* 85% of default 9vh */
+}
+.chamber[data-prism-id="research-lab"] .wall-text-body p {
+    margin-bottom: 0.525em;
+}
+
+/* ===== Chamber Moire tints — CSS filter on wall-bg image =====
+   Each chamber takes the same moire pattern but renders it in a different
+   "metallic plate" — kept as the common thread tying the four side chambers
+   together. Hue rotations are pure colour shifts (no sepia desaturation) so
+   nothing reads as nicotine-stained any more. */
+
+[data-prism-id="ovs-chapel"] .wall-bg {
+    /* Vermillion / blood-red on burgundy — occult / stained glass */
+    filter: hue-rotate(335deg) saturate(2.3) brightness(0.85) contrast(1.05);
+}
+[data-prism-id="mythopoeic-archive"] .wall-bg {
+    /* Indigo / violet on midnight — cosmic / astrolabe */
+    filter: hue-rotate(218deg) saturate(1.7) brightness(0.80);
+}
+[data-prism-id="research-lab"] .wall-bg {
+    /* Cyan on steel — clean lab / blueprint */
+    filter: hue-rotate(180deg) saturate(1.4) brightness(0.85) contrast(1.05);
+}
+[data-prism-id="gpt3-library"] .wall-bg {
+    /* Jade / vellum — medieval scriptorium */
+    filter: hue-rotate(78deg) saturate(0.7) brightness(0.92) contrast(1.04);
+}
+
+/* ===== OVS Chapel — vermillion & gold ===== */
+
+.chamber[data-prism-id="ovs-chapel"] .wall-word {
+    color: #6B0A18;
+}
+.chamber[data-prism-id="ovs-chapel"] .wall-word:hover {
+    color: #9C1228;
+    text-shadow:
+        0 1px 0 rgba(255,255,255,0.30),
+        0 0 18px rgba(196,18,48,0.50),
+        0 0 36px rgba(220,80,60,0.25);
+}
+.chamber[data-prism-id="ovs-chapel"] .wall-text-frame {
+    background: rgba(38, 4, 12, 0.92);
+    border-color: rgba(196, 18, 48, 0.35);
+    box-shadow:
+        inset 0 0 48px rgba(24, 2, 8, 0.6),
+        0 0 24px rgba(196, 18, 48, 0.09);
+}
+.chamber[data-prism-id="ovs-chapel"] .wall-word {
+    font-family: 'Cinzel', 'Cormorant Garamond', serif;
+    font-weight: 400;
+    letter-spacing: 0.06em;
+}
+.chamber[data-prism-id="ovs-chapel"] .wall-text-body {
+    color: rgba(232, 198, 138, 0.94);
+    font-family: 'Marcellus', 'Cormorant Garamond', serif;
+    font-weight: 400;
+    font-size: 3.45vh;
+    letter-spacing: 0.015em;
+    line-height: 1.55;
+    scrollbar-color: rgba(196, 18, 48, 0.25) transparent;
+}
+.chamber[data-prism-id="ovs-chapel"] .wall-text-body p {
+    margin-bottom: 0.55em;
+}
+.chamber[data-prism-id="ovs-chapel"] .wall-text-body a {
+    color: #d8a14a;
+    text-decoration-color: rgba(216, 161, 74, 0.55);
+}
+.chamber[data-prism-id="ovs-chapel"] .wall-text-body a:hover {
+    color: #f0c878;
+}
+.chamber[data-prism-id="ovs-chapel"] .wall-text-body::-webkit-scrollbar-thumb {
+    background: rgba(196, 18, 48, 0.28);
+}
+.chamber[data-prism-id="ovs-chapel"] .wall-close-btn {
+    color: rgba(196, 18, 48, 0.55);
+}
+.chamber[data-prism-id="ovs-chapel"] .wall-close-btn:hover {
+    color: rgba(220, 80, 60, 0.90);
+}
+.chamber[data-prism-id="ovs-chapel"] .wall-scroll-up,
+.chamber[data-prism-id="ovs-chapel"] .wall-scroll-down {
+    border-color: rgba(196, 18, 48, 0.36);
+    color: rgba(196, 18, 48, 0.68);
+}
+.chamber[data-prism-id="ovs-chapel"] .wall-scroll-up:hover,
+.chamber[data-prism-id="ovs-chapel"] .wall-scroll-down:hover {
+    border-color: rgba(220, 80, 60, 0.80);
+    color: rgba(220, 80, 60, 1.0);
+}
+
+/* ===== Mythopoeic Archive — midnight indigo & silver ===== */
+
+.chamber[data-prism-id="mythopoeic-archive"] .wall-word {
+    color: #190840;
+}
+.chamber[data-prism-id="mythopoeic-archive"] .wall-word:hover {
+    color: #2d1468;
+    text-shadow:
+        0 1px 0 rgba(255,255,255,0.30),
+        0 0 18px rgba(130,100,210,0.50),
+        0 0 36px rgba(100,60,180,0.25);
+}
+.chamber[data-prism-id="mythopoeic-archive"] .wall-text-frame {
+    background: rgba(8, 4, 26, 0.92);
+    border-color: rgba(155, 135, 210, 0.28);
+    box-shadow:
+        inset 0 0 48px rgba(4, 2, 18, 0.6),
+        0 0 24px rgba(140, 110, 200, 0.09);
+}
+.chamber[data-prism-id="mythopoeic-archive"] .wall-word {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-weight: 300;
+}
+.chamber[data-prism-id="mythopoeic-archive"] .wall-text-body {
+    color: rgba(220, 218, 248, 0.94);
+    font-family: 'IM Fell English', 'Cormorant Garamond', serif;
+    font-weight: 400;
+    font-size: 3.1vh;
+    letter-spacing: 0.01em;
+    line-height: 1.5;
+    scrollbar-color: rgba(140, 110, 200, 0.25) transparent;
+}
+.chamber[data-prism-id="mythopoeic-archive"] .wall-text-body p {
+    margin-bottom: 0.78em;
+}
+.chamber[data-prism-id="mythopoeic-archive"] .wall-text-body a {
+    color: #a894e8;
+}
+.chamber[data-prism-id="mythopoeic-archive"] .wall-text-body a:hover {
+    color: #c8bcf8;
+}
+.chamber[data-prism-id="mythopoeic-archive"] .wall-text-body::-webkit-scrollbar-thumb {
+    background: rgba(140, 110, 200, 0.28);
+}
+.chamber[data-prism-id="mythopoeic-archive"] .wall-close-btn {
+    color: rgba(140, 110, 200, 0.50);
+}
+.chamber[data-prism-id="mythopoeic-archive"] .wall-close-btn:hover {
+    color: rgba(180, 155, 235, 0.90);
+}
+.chamber[data-prism-id="mythopoeic-archive"] .wall-scroll-up,
+.chamber[data-prism-id="mythopoeic-archive"] .wall-scroll-down {
+    border-color: rgba(140, 110, 200, 0.35);
+    color: rgba(140, 110, 200, 0.68);
+}
+.chamber[data-prism-id="mythopoeic-archive"] .wall-scroll-up:hover,
+.chamber[data-prism-id="mythopoeic-archive"] .wall-scroll-down:hover {
+    border-color: rgba(180, 155, 235, 0.80);
+    color: rgba(180, 155, 235, 1.0);
+}
+
+/* ===== Research Lab — steel & cyan (lab / blueprint) ===== */
+
+.chamber[data-prism-id="research-lab"] .wall-word {
+    font-family: 'Space Grotesk', 'IBM Plex Mono', sans-serif;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: #0a2538;
+    text-shadow: 0 1px 0 rgba(180,210,235,0.20), 0 -1px 2px rgba(0,0,0,0.25);
+}
+.chamber[data-prism-id="research-lab"] .wall-word:hover {
+    color: #061826;
+    text-shadow:
+        0 1px 0 rgba(255,255,255,0.30),
+        0 0 18px rgba(120,200,255,0.55),
+        0 0 36px rgba(80,170,235,0.25);
+}
+.chamber[data-prism-id="research-lab"] .wall-text-frame {
+    background: rgba(4, 12, 22, 0.92);
+    border-color: rgba(120, 200, 255, 0.30);
+    box-shadow:
+        inset 0 0 48px rgba(2, 8, 18, 0.6),
+        0 0 24px rgba(80, 170, 235, 0.08);
+}
+.chamber[data-prism-id="research-lab"] .wall-text-body {
+    color: rgba(220, 232, 244, 0.93);
+    font-family: 'Space Mono', 'IBM Plex Mono', monospace;
+    font-weight: 400;
+    font-size: 2.55vh;
+    letter-spacing: 0.005em;
+    line-height: 1.55;
+    scrollbar-color: rgba(120, 200, 255, 0.25) transparent;
+}
+.chamber[data-prism-id="research-lab"] .wall-text-body a {
+    color: #7fd4ff;
+    text-decoration-color: rgba(127, 212, 255, 0.55);
+}
+.chamber[data-prism-id="research-lab"] .wall-text-body a:hover {
+    color: #b8eaff;
+}
+.chamber[data-prism-id="research-lab"] .wall-text-body::-webkit-scrollbar-thumb {
+    background: rgba(120, 200, 255, 0.28);
+}
+.chamber[data-prism-id="research-lab"] .wall-close-btn {
+    color: rgba(120, 200, 255, 0.55);
+}
+.chamber[data-prism-id="research-lab"] .wall-close-btn:hover {
+    color: rgba(170, 225, 255, 0.95);
+}
+.chamber[data-prism-id="research-lab"] .wall-scroll-up,
+.chamber[data-prism-id="research-lab"] .wall-scroll-down {
+    border-color: rgba(120, 200, 255, 0.36);
+    color: rgba(120, 200, 255, 0.72);
+}
+.chamber[data-prism-id="research-lab"] .wall-scroll-up:hover,
+.chamber[data-prism-id="research-lab"] .wall-scroll-down:hover {
+    border-color: rgba(170, 225, 255, 0.85);
+    color: rgba(170, 225, 255, 1.0);
+}
+
+/* ===== GPT-3 Library (Scriptorium) — jade & deep teal ===== */
+
+[data-prism-id="gpt3-library"] .wall-poetry-passage {
+    inset: 18% 8% 14% 8%;
+}
+[data-prism-id="gpt3-library"] .wall-poetry-passage[data-has-archway] {
+    inset: 18% 8% 36% 8%;
+}
+[data-prism-id="gpt3-library"] .poetry-card {
+    background: rgba(240, 252, 246, 0.55);
+    border-radius: 8px;
+    padding: calc(2 * 1.32em) 1.4em 1.1em;
+}
+[data-prism-id="gpt3-library"] .poetry-text {
+    color: rgba(3, 36, 26, 0.90);
+}
+[data-prism-id="gpt3-library"] .poetry-attribution {
+    color: rgba(3, 36, 26, 0.62);
+}
+
+/* ===== Reading overlay (shrine skyward reading mode) ===== */
+
+.reading-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    background: #000;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+}
+
+.reading-overlay.active {
+    display: flex;
+    opacity: 1;
+}
+
+.reading-overlay.fading-in {
+    display: flex;
+    opacity: 0;
+}
+
+.reading-content {
+    width: min(90vw, 640px);
+    max-height: 100vh;
+    padding: 8vh 0 12vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #5eefa2 transparent;
+}
+
+.reading-content::-webkit-scrollbar { width: 6px; }
+.reading-content::-webkit-scrollbar-track { background: transparent; }
+.reading-content::-webkit-scrollbar-thumb { background: #5eefa2; border-radius: 3px; }
+
+.reading-title {
+    font-family: 'Cinzel', serif;
+    font-weight: 400;
+    font-size: clamp(1rem, 2.2vw, 1.5rem);
+    color: #5eefa2;
+    text-align: center;
+    margin: 0 0 4vh;
+    letter-spacing: 0.05em;
+    text-shadow: 0 0 20px rgba(94, 239, 162, 0.3);
+    opacity: 0.85;
+}
+
+.reading-body {
+    font-family: 'Crimson Pro', serif;
+    font-weight: 300;
+    font-size: clamp(0.95rem, 1.8vw, 1.2rem);
+    line-height: 1.75;
+    color: #5eefa2;
+    text-shadow: 0 0 12px rgba(94, 239, 162, 0.15);
+    white-space: pre-wrap;
+    text-align: left;
+    width: 100%;
+}
+
+.reading-body p {
+    margin: 0 0 1.5em;
+}
+
+.reading-return {
+    margin-top: 6vh;
+    padding: 0.8em 2.5em;
+    font-family: 'Cinzel', serif;
+    font-weight: 400;
+    font-size: clamp(0.75rem, 1.3vw, 0.95rem);
+    letter-spacing: 0.12em;
+    color: #5eefa2;
+    background: transparent;
+    border: 1px solid rgba(94, 239, 162, 0.35);
+    border-radius: 2px;
+    cursor: pointer;
+    transition: border-color 0.3s, text-shadow 0.3s;
+    text-shadow: 0 0 10px rgba(94, 239, 162, 0.2);
+    flex-shrink: 0;
+}
+
+.reading-return:hover {
+    border-color: rgba(94, 239, 162, 0.7);
+    text-shadow: 0 0 18px rgba(94, 239, 162, 0.5);
+}
+
+/* ===== ALEPH ORB (art gallery) ===== */
+/* Orb: deep purple sphere, thick brass rim, emerald glow */
+.aleph-orb {
+    position: absolute;
+    top: 2%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 6vh;
+    height: 6vh;
+    border-radius: 50%;
+    border: 3px solid;
+    border-color: #c9a84c #b8963e #a07830 #bfa044;
+    background:
+        radial-gradient(circle at 35% 28%, rgba(220, 200, 255, 0.35), transparent 40%),
+        radial-gradient(circle at 50% 50%, rgba(110, 40, 170, 1), rgba(85, 25, 140, 0.97) 30%, rgba(65, 18, 110, 0.94) 55%, rgba(45, 12, 80, 0.97) 80%);
+    box-shadow:
+        0 0 5px 2px rgba(200, 170, 80, 0.75),
+        0 0 16px 5px rgba(130, 80, 200, 0.5),
+        0 0 30px 10px rgba(94, 239, 162, 0.35),
+        0 0 50px 16px rgba(94, 239, 162, 0.15),
+        inset -3px -3px 8px rgba(0, 0, 0, 0.5),
+        inset 3px 3px 8px rgba(180, 140, 230, 0.3);
+    cursor: pointer;
+    z-index: 12;
+    overflow: hidden;
+    transition: box-shadow 0.3s, border-color 0.3s;
+}
+.aleph-orb:hover {
+    border-color: #dbb85a #cca84e #b89040 #d2b052;
+    box-shadow:
+        0 0 6px 3px rgba(220, 190, 100, 0.85),
+        0 0 20px 8px rgba(130, 80, 200, 0.6),
+        0 0 35px 14px rgba(94, 239, 162, 0.45),
+        0 0 60px 22px rgba(94, 239, 162, 0.2),
+        inset -3px -3px 8px rgba(0, 0, 0, 0.5),
+        inset 3px 3px 8px rgba(180, 140, 230, 0.35);
+}
+/* Glass specular highlight — upper-left glint */
+.aleph-orb::before {
+    content: '';
+    position: absolute;
+    top: 8%;
+    left: 15%;
+    width: 38%;
+    height: 38%;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 50%, rgba(255, 255, 255, 0.35), transparent 65%);
+    pointer-events: none;
+}
+.aleph-char {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(94, 239, 162, 0.95);
+    font-size: 2.8vh;
+    font-weight: 400;
+    pointer-events: none;
+    animation: alephPulse 1.2s ease-in-out infinite;
+}
+@keyframes alephPulse {
+    0%, 100% { opacity: 0.55; transform: scale(0.9); }
+    50%      { opacity: 1; transform: scale(1.05); }
+}
+
+/* ===== CINEMATIC READER (art gallery) ===== */
+/* Appended to <body> by JS so position:fixed works against the true viewport.
+   Grown 5% upward to cover the wedge tips and merge into the night sky. */
+.cinematic-reader {
+    position: fixed;
+    top: 10.225vh;
+    bottom: 63vh;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 77.7vh;
+    background: rgba(0, 0, 0, 0.96);
+    z-index: 9000;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    pointer-events: none;
+}
+.cinematic-reader.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Trapezoid perspective — Star Wars crawl: wide at bottom, narrows toward top */
+.cinematic-scroll {
+    flex: 1;
+    overflow: hidden;
+    perspective: 500px;
+    perspective-origin: 50% 0%;
+}
+.cinematic-text {
+    transform-origin: 50% 0%;
+    transform: rotateX(35deg);
+    width: 78%;
+    margin: 0 auto;
+    padding: 2vh 0 2vh;
+    color: rgba(94, 239, 162, 0.92);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 2.6vh;
+    line-height: 1.65;
+    text-align: justify;
+}
+.cinematic-text em { font-style: italic; opacity: 0.85; }
+.cinematic-text p { margin-bottom: 0.8em; }
+
+/* Control bar */
+.cinematic-controls {
+    flex-shrink: 0;
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 0 8px;
+    background: rgba(0, 0, 0, 0.85);
+    border-top: 1px solid rgba(94, 239, 162, 0.12);
+}
+.cinematic-btn {
+    width: 3.2vh;
+    height: 3.2vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(20, 20, 25, 0.8);
+    border: 1px solid rgba(94, 239, 162, 0.25);
+    border-radius: 3px;
+    color: rgba(94, 239, 162, 0.7);
+    font-size: 1.5vh;
+    cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+    transition: border-color 0.2s, color 0.2s;
+}
+.cinematic-btn:hover {
+    border-color: rgba(94, 239, 162, 0.6);
+    color: rgba(94, 239, 162, 1);
+}
+.cinematic-btn svg {
+    width: 1.6vh;
+    height: 1.6vh;
+    fill: currentColor;
+    stroke: currentColor;
+    stroke-width: 0;
+}
+
+/* Day-mode: art-gallery cinematic reader switches to white-on-sky-blue.
+   The reader is the only consumer of these classes (orbs render only on
+   art-gallery walls), so unscoped body.day-mode selectors are safe. */
+body.day-mode .cinematic-reader {
+    background: rgba(91, 155, 213, 0.96);
+}
+body.day-mode .cinematic-text {
+    color: rgba(255, 255, 255, 0.96);
+}
+body.day-mode .cinematic-text em {
+    opacity: 0.92;
+}
+body.day-mode .cinematic-controls {
+    background: rgba(91, 155, 213, 0.85);
+    border-top: 1px solid rgba(255, 255, 255, 0.28);
+}
+body.day-mode .cinematic-btn {
+    background: rgba(91, 155, 213, 0.8);
+    border-color: rgba(255, 255, 255, 0.40);
+    color: rgba(255, 255, 255, 0.88);
+}
+body.day-mode .cinematic-btn:hover {
+    border-color: rgba(255, 255, 255, 0.90);
+    color: rgba(255, 255, 255, 1);
+}

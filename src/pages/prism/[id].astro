@@ -1,0 +1,368 @@
+---
+import { prisms } from '../../data/prisms';
+import type { PrismConfig } from '../../data/prisms';
+import { getCollection } from 'astro:content';
+import '../../styles/prism.css';
+import WallPanel from '../../components/WallPanel.astro';
+import imageCaptions from '../../data/image-captions.json';
+import masksRaw from '../../data/masks_and_chains.json';
+
+export function getStaticPaths() {
+    return Object.values(prisms).map(prism => ({
+        params: { id: prism.id },
+        props: { prism },
+    }));
+}
+
+interface Props { prism: PrismConfig }
+const { prism } = Astro.props;
+
+function textToHtml(text: string): string {
+    // Split on double newlines OR <br><br> (used in hand-edited HTML files)
+    return text
+        .replace(/<br\s*\/?>\s*<br\s*\/?>/gi, '\n\n')
+        .split('\n\n')
+        .map(p => `<p>${p.trim()}</p>`)
+        .join('');
+}
+
+// Build the config object injected into the page for prism.js
+const destinations: Record<number, string> = {};
+const randomPools: Record<number, { src: string; w: number; h: number }[]> = {};
+const straplinePools: Record<number, string[]> = {};
+const poetryWalls: Record<number, { maxChars?: number }> = {};
+
+const heavensTiltWalls: Record<number, { title: string; body: string; imageSrc?: string; returnLabel?: string }> = {};
+
+prism.walls.forEach((wall, i) => {
+    const wallNum = i + 1;
+    if (wall.destination) destinations[wallNum] = wall.destination;
+    if (wall.content?.type === 'random-images') randomPools[wallNum] = wall.content.pool;
+    if (wall.straplinePool?.length) straplinePools[wallNum] = wall.straplinePool;
+    if (wall.content?.type === 'poetry-passage') poetryWalls[wallNum] = { maxChars: wall.content.maxChars };
+    if (wall.heavensTilt) {
+        heavensTiltWalls[wallNum] = {
+            ...wall.heavensTilt,
+            body: wall.heavensTilt.body.includes('<p>') ? wall.heavensTilt.body : textToHtml(wall.heavensTilt.body),
+        };
+    }
+});
+
+const isArtGallery = prism.id === 'art-gallery';
+const prismConfigJson = JSON.stringify({ destinations, randomPools, straplinePools, poetryWalls, heavensTiltWalls, isArtGallery });
+
+// Transmission index — only built for prisms that have a shrine-search wall
+const hasShrine = prism.walls.some(w => w.content?.type === 'shrine-search');
+const hasOvsStar = prism.walls.some(w => w.content?.type === 'ovs-star');
+const hasPoetry = prism.walls.some(w => w.content?.type === 'poetry-passage');
+const leilanIndex = hasShrine
+    ? (await getCollection('transmissions')).map(e => ({
+        t: e.data.title,
+        s: e.id,
+        c: e.body || '',
+        i: e.data.id,
+    }))
+    : [];
+const leilanIndexJson = JSON.stringify(leilanIndex);
+
+// Strip documentation keys before injecting masks
+const masks = Object.fromEntries(
+    Object.entries(masksRaw as Record<string, unknown>).filter(([k]) => !k.startsWith('_'))
+);
+const masksJson = JSON.stringify(masks);
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{prism.title}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Cinzel:wght@400;600&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&family=Marcellus&family=IM+Fell+English:ital@0;1&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="scene-curtain" id="scene-curtain" aria-hidden="true"></div>
+    <div class="page-fade-overlay" aria-hidden="true"></div>
+
+    <!-- Shared gradient definitions -->
+    <svg style="position:absolute;width:0;height:0;">
+        <defs>
+            <linearGradient id="arrowGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#6B8DD6"/>
+                <stop offset="50%" stop-color="#9B6BCC"/>
+                <stop offset="100%" stop-color="#D66B9B"/>
+            </linearGradient>
+            <linearGradient id="serpGrad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="1600" y2="0">
+                <stop class="serp-stop" offset="0%" stop-color="#6B8DD6"/>
+                <stop class="serp-stop" offset="6.67%" stop-color="#6B8DD6"/>
+                <stop class="serp-stop" offset="13.33%" stop-color="#6B8DD6"/>
+                <stop class="serp-stop" offset="20%" stop-color="#6B8DD6"/>
+                <stop class="serp-stop" offset="26.67%" stop-color="#6B8DD6"/>
+                <stop class="serp-stop" offset="33.33%" stop-color="#6B8DD6"/>
+                <stop class="serp-stop" offset="40%" stop-color="#6B8DD6"/>
+                <stop class="serp-stop" offset="46.67%" stop-color="#6B8DD6"/>
+                <stop class="serp-stop" offset="53.33%" stop-color="#6B8DD6"/>
+                <stop class="serp-stop" offset="60%" stop-color="#6B8DD6"/>
+                <stop class="serp-stop" offset="66.67%" stop-color="#6B8DD6"/>
+                <stop class="serp-stop" offset="73.33%" stop-color="#6B8DD6"/>
+                <stop class="serp-stop" offset="80%" stop-color="#6B8DD6"/>
+                <stop class="serp-stop" offset="86.67%" stop-color="#6B8DD6"/>
+                <stop class="serp-stop" offset="93.33%" stop-color="#6B8DD6"/>
+                <stop class="serp-stop" offset="100%" stop-color="#6B8DD6"/>
+            </linearGradient>
+            <!-- Crenellation gradients (shared across all 6 wall SVGs) -->
+            <linearGradient id="crenTriFill" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#D4D4D4"/>
+                <stop offset="100%" stop-color="#BABABA"/>
+            </linearGradient>
+            <linearGradient id="crenTrapWhite" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#FFFFFF"/>
+                <stop offset="8%"  stop-color="#FAFAFA"/>
+                <stop offset="100%" stop-color="#EBEBEB"/>
+            </linearGradient>
+            <linearGradient id="crenTrapShadow" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#C4C4C4"/>
+                <stop offset="100%" stop-color="#A8A8A8"/>
+            </linearGradient>
+            <linearGradient id="crenTrapSlightShadow" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#DEDEDE"/>
+                <stop offset="100%" stop-color="#C8C8C8"/>
+            </linearGradient>
+        </defs>
+    </svg>
+
+    <div class="chamber" data-prism-id={prism.id}>
+        <!-- Sky: always full viewport behind everything -->
+        <div class="sky-layer">
+            <canvas id="sky-canvas"></canvas>
+        </div>
+
+        <!-- Click overlay for archway — sits outside the 3D container -->
+        <div class="archway-click-overlay" id="archway-click-overlay"></div>
+
+        <div class="wall-area" id="wall-area">
+            <div id="world-tilt">
+            <div class="prism-container" id="prism-container">
+
+                {prism.walls.map((wall, i) => {
+                    const wallNum = i + 1;
+                    return (
+                        <WallPanel
+                            wall={wallNum}
+                            archway={wall.archway}
+                            bg={prism.chamberBg ?? wall.bg}
+                            bgOverlay={prism.chamberBgOverlay}
+                            showBorder={prism.wallBorder ?? true}
+                            bgFit={prism.chamberBg ? 'cover' : 'contain'}
+                        >
+                            {wall.content?.type === 'image' && (
+                                <img
+                                    class="wall-panel-img"
+                                    src={wall.content.src}
+                                    alt=""
+                                    loading="eager"
+                                    decoding="async"
+                                    style={wall.content.style}
+                                />
+                            )}
+                            {wall.straplinePool?.length && (
+                                <div class="wall-strapline" data-wall={wallNum}></div>
+                            )}
+                            {wall.content?.type === 'text' && (
+                                <div class="wall-text" set:html={wall.content.html} />
+                            )}
+                            {wall.content?.type === 'random-images' && (
+                                <img
+                                    class="wall-panel-img wall-random-img"
+                                    data-wall={wallNum}
+                                    src=""
+                                    alt=""
+                                    loading="eager"
+                                    decoding="async"
+                                    style="display:none"
+                                />
+                            )}
+                            {wall.content?.type === 'random-images' && isArtGallery && (
+                                <div class="aleph-orb" data-wall={wallNum}>
+                                    <div class="aleph-char">{'\u05D0'}</div>
+                                </div>
+                            )}
+                            {wall.content?.type === 'random-images' && isArtGallery && (
+                                <div class="cinematic-reader" data-wall={wallNum}>
+                                    <div class="cinematic-scroll">
+                                        <div class="cinematic-text"></div>
+                                    </div>
+                                    <div class="cinematic-controls">
+                                        <button class="cinematic-btn" data-action="minus" title="Smaller text">&minus;</button>
+                                        <button class="cinematic-btn" data-action="pause" title="Pause/Play">&#10074;&#10074;</button>
+                                        <button class="cinematic-btn" data-action="left" title="Reverse">&#9664;</button>
+                                        <button class="cinematic-btn" data-action="right" title="Forward">&#9654;</button>
+                                        <button class="cinematic-btn" data-action="eject" title="Close">&#9167;</button>
+                                        <button class="cinematic-btn" data-action="plus" title="Larger text">+</button>
+                                    </div>
+                                </div>
+                            )}
+                            {wall.content?.type === 'shrine-search' && (
+                                <div class="wall-shrine-search">
+                                    <div class="wall-search-wrap">
+                                        <input class="wall-search-input" type="text" placeholder="light a candle or search Leilan's words…" autocomplete="off" spellcheck="false" />
+                                        <div class="wall-search-results-frame">
+                                            <div class="wall-search-results"></div>
+                                            <button class="results-scroll-up" type="button" aria-label="Scroll results up">▲</button>
+                                            <button class="results-scroll-down" type="button" aria-label="Scroll results down">▼</button>
+                                        </div>
+                                    </div>
+                                    <div class="wall-shrine">
+                                        <img class="shrine-backdrop" src="/images/candleshrine.png" alt="" />
+                                        {[5.9, 10.6, 14.8].map((bottom) => (
+                                            <div class="shrine-candles" style={`bottom: ${bottom}%`}>
+                                                {[14.16, 23.17, 32.18, 41.19, 50.20, 59.20, 68.21, 77.22, 86.23].map((left) => (
+                                                    <div class="shrine-candle" style={`left: ${left}%`}>
+                                                        <div class="candle-flame"></div>
+                                                        <div class="candle-body"></div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            {wall.content?.type === 'ovs-star' && (
+                                <div class="wall-ovs-star">
+                                    <svg class="ovs-star-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                        <!-- 8-pointed Islamic-geometry star — solid vermillion -->
+                                        <polygon
+                                            points="100,25 113.4,67.7 153,47 132.3,86.6 175,100 132.3,113.4 153,153 113.4,132.3 100,175 86.6,132.3 47,153 67.7,113.4 25,100 67.7,86.6 47,47 86.6,67.7"
+                                            fill="#C41230" stroke="#C41230" stroke-width="1.4" stroke-linejoin="round"
+                                        />
+                                        <!-- Inner octagon (concave void) -->
+                                        <polygon
+                                            points="113.4,67.7 132.3,86.6 132.3,113.4 113.4,132.3 86.6,132.3 67.7,113.4 67.7,86.6 86.6,67.7"
+                                            fill="rgba(196,18,48,0.15)" stroke="#C41230" stroke-width="0.8" opacity="0.7"
+                                        />
+                                        <!-- Thick outer ring -->
+                                        <circle cx="100" cy="100" r="88" fill="none" stroke="#C41230" stroke-width="3" opacity="0.85"/>
+                                        <!-- Centre glow circle -->
+                                        <circle cx="100" cy="100" r="24" fill="rgba(46,0,79,0.25)" stroke="#2E004F" stroke-width="0.8" opacity="0.8"/>
+                                        <!-- O V S lettering -->
+                                        <text x="100" y="100" class="ovs-letter-text" text-anchor="middle" dominant-baseline="central">OVS</text>
+                                    </svg>
+                                </div>
+                            )}
+                            {wall.content?.type === 'word-panel' && (
+                                <div class="wall-word-panel" data-has-archway={wall.archway ? 'true' : undefined}>
+                                    <div class="wall-word">{wall.content.label}</div>
+                                    <div class="wall-text-frame">
+                                        <button class="wall-close-btn" type="button" aria-label="Close">×</button>
+                                        <button class="wall-scroll-up" type="button" aria-label="Scroll up">▲</button>
+                                        <button class={`wall-video-btn${wall.videoSrc ? '' : ' wall-video-disabled'}`}
+                                            type="button"
+                                            data-video-src={wall.videoSrc || ''}
+                                            disabled={!wall.videoSrc}>
+                                            <span class="wall-video-icon">▶</span> video
+                                        </button>
+                                        <div class="wall-text-body" set:html={textToHtml(wall.content.text)} />
+                                        <button class="wall-scroll-down" type="button" aria-label="Scroll down">▼</button>
+                                    </div>
+                                </div>
+                            )}
+                            {wall.content?.type === 'poetry-passage' && (
+                                <div class="wall-poetry-passage" data-wall={wallNum} data-has-archway={wall.archway ? 'true' : undefined}>
+                                    <div class="poetry-card">
+                                        <div class="poetry-text"></div>
+                                        <div class="poetry-attribution"></div>
+                                    </div>
+                                </div>
+                            )}
+                        </WallPanel>
+                    );
+                })}
+
+                <!-- 3D rim: real triangular-prism wedges + flat half-wedges at corners.
+                     Lives outside .wall-panel so wall-panel can keep its 2D-flat content
+                     (without preserve-3d leaking back-facing wall content into view). -->
+                <div class="prism-rim-3d" aria-hidden="true">
+                    {[1, 2, 3, 4, 5, 6].map(wallNum => (
+                        <div class="rim-section" data-rim-wall={wallNum}>
+                            <div class="rim-half-wedge rim-half-wedge-start"></div>
+                            <div class="rim-wedge" style="left:8.33%">
+                                <div class="rim-wedge-face rim-wedge-face-left"></div>
+                                <div class="rim-wedge-face rim-wedge-face-right"></div>
+                                <div class="rim-wedge-bottom"></div>
+                            </div>
+                            <div class="rim-wedge" style="left:36.11%">
+                                <div class="rim-wedge-face rim-wedge-face-left"></div>
+                                <div class="rim-wedge-face rim-wedge-face-right"></div>
+                                <div class="rim-wedge-bottom"></div>
+                            </div>
+                            <div class="rim-wedge" style="left:63.89%">
+                                <div class="rim-wedge-face rim-wedge-face-left"></div>
+                                <div class="rim-wedge-face rim-wedge-face-right"></div>
+                                <div class="rim-wedge-bottom"></div>
+                            </div>
+                            <div class="rim-half-wedge rim-half-wedge-end"></div>
+                        </div>
+                    ))}
+
+                    <!-- Vertex bridging panels: one at each of the 6 hex corners,
+                         flat panel chamfering the crease between adjacent half-wedges. -->
+                    {[1, 2, 3, 4, 5, 6].map(v => (
+                        <div class="rim-vertex" data-rim-vertex={v}>
+                            <div class="rim-vertex-panel"></div>
+                            <div class="rim-vertex-bottom"></div>
+                        </div>
+                    ))}
+                </div>
+
+            </div>
+            </div> <!-- /world-tilt -->
+        </div>
+    </div>
+
+    <!-- Archway transition overlays -->
+    <div class="archway-vignette" id="archway-vignette"></div>
+    <div class="archway-shimmer" id="archway-shimmer">
+        <canvas id="shimmer-canvas"></canvas>
+    </div>
+
+    <!-- Reading overlay (shrine → skyward reading mode) -->
+    {hasShrine && (
+        <div class="reading-overlay" id="reading-overlay">
+            <div class="reading-content">
+                <h2 class="reading-title" id="reading-title"></h2>
+                <div class="reading-body" id="reading-body"></div>
+                <button class="reading-return" id="reading-return" type="button">eternal return</button>
+            </div>
+        </div>
+    )}
+
+    <!-- Navigation arrows (wall mode) -->
+    <button class="nav-arrow left" id="nav-left" type="button" aria-label="Turn left">
+        <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <button class="nav-arrow right" id="nav-right" type="button" aria-label="Turn right">
+        <svg viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg>
+    </button>
+    <!-- Navigation arrows (sky mode) -->
+    <a class="nav-arrow down" id="nav-down" href="#1">
+        <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+    </a>
+
+    <!-- Day/Night toggle (sky mode only) -->
+    <button class="sky-toggle" id="sky-toggle" title="Toggle day/night">
+        <span id="sky-toggle-icon">&#9790;</span>
+    </button>
+
+    <!-- Inject prism config for prism.js -->
+    <script is:inline set:html={`window.PRISM_CONFIG = ${prismConfigJson};`} />
+    {hasShrine && (
+        <script is:inline set:html={`window.LEILAN_INDEX = ${leilanIndexJson}; window.LEILAN_MASKS = ${masksJson};`} />
+    )}
+    {isArtGallery && (
+        <script is:inline set:html={`window.IMAGE_CAPTIONS = ${JSON.stringify(imageCaptions)};`} />
+    )}
+    <script is:inline src="/scripts/prism.js"></script>
+</body>
+</html>

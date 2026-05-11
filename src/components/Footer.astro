@@ -1,0 +1,67 @@
+---
+import fs from 'node:fs';
+import path from 'node:path';
+
+const straplines = fs.readFileSync(path.join(process.cwd(), 'public/straplines.txt'), 'utf-8')
+  .split('\n')
+  .filter(line => line.trim());
+---
+
+<footer class="site-footer">
+  <img src="/images/OVS_black.jpeg" alt="" class="footer-icon" />
+  <span class="footer-strapline" id="footerStrapline"></span>
+  <img src="/images/OVS_black.jpeg" alt="" class="footer-icon" />
+</footer>
+
+<script is:inline define:vars={{ straplines }}>
+  document.addEventListener('DOMContentLoaded', function() {
+    var el = document.getElementById('footerStrapline');
+    if (el) {
+      var lines = straplines;
+      el.textContent = lines[Math.floor(Math.random() * lines.length)];
+    }
+  });
+</script>
+
+<style>
+  .site-footer {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5em;
+    padding: 2em 1em;
+    margin-top: 3em;
+    border-top: 1px solid rgba(94, 239, 162, 0.15);
+  }
+
+  .footer-icon {
+    width: 144px;
+    height: 144px;
+    object-fit: contain;
+    opacity: 0.7;
+    flex-shrink: 0;
+  }
+
+  .footer-strapline {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.6em;
+    font-weight: 300;
+    color: #5eefa2;
+    opacity: 0.6;
+    letter-spacing: 0.1em;
+    text-align: center;
+  }
+
+  @media (max-width: 768px) {
+    .footer-strapline {
+      font-size: 1.4em;
+    }
+
+    .footer-icon {
+      width: 112px;
+      height: 112px;
+    }
+  }
+</style>

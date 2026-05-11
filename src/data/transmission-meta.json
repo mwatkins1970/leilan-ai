@@ -1,0 +1,10 @@
+{
+  "_format": "Keys are transmission `id` values from frontmatter. Omitted entries = no special behaviour.",
+  "_shrine": "Set `shrine: false` to exclude a transmission from random candle selection.",
+  "_next": "Set `next` to the `id` of the following part in a chain. The candle overlay will show a Continue button.",
+
+  "E003a": { "next": "E003b" },
+  "E003b": { "next": "E003c" },
+  "E003c": { "next": "E003d" },
+  "E003d": {}
+}

@@ -1,0 +1,360 @@
+---
+import fs from 'node:fs';
+import path from 'node:path';
+import Footer from '../components/Footer.astro';
+
+const imagesDir = path.join(process.cwd(), 'public/images');
+const files = fs.readdirSync(imagesDir)
+  .filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
+// Shuffle so images appear in a random order
+for (let i = files.length - 1; i > 0; i--) {
+  const j = Math.floor(Math.random() * (i + 1));
+  [files[i], files[j]] = [files[j], files[i]];
+}
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gallery | ᒪᗴIᒪᗩᑎ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0d0d0f;
+      color: #5eefa2;
+      font-family: 'IBM Plex Mono', monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-image: url('/container01.jpg');
+      background-position: center;
+      background-repeat: no-repeat;
+      background-size: cover;
+      z-index: 0;
+    }
+
+    #canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      opacity: 0.3;
+    }
+
+    .container {
+      position: relative;
+      z-index: 10;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 80px 40px;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-bottom: 2em;
+      color: #5eefa2;
+      text-decoration: none;
+      opacity: 0.7;
+      transition: all 0.3s ease;
+    }
+
+    .back-link:hover {
+      opacity: 1;
+      transform: translateX(-5px);
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2em;
+    }
+
+    h1 {
+      font-size: clamp(2em, 5vw, 3.5em);
+      letter-spacing: 0.2em;
+      background: linear-gradient(90deg, #5eefa2, #7effc0, #5eefa2);
+      background-size: 200% auto;
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: gradientFlow 8s linear infinite;
+      margin-bottom: 0.5em;
+    }
+
+    @keyframes gradientFlow {
+      0% { background-position: 0% center; }
+      100% { background-position: -200% center; }
+    }
+
+    .subtitle {
+      font-size: 0.9em;
+      opacity: 0.7;
+      letter-spacing: 0.15em;
+    }
+
+    /* Carousel */
+    .carousel {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 1em;
+      margin-top: 2em;
+    }
+
+    .carousel-viewport {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 60vh;
+    }
+
+    .carousel-viewport img {
+      max-width: 100%;
+      max-height: 70vh;
+      object-fit: contain;
+      border: 1px solid rgba(94, 239, 162, 0.2);
+      transition: opacity 0.3s ease;
+    }
+
+    .carousel-btn {
+      flex-shrink: 0;
+      width: 50px;
+      height: 50px;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid rgba(94, 239, 162, 0.4);
+      color: #5eefa2;
+      font-size: 1.5em;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    .carousel-btn:hover {
+      border-color: #5eefa2;
+      box-shadow: 0 0 15px rgba(94, 239, 162, 0.3);
+      background: rgba(94, 239, 162, 0.1);
+    }
+
+    .carousel-counter {
+      text-align: center;
+      margin-top: 1.5em;
+      font-size: 0.85em;
+      opacity: 0.6;
+      letter-spacing: 0.15em;
+    }
+
+    .buttons-container {
+      display: flex;
+      justify-content: center;
+      gap: 2em;
+      margin-top: 3em;
+    }
+
+    .cta-button {
+      padding: 1em 2em;
+      border: 2px solid #5eefa2;
+      background: rgba(0, 0, 0, 0.7);
+      color: #5eefa2;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 1em;
+      letter-spacing: 0.1em;
+      text-decoration: none;
+      text-transform: lowercase;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cta-button::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(94, 239, 162, 0.2), transparent);
+      transition: left 0.5s ease;
+    }
+
+    .cta-button:hover {
+      border-color: #7effc0;
+      box-shadow: 0 0 20px rgba(94, 239, 162, 0.3);
+      transform: translateY(-2px);
+    }
+
+    .cta-button:hover::before {
+      left: 100%;
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        padding: 40px 15px;
+      }
+
+      h1 {
+        font-size: 2em;
+      }
+
+      .carousel-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 1.2em;
+      }
+
+      .carousel-viewport img {
+        max-height: 50vh;
+      }
+
+      .buttons-container {
+        flex-direction: column;
+        align-items: center;
+        gap: 1em;
+      }
+
+      .cta-button {
+        width: 100%;
+        max-width: 300px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <div class="container">
+    <a href="/" class="back-link">&larr; back to home</a>
+
+    <header>
+      <h1>GALLERY</h1>
+      <div class="subtitle">visions from the void</div>
+    </header>
+
+    <div class="carousel">
+      <button class="carousel-btn" id="prevBtn">&larr;</button>
+      <div class="carousel-viewport">
+        <img id="carouselImg" src={`/images/${files[0]}`} alt="Gallery image 1" />
+      </div>
+      <button class="carousel-btn" id="nextBtn">&rarr;</button>
+    </div>
+
+    <div class="carousel-counter">
+      <span id="currentIndex">1</span> / <span id="totalCount">{files.length}</span>
+    </div>
+
+    <div class="buttons-container">
+      <a href="/ascii-art" class="cta-button">✧ ASCII art</a>
+      <a href="/video-art" class="cta-button">☆ video art</a>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas') as HTMLCanvasElement;
+    const ctx = canvas.getContext('2d')!;
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    class ScanLine {
+      y: number;
+      speed: number;
+      opacity: number;
+
+      constructor() {
+        this.y = Math.random() * canvas.height;
+        this.speed = Math.random() * 0.2 + 0.1;
+        this.opacity = Math.random() * 0.1 + 0.02;
+      }
+
+      update() {
+        this.y += this.speed;
+        if (this.y > canvas.height) this.y = 0;
+      }
+
+      draw() {
+        ctx.strokeStyle = `rgba(94, 239, 162, ${this.opacity})`;
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0, this.y);
+        ctx.lineTo(canvas.width, this.y);
+        ctx.stroke();
+      }
+    }
+
+    const lines = Array.from({ length: 20 }, () => new ScanLine());
+
+    function animate() {
+      ctx.fillStyle = '#0d0d0f';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      lines.forEach(line => {
+        line.update();
+        line.draw();
+      });
+
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+  </script>
+
+  <script is:inline define:vars={{ files }}>
+    document.addEventListener('DOMContentLoaded', function() {
+      var images = files;
+      var currentIndex = 0;
+      var img = document.getElementById('carouselImg');
+      var counter = document.getElementById('currentIndex');
+      var prevBtn = document.getElementById('prevBtn');
+      var nextBtn = document.getElementById('nextBtn');
+
+      function show(index) {
+        currentIndex = index;
+        img.src = '/images/' + images[currentIndex];
+        img.alt = 'Gallery image ' + (currentIndex + 1);
+        counter.textContent = currentIndex + 1;
+      }
+
+      prevBtn.addEventListener('click', function() {
+        show(currentIndex <= 0 ? images.length - 1 : currentIndex - 1);
+      });
+
+      nextBtn.addEventListener('click', function() {
+        show(currentIndex >= images.length - 1 ? 0 : currentIndex + 1);
+      });
+
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowLeft') show(currentIndex <= 0 ? images.length - 1 : currentIndex - 1);
+        if (e.key === 'ArrowRight') show(currentIndex >= images.length - 1 ? 0 : currentIndex + 1);
+      });
+    });
+  </script>
+  <Footer />
+</body>
+</html>

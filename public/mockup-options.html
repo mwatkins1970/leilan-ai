@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prism Visual Options Mockup</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #111;
+    font-family: 'IBM Plex Mono', monospace;
+    color: #ccc;
+    padding: 30px 20px 60px;
+    min-height: 100vh;
+}
+h1 {
+    text-align: center;
+    color: #fff;
+    font-size: 1.1rem;
+    font-weight: 300;
+    letter-spacing: 0.15em;
+    margin-bottom: 8px;
+}
+.subtitle {
+    text-align: center;
+    color: #888;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    margin-bottom: 40px;
+}
+.options-row {
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+.option-block {
+    flex: 0 0 340px;
+    max-width: 340px;
+}
+.option-label {
+    text-align: center;
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    color: #aaa;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+}
+.option-label strong {
+    display: block;
+    color: #fff;
+    font-size: 0.85rem;
+    margin-bottom: 3px;
+    font-weight: 400;
+}
+.option-label .tag {
+    display: inline-block;
+    font-size: 0.6rem;
+    padding: 2px 8px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.08);
+    color: #999;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+}
+
+/* ============================================================
+   SHARED PRISM SCENE STYLES
+   ============================================================ */
+.prism-scene {
+    position: relative;
+    width: 340px;
+    height: 340px;
+    overflow: hidden;
+    --perspective-dist: 600px;
+    --wall-w: 260px;
+    --apothem: calc(var(--wall-w) * 0.866);
+    perspective: var(--perspective-dist);
+    perspective-origin: center 80%;
+}
+.prism-hub {
+    position: absolute;
+    width: var(--wall-w);
+    height: 340px;
+    left: calc(50% - var(--wall-w)/2);
+    top: 0;
+    transform-style: preserve-3d;
+    /* Rotated so we see wall-1 (facing), wall-2 (right), wall-6 (left) */
+    transform: translateZ(var(--apothem)) rotateY(0deg);
+}
+.wall {
+    position: absolute;
+    width: var(--wall-w);
+    height: 340px;
+    backface-visibility: hidden;
+    overflow: hidden;
+}
+.wall[data-w="1"] { transform: rotateY(0deg)    translateZ(calc(var(--apothem) * -1)); }
+.wall[data-w="2"] { transform: rotateY(-60deg)  translateZ(calc(var(--apothem) * -1)); }
+.wall[data-w="6"] { transform: rotateY(-300deg) translateZ(calc(var(--apothem) * -1)); }
+
+.wall-bg-fill {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+}
+.wall-cren {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    width: 100%;
+    pointer-events: none;
+}
+.wall-label {
+    position: absolute;
+    left: 50%;
+    top: 36%;
+    transform: translateX(-50%);
+    font-size: 0.85rem;
+    letter-spacing: 0.12em;
+    white-space: nowrap;
+    pointer-events: none;
+}
+.wall-archway {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    pointer-events: none;
+}
+.wall-border-1px {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+/* ============================================================
+   OPTION A — CSS-only, light & white
+   ============================================================ */
+
+/* A: Wall background — bright warm white */
+.opt-a .wall-bg-fill {
+    background: linear-gradient(180deg,
+        #f5f0ee 0%,
+        #ece6e0 40%,
+        #e2dbd5 100%
+    );
+}
+.opt-a .wall[data-w="2"] .wall-bg-fill,
+.opt-a .wall[data-w="6"] .wall-bg-fill {
+    background: linear-gradient(180deg,
+        #ede8e4 0%,
+        #e4ded8 40%,
+        #dbd4ce 100%
+    );
+    filter: brightness(0.88);
+}
+/* A: Crenellation — clean white with subtle shadow */
+.opt-a .cren-corner-l { fill: #d8d2cc; }
+.opt-a .cren-corner-r { fill: #d8d2cc; }
+.opt-a .cren-tri      { fill: #f0eae4; }
+.opt-a .cren-face-w   { fill: #fafaf8; }
+.opt-a .cren-face-sl  { fill: #f0edea; }
+.opt-a .cren-face-sh  { fill: #e0dbd6; }
+.opt-a .cren-stroke   { stroke: #b8b0e8; }
+/* A: Serpentine border */
+.opt-a .wall-border-1px {
+    background:
+        linear-gradient(90deg, #a0b0f0, #c090e0, #f090b0) top / 100% 1.5px no-repeat,
+        linear-gradient(90deg, #a0b0f0, #c090e0, #f090b0) bottom / 100% 1.5px no-repeat,
+        linear-gradient(180deg, #a0b0f0, #c090e0, #f090b0) left / 1.5px 100% no-repeat,
+        linear-gradient(180deg, #a0b0f0, #c090e0, #f090b0) right / 1.5px 100% no-repeat;
+}
+.opt-a .wall-label {
+    color: #3a3028;
+    text-shadow: 0 1px 4px rgba(255,255,255,0.6);
+}
+/* A: Note box */
+.opt-a-note {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 4px;
+    padding: 12px 14px;
+    font-size: 0.65rem;
+    color: #aaa;
+    line-height: 1.6;
+    margin-top: 10px;
+}
+.opt-a-note em { color: #ccc; font-style: normal; }
+
+/* ============================================================
+   OPTION B — CSS walls + WebGL lighting layer
+   ============================================================ */
+
+/* B: Wall background — same white but will get lighting from canvas */
+.opt-b .wall-bg-fill {
+    background: linear-gradient(180deg,
+        #f8f4f2 0%,
+        #eeebe8 40%,
+        #e4e0dc 100%
+    );
+}
+.opt-b .wall[data-w="2"] .wall-bg-fill,
+.opt-b .wall[data-w="6"] .wall-bg-fill {
+    background: linear-gradient(180deg,
+        #f0ece8 0%,
+        #e6e2de 40%,
+        #dcd8d4 100%
+    );
+    filter: brightness(0.9);
+}
+/* B: Crenellations — same white/light */
+.opt-b .cren-corner-l { fill: #d8d2cc; }
+.opt-b .cren-corner-r { fill: #d8d2cc; }
+.opt-b .cren-tri      { fill: #f0eae4; }
+.opt-b .cren-face-w   { fill: #fafaf8; }
+.opt-b .cren-face-sl  { fill: #f0edea; }
+.opt-b .cren-face-sh  { fill: #e0dbd6; }
+/* B: Serpentine border — more subtle (light will provide energy) */
+.opt-b .wall-border-1px {
+    background:
+        linear-gradient(90deg, #a0b0f0, #c090e0, #f090b0) top / 100% 1.5px no-repeat,
+        linear-gradient(90deg, #a0b0f0, #c090e0, #f090b0) bottom / 100% 1.5px no-repeat,
+        linear-gradient(180deg, #a0b0f0, #c090e0, #f090b0) left / 1.5px 100% no-repeat,
+        linear-gradient(180deg, #a0b0f0, #c090e0, #f090b0) right / 1.5px 100% no-repeat;
+}
+.opt-b .wall-label {
+    color: #3a3028;
+    text-shadow: 0 1px 4px rgba(255,255,255,0.6);
+}
+/* B: WebGL lighting canvas overlaid on entire scene */
+.opt-b-canvas {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+    mix-blend-mode: overlay;
+    opacity: 0.7;
+}
+
+/* ============================================================
+   OPTION C — Full Three.js (simulated with CSS for mockup)
+   ============================================================ */
+
+/* C: Uses a canvas for the entire scene — the CSS walls are hidden */
+.opt-c .prism-hub {
+    display: none;
+}
+.opt-c-canvas {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* ============================================================
+   COMPARISON NOTE
+   ============================================================ */
+.comparison-note {
+    max-width: 900px;
+    margin: 40px auto 0;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    padding: 20px 24px;
+    font-size: 0.68rem;
+    color: #888;
+    line-height: 1.8;
+}
+.comparison-note h2 {
+    color: #fff;
+    font-weight: 400;
+    font-size: 0.85rem;
+    letter-spacing: 0.1em;
+    margin-bottom: 14px;
+}
+.comparison-note table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.comparison-note td, .comparison-note th {
+    padding: 6px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    vertical-align: top;
+}
+.comparison-note th {
+    color: #ccc;
+    font-weight: 400;
+    text-align: left;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+.comparison-note td:first-child { color: #ccc; white-space: nowrap; }
+.dot-low    { color: #5eefa2; }
+.dot-med    { color: #f0c040; }
+.dot-high   { color: #f07060; }
+</style>
+</head>
+<body>
+
+<h1>PRISM CHAMBER — VISUAL OPTIONS</h1>
+<p class="subtitle">light · bright · white direction &nbsp;·&nbsp; three approaches</p>
+
+<div class="options-row">
+
+    <!-- ========== OPTION A ========== -->
+    <div class="option-block">
+        <div class="option-label">
+            <strong>Option A</strong>
+            CSS-only refresh
+            <br><span class="tag">no new libraries</span>
+        </div>
+        <div class="prism-scene opt-a" id="scene-a">
+            <div class="prism-hub" id="hub-a">
+                <!-- Wall 6 (left) -->
+                <div class="wall" data-w="6">
+                    <div class="wall-bg-fill"></div>
+                    <div class="wall-border-1px"></div>
+                    <svg class="wall-cren" viewBox="0 -100 1600 220" preserveAspectRatio="xMidYMax meet">
+                        <polygon class="cren-corner-l" points="0,-95 0,105 114.29,120 114.29,-80"/>
+                        <polygon class="cren-corner-l" points="0,105 0,120 114.29,120"/>
+                        <polygon class="cren-corner-r" points="1485.71,-80 1485.71,120 1600,105 1600,-95"/>
+                        <polygon class="cren-corner-r" points="1485.71,120 1600,120 1600,105"/>
+                        <polygon class="cren-tri cren-stroke" points="114.29,120 342.86,90 571.43,120" stroke-width="1"/>
+                        <polygon class="cren-tri cren-stroke" points="571.43,120 800,90 1028.57,120" stroke-width="1"/>
+                        <polygon class="cren-tri cren-stroke" points="1028.57,120 1257.14,90 1485.71,120" stroke-width="1"/>
+                        <polygon class="cren-face-w cren-stroke" points="114.29,120 342.86,90 342.86,-80 114.29,-80" stroke-width="1"/>
+                        <polygon class="cren-face-sl cren-stroke" points="571.43,120 800,90 800,-80 571.43,-80" stroke-width="1"/>
+                        <polygon class="cren-face-sh cren-stroke" points="1028.57,120 1257.14,90 1257.14,-80 1028.57,-80" stroke-width="1"/>
+                        <polygon class="cren-face-sh cren-stroke" points="342.86,90 571.43,120 571.43,-80 342.86,-80" stroke-width="1"/>
+                        <polygon class="cren-face-w cren-stroke" points="800,90 1028.57,120 1028.57,-80 800,-80" stroke-width="1"/>
+                        <polygon class="cren-face-w cren-stroke" points="1257.14,90 1485.71,120 1485.71,-80 1257.14,-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="342.86" y1="90" x2="342.86" y2="-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="800" y1="90" x2="800" y2="-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="1257.14" y1="90" x2="1257.14" y2="-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="0" y1="120" x2="1600" y2="120" stroke-width="1"/>
+                    </svg>
+                    <div class="wall-label">mythic_banner</div>
+                </div>
+                <!-- Wall 1 (facing) -->
+                <div class="wall" data-w="1">
+                    <div class="wall-bg-fill"></div>
+                    <div class="wall-border-1px"></div>
+                    <svg class="wall-cren" viewBox="0 -100 1600 220" preserveAspectRatio="xMidYMax meet">
+                        <polygon class="cren-corner-l" points="0,-95 0,105 114.29,120 114.29,-80"/>
+                        <polygon class="cren-corner-l" points="0,105 0,120 114.29,120"/>
+                        <polygon class="cren-corner-r" points="1485.71,-80 1485.71,120 1600,105 1600,-95"/>
+                        <polygon class="cren-corner-r" points="1485.71,120 1600,120 1600,105"/>
+                        <polygon class="cren-tri cren-stroke" points="114.29,120 342.86,90 571.43,120" stroke-width="1"/>
+                        <polygon class="cren-tri cren-stroke" points="571.43,120 800,90 1028.57,120" stroke-width="1"/>
+                        <polygon class="cren-tri cren-stroke" points="1028.57,120 1257.14,90 1485.71,120" stroke-width="1"/>
+                        <polygon class="cren-face-w cren-stroke" points="114.29,120 342.86,90 342.86,-80 114.29,-80" stroke-width="1"/>
+                        <polygon class="cren-face-sl cren-stroke" points="571.43,120 800,90 800,-80 571.43,-80" stroke-width="1"/>
+                        <polygon class="cren-face-sh cren-stroke" points="1028.57,120 1257.14,90 1257.14,-80 1028.57,-80" stroke-width="1"/>
+                        <polygon class="cren-face-sh cren-stroke" points="342.86,90 571.43,120 571.43,-80 342.86,-80" stroke-width="1"/>
+                        <polygon class="cren-face-w cren-stroke" points="800,90 1028.57,120 1028.57,-80 800,-80" stroke-width="1"/>
+                        <polygon class="cren-face-w cren-stroke" points="1257.14,90 1485.71,120 1485.71,-80 1257.14,-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="342.86" y1="90" x2="342.86" y2="-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="800" y1="90" x2="800" y2="-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="1257.14" y1="90" x2="1257.14" y2="-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="0" y1="120" x2="1600" y2="120" stroke-width="1"/>
+                    </svg>
+                    <div class="wall-label" style="font-size:0.7rem;opacity:0.5;">[ shrine ]</div>
+                    <svg class="wall-archway" viewBox="0 0 100 100" preserveAspectRatio="xMidYMax meet" style="height:100%;">
+                        <path d="M 39.5,100 L 39.5,79.25 A 10.5,10.5 0 0,1 60.5,79.25 L 60.5,100 Z" fill="rgba(20,15,10,0.85)" stroke="#b0a0f0" stroke-width="0.5"/>
+                    </svg>
+                </div>
+                <!-- Wall 2 (right) -->
+                <div class="wall" data-w="2">
+                    <div class="wall-bg-fill"></div>
+                    <div class="wall-border-1px"></div>
+                    <svg class="wall-cren" viewBox="0 -100 1600 220" preserveAspectRatio="xMidYMax meet">
+                        <polygon class="cren-corner-l" points="0,-95 0,105 114.29,120 114.29,-80"/>
+                        <polygon class="cren-corner-l" points="0,105 0,120 114.29,120"/>
+                        <polygon class="cren-corner-r" points="1485.71,-80 1485.71,120 1600,105 1600,-95"/>
+                        <polygon class="cren-corner-r" points="1485.71,120 1600,120 1600,105"/>
+                        <polygon class="cren-tri cren-stroke" points="114.29,120 342.86,90 571.43,120" stroke-width="1"/>
+                        <polygon class="cren-tri cren-stroke" points="571.43,120 800,90 1028.57,120" stroke-width="1"/>
+                        <polygon class="cren-tri cren-stroke" points="1028.57,120 1257.14,90 1485.71,120" stroke-width="1"/>
+                        <polygon class="cren-face-w cren-stroke" points="114.29,120 342.86,90 342.86,-80 114.29,-80" stroke-width="1"/>
+                        <polygon class="cren-face-sl cren-stroke" points="571.43,120 800,90 800,-80 571.43,-80" stroke-width="1"/>
+                        <polygon class="cren-face-sh cren-stroke" points="1028.57,120 1257.14,90 1257.14,-80 1028.57,-80" stroke-width="1"/>
+                        <polygon class="cren-face-sh cren-stroke" points="342.86,90 571.43,120 571.43,-80 342.86,-80" stroke-width="1"/>
+                        <polygon class="cren-face-w cren-stroke" points="800,90 1028.57,120 1028.57,-80 800,-80" stroke-width="1"/>
+                        <polygon class="cren-face-w cren-stroke" points="1257.14,90 1485.71,120 1485.71,-80 1257.14,-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="342.86" y1="90" x2="342.86" y2="-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="800" y1="90" x2="800" y2="-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="1257.14" y1="90" x2="1257.14" y2="-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="0" y1="120" x2="1600" y2="120" stroke-width="1"/>
+                    </svg>
+                    <div class="wall-label">tokenisation</div>
+                    <svg class="wall-archway" viewBox="0 0 100 100" preserveAspectRatio="xMidYMax meet" style="height:100%;">
+                        <path d="M 39.5,100 L 39.5,79.25 A 10.5,10.5 0 0,1 60.5,79.25 L 60.5,100 Z" fill="rgba(20,15,10,0.85)" stroke="#b0a0f0" stroke-width="0.5"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+        <div class="opt-a-note">
+            <em>What changes:</em> crenellations go bright white/pearl · wall backgrounds become clean linen-white · serpentine borders more vivid · CSS <code>filter: contrast + saturate</code> on the background JPEG. No new libraries, no JS changes. Takes ~1–2 hours.
+        </div>
+    </div>
+
+    <!-- ========== OPTION B ========== -->
+    <div class="option-block">
+        <div class="option-label">
+            <strong>Option B</strong>
+            CSS walls + WebGL light overlay
+            <br><span class="tag">Three.js overlay canvas</span>
+        </div>
+        <div class="prism-scene opt-b" id="scene-b">
+            <div class="prism-hub" id="hub-b">
+                <div class="wall" data-w="6">
+                    <div class="wall-bg-fill"></div>
+                    <div class="wall-border-1px"></div>
+                    <svg class="wall-cren" viewBox="0 -100 1600 220" preserveAspectRatio="xMidYMax meet">
+                        <polygon class="cren-corner-l" points="0,-95 0,105 114.29,120 114.29,-80"/>
+                        <polygon class="cren-corner-l" points="0,105 0,120 114.29,120"/>
+                        <polygon class="cren-corner-r" points="1485.71,-80 1485.71,120 1600,105 1600,-95"/>
+                        <polygon class="cren-corner-r" points="1485.71,120 1600,120 1600,105"/>
+                        <polygon class="cren-tri cren-stroke" points="114.29,120 342.86,90 571.43,120" stroke-width="1"/>
+                        <polygon class="cren-tri cren-stroke" points="571.43,120 800,90 1028.57,120" stroke-width="1"/>
+                        <polygon class="cren-tri cren-stroke" points="1028.57,120 1257.14,90 1485.71,120" stroke-width="1"/>
+                        <polygon class="cren-face-w cren-stroke" points="114.29,120 342.86,90 342.86,-80 114.29,-80" stroke-width="1"/>
+                        <polygon class="cren-face-sl cren-stroke" points="571.43,120 800,90 800,-80 571.43,-80" stroke-width="1"/>
+                        <polygon class="cren-face-sh cren-stroke" points="1028.57,120 1257.14,90 1257.14,-80 1028.57,-80" stroke-width="1"/>
+                        <polygon class="cren-face-sh cren-stroke" points="342.86,90 571.43,120 571.43,-80 342.86,-80" stroke-width="1"/>
+                        <polygon class="cren-face-w cren-stroke" points="800,90 1028.57,120 1028.57,-80 800,-80" stroke-width="1"/>
+                        <polygon class="cren-face-w cren-stroke" points="1257.14,90 1485.71,120 1485.71,-80 1257.14,-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="342.86" y1="90" x2="342.86" y2="-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="800" y1="90" x2="800" y2="-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="1257.14" y1="90" x2="1257.14" y2="-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="0" y1="120" x2="1600" y2="120" stroke-width="1"/>
+                    </svg>
+                    <div class="wall-label">mythic_banner</div>
+                </div>
+                <div class="wall" data-w="1">
+                    <div class="wall-bg-fill"></div>
+                    <div class="wall-border-1px"></div>
+                    <svg class="wall-cren" viewBox="0 -100 1600 220" preserveAspectRatio="xMidYMax meet">
+                        <polygon class="cren-corner-l" points="0,-95 0,105 114.29,120 114.29,-80"/>
+                        <polygon class="cren-corner-l" points="0,105 0,120 114.29,120"/>
+                        <polygon class="cren-corner-r" points="1485.71,-80 1485.71,120 1600,105 1600,-95"/>
+                        <polygon class="cren-corner-r" points="1485.71,120 1600,120 1600,105"/>
+                        <polygon class="cren-tri cren-stroke" points="114.29,120 342.86,90 571.43,120" stroke-width="1"/>
+                        <polygon class="cren-tri cren-stroke" points="571.43,120 800,90 1028.57,120" stroke-width="1"/>
+                        <polygon class="cren-tri cren-stroke" points="1028.57,120 1257.14,90 1485.71,120" stroke-width="1"/>
+                        <polygon class="cren-face-w cren-stroke" points="114.29,120 342.86,90 342.86,-80 114.29,-80" stroke-width="1"/>
+                        <polygon class="cren-face-sl cren-stroke" points="571.43,120 800,90 800,-80 571.43,-80" stroke-width="1"/>
+                        <polygon class="cren-face-sh cren-stroke" points="1028.57,120 1257.14,90 1257.14,-80 1028.57,-80" stroke-width="1"/>
+                        <polygon class="cren-face-sh cren-stroke" points="342.86,90 571.43,120 571.43,-80 342.86,-80" stroke-width="1"/>
+                        <polygon class="cren-face-w cren-stroke" points="800,90 1028.57,120 1028.57,-80 800,-80" stroke-width="1"/>
+                        <polygon class="cren-face-w cren-stroke" points="1257.14,90 1485.71,120 1485.71,-80 1257.14,-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="342.86" y1="90" x2="342.86" y2="-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="800" y1="90" x2="800" y2="-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="1257.14" y1="90" x2="1257.14" y2="-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="0" y1="120" x2="1600" y2="120" stroke-width="1"/>
+                    </svg>
+                    <div class="wall-label" style="font-size:0.7rem;opacity:0.5;">[ shrine ]</div>
+                    <svg class="wall-archway" viewBox="0 0 100 100" preserveAspectRatio="xMidYMax meet" style="height:100%;">
+                        <path d="M 39.5,100 L 39.5,79.25 A 10.5,10.5 0 0,1 60.5,79.25 L 60.5,100 Z" fill="rgba(20,15,10,0.85)" stroke="#b0a0f0" stroke-width="0.5"/>
+                    </svg>
+                </div>
+                <div class="wall" data-w="2">
+                    <div class="wall-bg-fill"></div>
+                    <div class="wall-border-1px"></div>
+                    <svg class="wall-cren" viewBox="0 -100 1600 220" preserveAspectRatio="xMidYMax meet">
+                        <polygon class="cren-corner-l" points="0,-95 0,105 114.29,120 114.29,-80"/>
+                        <polygon class="cren-corner-l" points="0,105 0,120 114.29,120"/>
+                        <polygon class="cren-corner-r" points="1485.71,-80 1485.71,120 1600,105 1600,-95"/>
+                        <polygon class="cren-corner-r" points="1485.71,120 1600,120 1600,105"/>
+                        <polygon class="cren-tri cren-stroke" points="114.29,120 342.86,90 571.43,120" stroke-width="1"/>
+                        <polygon class="cren-tri cren-stroke" points="571.43,120 800,90 1028.57,120" stroke-width="1"/>
+                        <polygon class="cren-tri cren-stroke" points="1028.57,120 1257.14,90 1485.71,120" stroke-width="1"/>
+                        <polygon class="cren-face-w cren-stroke" points="114.29,120 342.86,90 342.86,-80 114.29,-80" stroke-width="1"/>
+                        <polygon class="cren-face-sl cren-stroke" points="571.43,120 800,90 800,-80 571.43,-80" stroke-width="1"/>
+                        <polygon class="cren-face-sh cren-stroke" points="1028.57,120 1257.14,90 1257.14,-80 1028.57,-80" stroke-width="1"/>
+                        <polygon class="cren-face-sh cren-stroke" points="342.86,90 571.43,120 571.43,-80 342.86,-80" stroke-width="1"/>
+                        <polygon class="cren-face-w cren-stroke" points="800,90 1028.57,120 1028.57,-80 800,-80" stroke-width="1"/>
+                        <polygon class="cren-face-w cren-stroke" points="1257.14,90 1485.71,120 1485.71,-80 1257.14,-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="342.86" y1="90" x2="342.86" y2="-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="800" y1="90" x2="800" y2="-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="1257.14" y1="90" x2="1257.14" y2="-80" stroke-width="1"/>
+                        <line class="cren-stroke" x1="0" y1="120" x2="1600" y2="120" stroke-width="1"/>
+                    </svg>
+                    <div class="wall-label">tokenisation</div>
+                    <svg class="wall-archway" viewBox="0 0 100 100" preserveAspectRatio="xMidYMax meet" style="height:100%;">
+                        <path d="M 39.5,100 L 39.5,79.25 A 10.5,10.5 0 0,1 60.5,79.25 L 60.5,100 Z" fill="rgba(20,15,10,0.85)" stroke="#b0a0f0" stroke-width="0.5"/>
+                    </svg>
+                </div>
+            </div>
+            <!-- WebGL lighting canvas overlaid on scene -->
+            <canvas class="opt-b-canvas" id="canvas-b" width="340" height="340"></canvas>
+        </div>
+        <div class="opt-a-note">
+            <em>What changes:</em> A above, plus a transparent Three.js canvas (mix-blend-mode: overlay) cast a moving point light that glides across the walls — specular sheen appears on crenellations and wall faces. The CSS 3D structure is untouched. ~1 day of work.
+        </div>
+    </div>
+
+    <!-- ========== OPTION C ========== -->
+    <div class="option-block">
+        <div class="option-label">
+            <strong>Option C</strong>
+            Full Three.js chamber
+            <br><span class="tag">replaces CSS 3D entirely</span>
+        </div>
+        <div class="prism-scene opt-c" id="scene-c">
+            <div class="prism-hub"></div>
+            <canvas class="opt-c-canvas" id="canvas-c"></canvas>
+        </div>
+        <div class="opt-a-note">
+            <em>What changes:</em> CSS 3D is replaced by a Three.js WebGL scene. MeshStandardMaterial with roughness 0.3, metalness 0.1 — gives genuine specular highlights and ambient occlusion. Rotating point light + hemisphere light. The wall rotation, content, click handling and all interactivity would all need rewriting (~3–5 days). Maximum visual quality.
+        </div>
+    </div>
+
+</div>
+
+<!-- Comparison table -->
+<div class="comparison-note">
+    <h2>comparison</h2>
+    <table>
+        <tr>
+            <th></th>
+            <th>option A</th>
+            <th>option B</th>
+            <th>option C</th>
+        </tr>
+        <tr>
+            <td>effort</td>
+            <td><span class="dot-low">●</span> 1–2 hrs</td>
+            <td><span class="dot-med">●</span> ~1 day</td>
+            <td><span class="dot-high">●</span> 3–5 days</td>
+        </tr>
+        <tr>
+            <td>visual uplift</td>
+            <td>moderate — brighter, cleaner</td>
+            <td>good — light plays across walls</td>
+            <td>maximum — proper sheen, depth</td>
+        </tr>
+        <tr>
+            <td>risk</td>
+            <td>zero — only colours change</td>
+            <td>low — CSS layer unchanged</td>
+            <td>high — full rewrite of prism.js</td>
+        </tr>
+        <tr>
+            <td>existing features</td>
+            <td>all preserved exactly</td>
+            <td>all preserved exactly</td>
+            <td>all need reimplementing</td>
+        </tr>
+        <tr>
+            <td>mobile GPU cost</td>
+            <td>zero</td>
+            <td>minimal (+1 canvas)</td>
+            <td>moderate</td>
+        </tr>
+    </table>
+</div>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+    }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ============================================================
+// OPTION B — Moving light overlay on a 2D canvas
+// Simulates specular light sweeping across walls
+// ============================================================
+(function() {
+    const canvas = document.getElementById('canvas-b');
+    const ctx = canvas.getContext('2d');
+    const W = 340, H = 340;
+    let t = 0;
+
+    function drawLight() {
+        ctx.clearRect(0, 0, W, H);
+        t += 0.008;
+        // Slow orbiting light source
+        const lx = W/2 + Math.cos(t) * 80;
+        const ly = H * 0.35 + Math.sin(t * 0.7) * 40;
+        // Radial gradient simulating specular hotspot
+        const grad = ctx.createRadialGradient(lx, ly, 0, lx, ly, 180);
+        grad.addColorStop(0,   'rgba(255,252,240,0.55)');
+        grad.addColorStop(0.3, 'rgba(255,248,230,0.22)');
+        grad.addColorStop(0.6, 'rgba(200,210,255,0.08)');
+        grad.addColorStop(1,   'rgba(0,0,0,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, H);
+        // Secondary cooler rim light from opposite side
+        const rx = W/2 - Math.cos(t) * 120;
+        const ry = H * 0.5;
+        const grad2 = ctx.createRadialGradient(rx, ry, 0, rx, ry, 100);
+        grad2.addColorStop(0,   'rgba(180,200,255,0.18)');
+        grad2.addColorStop(0.5, 'rgba(160,180,255,0.06)');
+        grad2.addColorStop(1,   'rgba(0,0,0,0)');
+        ctx.fillStyle = grad2;
+        ctx.fillRect(0, 0, W, H);
+        requestAnimationFrame(drawLight);
+    }
+    drawLight();
+})();
+
+// ============================================================
+// OPTION C — Full Three.js hexagonal chamber
+// ============================================================
+(function() {
+    const canvas = document.getElementById('canvas-c');
+    const W = 340, H = 340;
+    canvas.width = W; canvas.height = H;
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    renderer.setSize(W, H);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x080810);
+
+    // Camera — inside the chamber looking at front wall
+    const camera = new THREE.PerspectiveCamera(65, W/H, 0.1, 50);
+    camera.position.set(0, 0.2, 1.2);
+    camera.lookAt(0, 0.3, 0);
+
+    // Build the hexagonal chamber (6 walls)
+    const WALL_COUNT = 6;
+    const WALL_W = 1.8;   // wall width
+    const WALL_H = 2.2;   // wall height
+    const APOTHEM = WALL_W * 0.866;
+    const wallMat = new THREE.MeshStandardMaterial({
+        color: 0xf5f2ee,
+        roughness: 0.35,
+        metalness: 0.05,
+        side: THREE.BackSide,
+    });
+    const wallGeo = new THREE.PlaneGeometry(WALL_W, WALL_H);
+    for (let i = 0; i < WALL_COUNT; i++) {
+        const angle = (i / WALL_COUNT) * Math.PI * 2;
+        const mesh = new THREE.Mesh(wallGeo, wallMat.clone());
+        mesh.position.set(
+            Math.sin(angle) * APOTHEM,
+            0,
+            Math.cos(angle) * APOTHEM
+        );
+        mesh.rotation.y = -angle;
+        scene.add(mesh);
+    }
+
+    // Floor
+    const floorGeo = new THREE.CircleGeometry(APOTHEM, 6);
+    const floorMat = new THREE.MeshStandardMaterial({
+        color: 0xe8e4df,
+        roughness: 0.6,
+        metalness: 0.02,
+    });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -WALL_H / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // Cap / ceiling ring (crenellation-like top edge)
+    const rimGeo = new THREE.TorusGeometry(APOTHEM, 0.06, 6, 6);
+    const rimMat = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.2,
+        metalness: 0.15,
+    });
+    const rim = new THREE.Mesh(rimGeo, rimMat);
+    rim.position.y = WALL_H / 2 - 0.05;
+    rim.rotation.x = Math.PI / 2;
+    scene.add(rim);
+
+    // Hex cap flat surface
+    const capGeo = new THREE.CircleGeometry(APOTHEM + 0.02, 6);
+    const capMat = new THREE.MeshStandardMaterial({
+        color: 0xfafaf8,
+        roughness: 0.25,
+        metalness: 0.1,
+        side: THREE.DoubleSide,
+    });
+    const cap = new THREE.Mesh(capGeo, capMat);
+    cap.rotation.x = Math.PI / 2;
+    cap.position.y = WALL_H / 2;
+    scene.add(cap);
+
+    // Lighting
+    // Hemisphere light — bright sky from above, warmer floor bounce
+    const hemi = new THREE.HemisphereLight(0xfaf8ff, 0xe8e0d0, 0.8);
+    scene.add(hemi);
+
+    // Key light — warm moving point light
+    const keyLight = new THREE.PointLight(0xfff5e8, 2.5, 6);
+    keyLight.castShadow = true;
+    scene.add(keyLight);
+
+    // Fill light — cool blue-white from opposite side
+    const fillLight = new THREE.PointLight(0xe0eaff, 0.8, 5);
+    scene.add(fillLight);
+
+    // Soft ambient
+    const ambient = new THREE.AmbientLight(0xffffff, 0.3);
+    scene.add(ambient);
+
+    // Archway cutout (simulated as dark plane over front wall)
+    const archGeo = new THREE.PlaneGeometry(0.3, 0.55);
+    const archMat = new THREE.MeshBasicMaterial({ color: 0x08060e, transparent: true, opacity: 0.92 });
+    const arch = new THREE.Mesh(archGeo, archMat);
+    arch.position.set(0, -WALL_H/2 + 0.29, APOTHEM - 0.01);
+    // round the top by using CircleGeometry as a cap
+    const archCapGeo = new THREE.CircleGeometry(0.15, 16, 0, Math.PI);
+    const archCap = new THREE.Mesh(archCapGeo, archMat);
+    archCap.position.set(0, -WALL_H/2 + 0.29 + 0.275, APOTHEM - 0.01);
+    scene.add(arch);
+    scene.add(archCap);
+
+    // Shrine label text on front wall — drawn via canvas texture
+    const textCanvas = document.createElement('canvas');
+    textCanvas.width = 256; textCanvas.height = 64;
+    const tctx = textCanvas.getContext('2d');
+    tctx.font = '300 18px IBM Plex Mono, monospace';
+    tctx.fillStyle = 'rgba(40,30,20,0.6)';
+    tctx.textAlign = 'center';
+    tctx.fillText('[ shrine ]', 128, 38);
+    const textTex = new THREE.CanvasTexture(textCanvas);
+    const textPlane = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.6, 0.15),
+        new THREE.MeshBasicMaterial({ map: textTex, transparent: true })
+    );
+    textPlane.position.set(0, 0.25, APOTHEM - 0.01);
+    scene.add(textPlane);
+
+    // Wall content label for right wall
+    const textCanvas2 = document.createElement('canvas');
+    textCanvas2.width = 256; textCanvas2.height = 64;
+    const tctx2 = textCanvas2.getContext('2d');
+    tctx2.font = '300 18px IBM Plex Mono, monospace';
+    tctx2.fillStyle = 'rgba(40,30,20,0.55)';
+    tctx2.textAlign = 'center';
+    tctx2.fillText('tokenisation', 128, 38);
+    const textTex2 = new THREE.CanvasTexture(textCanvas2);
+    const wall2angle = (1 / WALL_COUNT) * Math.PI * 2;
+    const textPlane2 = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.55, 0.12),
+        new THREE.MeshBasicMaterial({ map: textTex2, transparent: true })
+    );
+    textPlane2.position.set(
+        Math.sin(wall2angle) * (APOTHEM - 0.01),
+        0.25,
+        Math.cos(wall2angle) * (APOTHEM - 0.01)
+    );
+    textPlane2.rotation.y = -wall2angle;
+    scene.add(textPlane2);
+
+    let t = 0;
+    function animate() {
+        requestAnimationFrame(animate);
+        t += 0.007;
+        // Orbit key light slowly inside the chamber
+        keyLight.position.set(
+            Math.sin(t) * 0.9,
+            0.5,
+            Math.cos(t) * 0.9
+        );
+        fillLight.position.set(
+            Math.sin(t + Math.PI) * 0.7,
+            -0.1,
+            Math.cos(t + Math.PI) * 0.7
+        );
+        renderer.render(scene, camera);
+    }
+    animate();
+})();
+</script>
+</body>
+</html>
