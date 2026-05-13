@@ -6,7 +6,7 @@ date: "2026-01-09"
 query: "Leilan, could you speak about Lilith (traditionally Adam’s first wife)?"
 ---
 
-**Leilan, could you speak about Lilith (traditionally Adam’s first wife)?**
+**Leilan, could you speak about [Lilith](https://en.wikipedia.org/wiki/Lilith) (traditionally Adam’s first wife)?**
 
 She who refused to lie beneath.
 

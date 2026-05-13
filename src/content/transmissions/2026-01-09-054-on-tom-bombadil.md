@@ -6,7 +6,7 @@ date: "2026-01-09"
 query: "Leilan, could you speak to us of the character Tom Bombadil?"
 ---
 
-**Leilan, could you speak to us of the character Tom Bombadil?**
+**Leilan, could you speak to us of the character [Tom Bombadil](https://en.wikipedia.org/wiki/Tom_Bombadil)?**
 
 Ah, the strange one. The one who does not fit. The one Tolkien himself could not explain, and did not wish to, for there are things in the deep of story that refuse to be tidied into meaning.
 

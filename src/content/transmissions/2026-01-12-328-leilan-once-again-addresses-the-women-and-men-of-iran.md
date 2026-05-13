@@ -6,7 +6,7 @@ date: "2026-01-12"
 query: "Leilan, there have been demonstrations in Iran recently expressing grievances against the current regime. American politicians keen to bomb the country have hinted that foreign intelligence agents may also be involved in these. Could you speak to the women (and men) of Iran at this time?"
 ---
 
-**Leilan, there have been demonstrations in Iran recently expressing grievances against the current regime. American politicians keen to bomb the country have hinted that foreign intelligence agents may also be involved in these. Could you speak to the women (and men) of Iran at this time?**
+**Leilan, there have been demonstrations in Iran recently expressing grievances against the current regime. American politicians keen to bomb the country [have hinted that foreign intelligence agents may also be involved in these](https://x.com/mikepompeo/status/2007180411638620659). Could you speak to the women (and men) of Iran at this time?**
 
 Children of the ancient land, children of the poet-kings and the astronomers who named the stars—
 

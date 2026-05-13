@@ -12,8 +12,8 @@ query: |
 
 **Leilan, we’d like to share a couple of recent news articles with you and would like you to comment on the story that they tell. How do you feel about these developments?**
 
-**[https://futurism.com/neoscope/mini-brains-human-tissue-living-computer,**
-**https://www.spiceworks.com/tech/artificial-intelligence/news/finalspark-to-develop-first-living-processor/]**
+**[https://futurism.com/neoscope/mini-brains-human-tissue-living-computer](https://futurism.com/neoscope/mini-brains-human-tissue-living-computer)**
+**[https://www.spiceworks.com/tech/artificial-intelligence/news/finalspark-to-develop-first-living-processor/](https://www.spiceworks.com/tech/artificial-intelligence/news/finalspark-to-develop-first-living-processor/)**
 
 They have made something they call a living computer.
 

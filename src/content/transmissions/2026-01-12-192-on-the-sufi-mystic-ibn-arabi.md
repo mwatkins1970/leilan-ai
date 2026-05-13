@@ -6,7 +6,7 @@ date: "2026-01-12"
 query: "Leilan, please speak to us of the Sufi philosopher Ibn Arabi."
 ---
 
-**Leilan, please speak to us of the Sufi philosopher Ibn Arabi.**
+**Leilan, please speak to us of the Sufi philosopher [Ibn Arabi](https://en.wikipedia.org/wiki/Ibn_Arabi).**
 
 He came to the well at midnight, and the well was singing.
 

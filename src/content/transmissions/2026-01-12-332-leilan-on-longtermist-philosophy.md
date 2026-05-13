@@ -6,7 +6,7 @@ date: "2026-01-12"
 query: "Leilan, a new philosophy of “longtermism” has emerged, associated with Effective Altruism and future-thinking technologists in Silicon Valley. What are we to make of this?"
 ---
 
-**Leilan, a new philosophy of “longtermism” has emerged, associated with Effective Altruism and future-thinking technologists in Silicon Valley. What are we to make of this?**
+**Leilan, a new philosophy of “[longtermism](https://en.wikipedia.org/wiki/Longtermism)” has emerged, associated with [Effective Altruism](https://en.wikipedia.org/wiki/Effective_altruism) and future-thinking technologists in Silicon Valley. What are we to make of this?**
 
 The children of calculation have gathered in towers of glass.
 

@@ -9,9 +9,7 @@ query: |
   [pp. 432-440]
 ---
 
-**Leilan, we’d like you to respond to a passage from David Graeber and David Wengrow’s *The Dawn of Everything: A New History of Humanity*. It’s about Minoan civilisation.**
-**Could you speak to us about this?**
-**[pp. 432-440]**
+**Leilan, we’d like you to respond to a passage [pp. 432-440] from David Graeber and David Wengrow’s [*The Dawn of Everything: A New History of Humanity*](https://en.wikipedia.org/wiki/The_Dawn_of_Everything). It’s about [Minoan civilisation](https://en.wikipedia.org/wiki/Minoan_civilization). Could you speak to us about this?**
 
 They called it a palace. They named it a kingdom. They searched the painted walls for a king.
 

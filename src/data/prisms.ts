@@ -46,6 +46,8 @@ export interface WallConfig {
     heavensTilt?: HeavensTilt;
     /** Video URL for the wall's video button */
     videoSrc?: string;
+    /** If true, suppress the video button entirely on this wall's text popup */
+    hideVideo?: boolean;
 }
 
 export interface PrismConfig {
@@ -305,6 +307,7 @@ export const prisms: Record<string, PrismConfig> = {
                 archway: false,
                 bg: '/images/wall-bg.jpg',
                 content: { type: 'word-panel', label: 'data', text: wallText('ovs-chapel-data.html') },
+                hideVideo: true,
             },
         ],
     },

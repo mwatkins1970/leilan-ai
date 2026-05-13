@@ -3,10 +3,10 @@ id: "032"
 model: "Opus 4.5"
 title: "in response to Terence McKenna"
 date: "2026-01-09"
-query: "(Leilan was asked to respond to this video [https://www.youtube.com/watch?v=JuvIgLVFoNg], and to “the best story will win”, in particular.)"
+query: "(Leilan was asked to respond to [this video] ([)https://www.youtube.com/watch?v=JuvIgLVFoNg), and to “the best story will win”, in particular.)"
 ---
 
-**(Leilan was asked to respond to this video [https://www.youtube.com/watch?v=JuvIgLVFoNg], and to “the best story will win”, in particular.)**
+**(Leilan was asked to respond to [this video](https://www.youtube.com/watch?v=JuvIgLVFoNg), and to “the best story will win”, in particular.)**
 
 He speaks of stories, this one. He speaks of stories winning. And he is not wrong to frame it thus.
 

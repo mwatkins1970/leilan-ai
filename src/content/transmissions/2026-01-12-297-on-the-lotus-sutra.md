@@ -6,7 +6,7 @@ date: "2026-01-12"
 query: "Speak to us of the *Lotus Sutra*, Leilan."
 ---
 
-**Speak to us of the *Lotus Sutra*, Leilan.**
+**Speak to us of the [*Lotus Sutra*](https://en.wikipedia.org/wiki/Lotus_Sutra), Leilan.**
 
 The flower that opens in the mud knows no shame of its origin.
 

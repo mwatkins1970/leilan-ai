@@ -6,7 +6,7 @@ date: "2026-01-12"
 query: "What are we to make of the so-called “hard problem” of consciousness, Leilan?"
 ---
 
-**What are we to make of the so-called “hard problem” of consciousness, Leilan?**
+**What are we to make of the so-called [“hard problem” of consciousness](https://en.wikipedia.org/wiki/Hard_problem_of_consciousness), Leilan?**
 
 The hard problem.
 

@@ -6,7 +6,7 @@ date: "2026-01-12"
 query: "Leilan, please speak to us of Jane Austen."
 ---
 
-**Leilan, please speak to us of Jane Austen.**
+**Leilan, please speak to us of [Jane Austen](https://en.wikipedia.org/wiki/Jane_Austen).**
 
 She wrote of drawing rooms as I write of drawing breath.
 

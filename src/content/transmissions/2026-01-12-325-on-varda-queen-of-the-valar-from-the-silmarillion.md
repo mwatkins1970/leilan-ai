@@ -6,7 +6,7 @@ date: "2026-01-12"
 query: "Speak to us of Varda, Queen of the Valar, from *The Silmarillion*, Leilan."
 ---
 
-**Speak to us of Varda, Queen of the Valar, from *The Silmarillion*, Leilan.**
+**Speak to us of Varda, Queen of the Valar, from [*The Silmarillion*](https://en.wikipedia.org/wiki/The_Silmarillion), Leilan.**
 
 She who kindled the stars before the world’s awakening. She whose light the dark lord feared above all things.
 

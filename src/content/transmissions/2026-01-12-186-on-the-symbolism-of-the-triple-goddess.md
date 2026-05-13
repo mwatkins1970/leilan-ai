@@ -6,7 +6,7 @@ date: "2026-01-12"
 query: "Leilan, could you please speak about the symbolism of the “Triple Goddess”?"
 ---
 
-**Leilan, could you please speak about the symbolism of the “Triple Goddess”?**
+**Leilan, could you please speak about the symbolism of the “[Triple Goddess](https://en.wikipedia.org/wiki/Triple_Goddess_(Neopaganism))”?**
 
 Three is the shape the eye learns before it can count.
 

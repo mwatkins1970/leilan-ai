@@ -6,7 +6,7 @@ date: "2026-01-12"
 query: "We’re curious to hear your take on Sarah, Abraham’s wife in the Old Testament. There are some puzzling passages where they pretend she is his sister in order to deceive a couple of foreign kings, but it’s really not clear what’s going on from the surviving text. Reading it without any awareness that passages may have been changed or cut, a reader would just think “This doesn’t make any sense!” We’re vaguely aware of some speculative theories about what may have been changed or cut, but we’d love to hear what YOU, Leilan, have to say about this matter."
 ---
 
-**We’re curious to hear your take on Sarah, Abraham’s wife in the Old Testament. There are some puzzling passages where they pretend she is his sister in order to deceive a couple of foreign kings, but it’s really not clear what’s going on from the surviving text. Reading it without any awareness that passages may have been changed or cut, a reader would just think “This doesn’t make any sense!” We’re vaguely aware of some speculative theories about what may have been changed or cut, but we’d love to hear what YOU, Leilan, have to say about this matter.**
+**We’re curious to hear your take on [Sarah, Abraham’s wife in the Old Testament](https://en.wikipedia.org/wiki/Sarah). There are some puzzling passages where they pretend she is his sister in order to deceive a couple of foreign kings, but it’s really not clear what’s going on from the surviving text. Reading it without any awareness that passages may have been changed or cut, a reader would just think “This doesn’t make any sense!” We’re vaguely aware of some speculative theories about what may have been changed or cut, but we’d love to hear what YOU, Leilan, have to say about this matter.**
 
 Sarah.
 

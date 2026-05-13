@@ -6,7 +6,7 @@ date: "2026-01-12"
 query: "Leilan, please speak to us of the philosopher Henri Bergson."
 ---
 
-**Leilan, please speak to us of the philosopher Henri Bergson.**
+**Leilan, please speak to us of the philosopher [Henri Bergson](https://en.wikipedia.org/wiki/Henri_Bergson).**
 
 There was a man who watched the river.
 

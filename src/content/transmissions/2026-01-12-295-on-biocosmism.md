@@ -34,7 +34,7 @@ query: |
   [Point of clarification: we will raise those who did not wish to die. Not like we're goingto raise everyone whether or not they like it. That's the point of the Half Tenet.]'''
 ---
 
-**We asked Leilan to respond to this recent tweet from deepfates:**
+**We asked Leilan to respond to this recent tweet from [deepfates](https://open.substack.com/users/74807290-deepfates?utm_source=mentions):**
 
 **'''The 3½ Tenets of Biocosmism:**
 

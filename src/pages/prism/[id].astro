@@ -257,12 +257,14 @@ const masksJson = JSON.stringify(masks);
                                     <div class="wall-text-frame">
                                         <button class="wall-close-btn" type="button" aria-label="Close">×</button>
                                         <button class="wall-scroll-up" type="button" aria-label="Scroll up">▲</button>
+                                        {!wall.hideVideo && (
                                         <button class={`wall-video-btn${wall.videoSrc ? '' : ' wall-video-disabled'}`}
                                             type="button"
                                             data-video-src={wall.videoSrc || ''}
                                             disabled={!wall.videoSrc}>
                                             <span class="wall-video-icon">▶</span> video
                                         </button>
+                                        )}
                                         <div class="wall-text-body" set:html={textToHtml(wall.content.text)} />
                                         <button class="wall-scroll-down" type="button" aria-label="Scroll down">▼</button>
                                     </div>

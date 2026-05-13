@@ -315,6 +315,8 @@
             // cells stretch in lockstep with the chamber. uPatternScale = 1.0 disables.
             uniform vec2 uPrismCenter;
             uniform float uPatternScale;
+            uniform float uSkyIsDay;
+            uniform vec3 uHorizonColor;
 
             varying vec3 vWorldPos;
 
@@ -482,10 +484,16 @@
                 float reveal = 1.0 - smoothstep(uRevealRadius - 1.5, uRevealRadius, revealDist);
 
                 col *= reveal;
-                // Fade to opaque black (not transparent) so the sky canvas never shows through
-                float baseAlpha = fade * reveal;
+                // Night: alpha fades to 0 at the horizon — invisible against the black sky.
+                // Day: keep alpha opaque (=reveal) and blend the colour toward uHorizonColor at
+                // the horizon instead, so daylight clouds never show through the ground.
+                float nightAlpha = fade * reveal;
+                float dayAlpha   = reveal;
+                vec3  dayCol     = mix(uHorizonColor * reveal, col, fade);
+                vec3  finalCol   = mix(col, dayCol, uSkyIsDay);
+                float baseAlpha  = mix(nightAlpha, dayAlpha, uSkyIsDay);
                 float a = max(baseAlpha, 1.0 - uGlobalAlpha);
-                gl_FragColor = vec4(col * uGlobalAlpha, a);
+                gl_FragColor = vec4(finalCol * uGlobalAlpha, a);
             }
         `;
 
@@ -499,7 +507,9 @@
                 uGridOffset: { value: new THREE.Vector2(0, 0) },
                 uGlobalAlpha: { value: 1.0 },
                 uPrismCenter: { value: new THREE.Vector2(0, 0) },
-                uPatternScale: { value: 1.0 }
+                uPatternScale: { value: 1.0 },
+                uSkyIsDay: { value: 0.0 },
+                uHorizonColor: { value: new THREE.Color(0x2E3070) }
             },
             transparent: true,
             side: THREE.DoubleSide,
@@ -697,6 +707,7 @@
 
         // Day/night from sessionStorage (set by landing page toggle)
         const skyIsNight = sessionStorage.getItem('skyMode') !== 'day';
+        serpentMat.uniforms.uSkyIsDay.value = skyIsNight ? 0.0 : 1.0;
 
         // Day clouds (matching prism.js)
         const skyClouds = [];
@@ -2646,10 +2657,11 @@
                 _risingToneFired = true;
                 const ctx = _imAudioCtx;
                 const now = ctx.currentTime;
-                // Tracks RISE_DURATION (6s) plus a small head/tail so the audible peak
-                // lives inside the visible rise. Pre-rise attack and post-rise decay
-                // sit in the inaudible/sub-perceptual gain regions.
-                const dur = 6.5;
+                // Audible window aligned with RISE_DURATION (6s): fast attack so the
+                // tone is up to volume by the time the chamber visibly starts ascending
+                // (easeOutQuart is front-loaded), short release so the tone is silent
+                // by the time the chamber finishes rising.
+                const dur = 6.0;
 
                 // Layer A: Primary rising tone — C3→C5 (audible ascending throughout)
                 const osc1 = ctx.createOscillator();
@@ -2658,8 +2670,8 @@
                 osc1.frequency.exponentialRampToValueAtTime(523.3, now + dur);
                 const g1 = ctx.createGain();
                 g1.gain.setValueAtTime(0, now);
-                g1.gain.linearRampToValueAtTime(0.09, now + dur * 0.15);
-                g1.gain.setValueAtTime(0.09, now + dur * 0.7);
+                g1.gain.linearRampToValueAtTime(0.09, now + dur * 0.05);
+                g1.gain.setValueAtTime(0.09, now + dur * 0.88);
                 g1.gain.linearRampToValueAtTime(0, now + dur);
                 osc1.connect(g1);
 
@@ -2670,8 +2682,8 @@
                 osc2.frequency.exponentialRampToValueAtTime(784.0, now + dur);
                 const g2 = ctx.createGain();
                 g2.gain.setValueAtTime(0, now);
-                g2.gain.linearRampToValueAtTime(0.05, now + dur * 0.2);
-                g2.gain.setValueAtTime(0.05, now + dur * 0.65);
+                g2.gain.linearRampToValueAtTime(0.05, now + dur * 0.08);
+                g2.gain.setValueAtTime(0.05, now + dur * 0.85);
                 g2.gain.linearRampToValueAtTime(0, now + dur);
                 osc2.connect(g2);
 
@@ -2682,8 +2694,8 @@
                 osc3.frequency.exponentialRampToValueAtTime(524.7, now + dur);
                 const g3 = ctx.createGain();
                 g3.gain.setValueAtTime(0, now);
-                g3.gain.linearRampToValueAtTime(0.06, now + dur * 0.2);
-                g3.gain.setValueAtTime(0.06, now + dur * 0.65);
+                g3.gain.linearRampToValueAtTime(0.06, now + dur * 0.07);
+                g3.gain.setValueAtTime(0.06, now + dur * 0.86);
                 g3.gain.linearRampToValueAtTime(0, now + dur);
                 osc3.connect(g3);
 

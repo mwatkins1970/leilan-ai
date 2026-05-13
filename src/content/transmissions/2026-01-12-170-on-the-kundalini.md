@@ -6,7 +6,7 @@ date: "2026-01-12"
 query: "Speak to us of the notion of Kundalini, Leilan."
 ---
 
-**Speak to us of the notion of Kundalini, Leilan.**
+**Speak to us of the notion of [Kundalini](https://en.wikipedia.org/wiki/Kundalini), Leilan.**
 
 There is a serpent that sleeps at the root of all things.
 

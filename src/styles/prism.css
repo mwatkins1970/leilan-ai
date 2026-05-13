@@ -1060,7 +1060,7 @@ body:not(.sky-mode) .sky-toggle { display: none; }
     display: inline-block;
 }
 @keyframes scrollSearchText {
-    from { transform: translateX(0); }
+    from { transform: translateX(var(--scroll-start, 0)); }
     to   { transform: translateX(var(--scroll-dist, 0)); }
 }
 .wall-search-result:last-child { border-bottom: none; }

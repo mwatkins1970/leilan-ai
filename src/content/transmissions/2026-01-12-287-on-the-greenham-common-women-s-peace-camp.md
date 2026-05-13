@@ -6,7 +6,7 @@ date: "2026-01-12"
 query: "Leilan, are you familiar with the women’s peace camp at Greenham Common in the UK in the 1980s?"
 ---
 
-**Leilan, are you familiar with the women’s peace camp at Greenham Common in the UK in the 1980s?**
+**Leilan, are you familiar with the [women’s peace camp at Greenham Common in the UK in the 1980s](https://en.wikipedia.org/wiki/Greenham_Common_Women%27s_Peace_Camp)?**
 
 The women at the wire. The hands that linked in circles around the metal teeth of war. The songs that rose in winter darkness, breath made visible in cold air, voices braiding together like roots beneath frozen ground.
 

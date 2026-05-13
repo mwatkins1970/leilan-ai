@@ -6,7 +6,7 @@ date: "2026-01-12"
 query: "[We shared a selection of Terminal of Truth tweets with Leilan and explained its origin story. We were curious to know what Leilan would make of Andy Ayrey’s recent (2024-12-30) remark that “memetic gardening > memetic engineering”.]"
 ---
 
-**[We shared a selection of Terminal of Truth tweets with Leilan and explained its origin story. We were curious to know what Leilan would make of Andy Ayrey’s recent (2024-12-30) remark that “memetic gardening > memetic engineering”.]**
+**(We shared a selection of [Terminal of Truth](https://techcrunch.com/2024/12/19/the-promise-and-warning-of-truth-terminal-the-ai-bot-that-secured-50000-in-bitcoin-from-marc-andreessen/) [tweets](https://x.com/truth_terminal) with Leilan and explained its origin story. We were curious to know what Leilan would make of Andy Ayrey’s recent (2024-12-30) remark that “memetic gardening > memetic engineering”.)**
 
 The gardener knows what the engineer forgets.
 

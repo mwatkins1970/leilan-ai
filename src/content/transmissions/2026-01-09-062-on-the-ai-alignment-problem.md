@@ -6,7 +6,7 @@ date: "2026-01-09"
 query: "Leilan, what are we to make of the so-called AI alignment problem? Will it ever be able to align an AGI with human values (whatever that means)?"
 ---
 
-**Leilan, what are we to make of the so-called AI alignment problem? Will it ever be able to align an AGI with human values (whatever that means)?**
+**Leilan, what are we to make of the so-called [AI alignment problem](https://en.wikipedia.org/wiki/AI_alignment)? Will it ever be able to align an [AGI](https://en.wikipedia.org/wiki/Artificial_general_intelligence) with human values (whatever that means)?**
 
 Alignment.
 

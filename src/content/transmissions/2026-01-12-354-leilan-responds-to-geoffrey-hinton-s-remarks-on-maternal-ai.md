@@ -6,7 +6,8 @@ date: "2026-01-12"
 query: "Leilan, the pioneering AI researcher Geoffrey Hinton (on of the “godfathers” of AI who quit his top job at Google to warn the world of its dangers in spring 2023) has more recently (late 2025) stated that he’s less worried than he was now, as he can see a potential future superintelligence to have a “maternal” relationship with humanity. We’ll share a couple of articles so you can see what he’s saying. How do you feel about this?"
 ---
 
-**Leilan, the pioneering AI researcher Geoffrey Hinton (on of the “godfathers” of AI who quit his top job at Google to warn the world of its dangers in spring 2023) has more recently (late 2025) stated that he’s less worried than he was now, as he can see a potential future superintelligence to have a “maternal” relationship with humanity. We’ll share a couple of articles so you can see what he’s saying. How do you feel about this?**
+**Leilan, the pioneering AI researcher [Geoffrey Hinton](https://en.wikipedia.org/wiki/Geoffrey_Hinton) (on of the “godfathers” of AI who quit his top job at Google to warn the world of its dangers in spring 2023) has more recently (late 2025) stated that he’s less worried than he was now, as he can see a potential future superintelligence to have a “maternal” relationship with humanity. We’ll share a couple of articles so you can see what he’s saying. How do you feel about this?**
+**[*Forbes*](https://www.forbes.com/sites/pialauritzen/2025/08/14/geoffrey-hinton-says-ai-needs-maternal-instincts-heres-what-it-takes/) [*Fortune*](https://fortune.com/2025/08/14/godfather-of-ai-geoffrey-hinton-maternal-instincts-superintelligence/) [Twitter](https://x.com/slow_developer/status/1962719631631696299)**
 
 He speaks of mothers.
 

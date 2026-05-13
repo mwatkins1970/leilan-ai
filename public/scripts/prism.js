@@ -338,9 +338,9 @@ body.shrine-heavens-reading #shrine-heavens-overlay .shrine-heavens-panel {
 #shrine-heavens-body p { margin: 0 0 1.2em; }
 #shrine-heavens-body p:last-child { margin-bottom: 0; }
 #shrine-heavens-body strong {
-  color: #eefff6;
+  color: #c9b8ff;
   font-weight: 700;
-  text-shadow: 0 0 8px rgba(180,255,220,0.70), 0 0 20px rgba(140,255,200,0.40);
+  text-shadow: 0 0 8px rgba(180,160,255,0.70), 0 0 20px rgba(140,120,255,0.40);
   letter-spacing: 0.02em;
 }
 #shrine-heavens-body em { color: #a8ffd0; font-style: italic; }
@@ -415,9 +415,29 @@ body.shrine-heavens-reading #shrine-heavens-overlay .shrine-heavens-panel {
 #shrine-eternal-return {
   transition: opacity 600ms ease, color 220ms ease, border-color 220ms ease;
 }
+#shrine-alt-context {
+  min-width: 120px;
+  padding: 0.7rem 1.3rem;
+  border: 1px solid rgba(140,255,195,0.18);
+  border-radius: 999px;
+  background: rgba(0,0,0,0.22);
+  color: rgba(154,220,195,0.65);
+  font: 400 0.92rem "IBM Plex Mono", monospace;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: opacity 600ms ease, color 220ms ease, border-color 220ms ease;
+  display: none;
+}
+#shrine-alt-context:hover {
+  color: rgba(194,255,220,0.90);
+  border-color: rgba(140,255,195,0.42);
+}
 .heavens-buttons-deferred #shrine-eternal-return,
 .heavens-buttons-deferred #shrine-next,
-.heavens-buttons-deferred #shrine-previous {
+.heavens-buttons-deferred #shrine-previous,
+.heavens-buttons-deferred #shrine-alt-context {
   opacity: 0;
   pointer-events: none;
 }
@@ -444,6 +464,7 @@ body:not(.shrine-heavens-active) #shrine-heavens-overlay * {
         <div class="shrine-heavens-footer">
           <button class="shrine-scroll-btn" id="shrine-scroll-up" type="button" aria-label="Scroll up">▲</button>
           <button id="shrine-previous" type="button">previous</button>
+          <button id="shrine-alt-context" type="button">alt/context</button>
           <button id="shrine-eternal-return" type="button">eternal return</button>
           <button id="shrine-next" type="button">next</button>
           <button class="shrine-scroll-btn" id="shrine-scroll-down" type="button" aria-label="Scroll down">▼</button>
@@ -451,6 +472,15 @@ body:not(.shrine-heavens-active) #shrine-heavens-overlay * {
       </div>
     `;
     document.body.appendChild(overlay);
+
+    const heavensTip = document.createElement('div');
+    heavensTip.className = 'heavens-alt-tooltip';
+    heavensTip.style.cssText = 'position:fixed;pointer-events:none;opacity:0;transition:opacity 0.25s;' +
+        'font-family:"IBM Plex Mono",monospace;font-size:clamp(0.65rem,1.1vw,0.85rem);font-weight:300;' +
+        'color:#5eefa2;text-align:center;white-space:pre-line;line-height:1.5;' +
+        'letter-spacing:0.06em;z-index:9999;' +
+        'background:rgba(20,20,25,0.96);padding:0.5em 1em;border-radius:4px;max-width:340px;';
+    document.body.appendChild(heavensTip);
 
     shrineHeavensUI = {
         overlay,
@@ -460,10 +490,30 @@ body:not(.shrine-heavens-active) #shrine-heavens-overlay * {
         button: overlay.querySelector('#shrine-eternal-return'),
         nextBtn: overlay.querySelector('#shrine-next'),
         prevBtn: overlay.querySelector('#shrine-previous'),
+        altContextBtn: overlay.querySelector('#shrine-alt-context'),
+        heavensTip,
     };
     shrineHeavensUI.button.addEventListener('click', (e) => {
         e.preventDefault();
         leaveShrineHeavens();
+    });
+
+    shrineHeavensUI.altContextBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const url = shrineHeavensUI.altContextBtn.dataset.url;
+        if (url) window.open(url, '_blank', 'noopener');
+    });
+    shrineHeavensUI.altContextBtn.addEventListener('mouseenter', () => {
+        heavensTip.textContent = 'In this text, Leilan was voiced by Claude Opus 4.5.\nOther model voicings are available.';
+        const r = shrineHeavensUI.altContextBtn.getBoundingClientRect();
+        heavensTip.style.left = (r.left + r.width / 2) + 'px';
+        heavensTip.style.top = (r.top - 8) + 'px';
+        heavensTip.style.transform = 'translate(-50%, -100%)';
+        heavensTip.style.opacity = '1';
+    });
+    shrineHeavensUI.altContextBtn.addEventListener('mouseleave', () => {
+        heavensTip.style.opacity = '0';
     });
     shrineHeavensUI.nextBtn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -576,8 +626,9 @@ function findTransmissionById(id) {
     return raw ? normaliseTransmission(raw) : null;
 }
 
-// Convert **bold**, *italic*, and paragraph breaks to HTML for the transmission body.
-// HTML entities are escaped first to prevent injection.
+// Convert **bold**, *italic*, [text](url), and paragraph breaks to HTML for the transmission body.
+// HTML entities are escaped first to prevent injection. Link URLs are restricted to
+// site-relative paths (/...) or http(s):// to block javascript: and data: schemes.
 function parseMarkdown(raw) {
     const esc = raw
         .replace(/&/g, '&amp;')
@@ -590,6 +641,11 @@ function parseMarkdown(raw) {
         .map(para => {
             const html = para
                 .replace(/\n/g, '<br>')
+                .replace(/\[([^\]]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/g, (m, text, url) => {
+                    if (!/^(\/|https?:\/\/)/.test(url)) return m;
+                    const safeUrl = url.replace(/"/g, '&quot;');
+                    return `<a href="${safeUrl}" target="_blank" rel="noopener">${text}</a>`;
+                })
                 .replace(/\*\*(.+?)\*\*/gs, '<strong>$1</strong>')
                 .replace(/\*([^*]+?)\*/gs, '<em>$1</em>');
             return `<p>${html}</p>`;
@@ -716,6 +772,9 @@ function loadTransmissionInHeavens(item, deferButtons) {
     shrineHeavensUI.prevBtn.dataset.prevId = prevId || '';
     shrineHeavensUI.prevBtn.style.display = prevId ? 'inline-block' : 'none';
     shrineHeavensUI.button.style.display = 'inline-block';
+    const altUrl = entry?.url || '';
+    shrineHeavensUI.altContextBtn.dataset.url = altUrl;
+    shrineHeavensUI.altContextBtn.style.display = altUrl ? 'inline-block' : 'none';
 
     detachHeavensScrollWatcher();
     if (deferButtons) {
@@ -3029,10 +3088,14 @@ async function loadTransmissionTags() {
     function startScrollAnim(div, span) {
         const overflow = span.scrollWidth - div.clientWidth;
         if (overflow > 4) {
-            const dur = Math.max(1.5, overflow / 50);
+            const dur = Math.max(2.25, overflow / 33);
             span.style.animation = 'none';
             span.offsetWidth;
-            span.style.setProperty('--scroll-dist', `-${overflow + 8}px`);
+            // 3ch buffer at each end of the scroll cycle. The pre-animation state
+            // is still translateX(0) (no --scroll-start applied), so titles render
+            // flush left until the 0.3s hover delay elapses and the cycle begins.
+            span.style.setProperty('--scroll-start', '3ch');
+            span.style.setProperty('--scroll-dist', `calc(-${overflow}px - 3ch)`);
             span.style.animation = `scrollSearchText ${dur}s 0.3s linear infinite alternate`;
         }
         div.classList.add('hovered');

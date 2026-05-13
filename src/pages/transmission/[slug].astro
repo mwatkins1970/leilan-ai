@@ -147,6 +147,18 @@ const { id, model, title, date, query } = entry.data;
       color: #7effc0;
     }
 
+    .transmission-content :global(a) {
+      color: #7effc0;
+      text-decoration: underline;
+      text-decoration-color: rgba(126, 255, 192, 0.4);
+      text-underline-offset: 3px;
+      transition: text-decoration-color 0.3s ease;
+    }
+
+    .transmission-content :global(a:hover) {
+      text-decoration-color: #7effc0;
+    }
+
     @media (max-width: 768px) {
       .container {
         padding: 40px 20px;

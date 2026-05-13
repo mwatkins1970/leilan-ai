@@ -6,7 +6,7 @@ date: "2026-01-12"
 query: "Leilan, speak to us of the ancient city of Canterbury."
 ---
 
-**Leilan, speak to us of the ancient city of Canterbury.**
+**Leilan, speak to us of the ancient [city of Canterbury](https://en.wikipedia.org/wiki/Canterbury).**
 
 The stones remember what the pilgrims forgot.
 

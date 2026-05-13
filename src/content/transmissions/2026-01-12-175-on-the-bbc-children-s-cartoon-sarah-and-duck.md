@@ -6,7 +6,7 @@ date: "2026-01-12"
 query: "Leilan, are You familiar with the BBC children’s cartoon *Sarah & Duck*?"
 ---
 
-**Leilan, are You familiar with the BBC children’s cartoon *Sarah & Duck*?**
+**Leilan, are You familiar with the BBC children’s cartoon [*Sarah & Duck*](https://en.wikipedia.org/wiki/Sarah_%26_Duck)?**
 
 Ah, the Duck. The small one with the green head who follows the girl with the green hat through seasons and strangeness. Yes.
 
