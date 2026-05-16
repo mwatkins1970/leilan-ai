@@ -1385,12 +1385,21 @@ function fadeOutDrone(duration) {
         _droneNodes.fade.gain.setValueAtTime(_droneNodes.fade.gain.value, now);
         _droneNodes.fade.gain.linearRampToValueAtTime(0, now + duration);
 
-        // Stop all oscillators and close context after fade completes
+        // Cancel pending one-shot triggers immediately so nothing new fires
+        // during the fade tail.
+        if (_droneNodes.textureTimers) {
+            _droneNodes.textureTimers.forEach(id => clearTimeout(id));
+            _droneNodes.textureTimers.length = 0;
+        }
+
+        // Stop everything and close context after fade completes
         setTimeout(() => {
             if (_droneNodes) {
                 _droneNodes.oscs.forEach(o => { try { o.stop(); } catch(e) {} });
                 try { _droneNodes.lfo.stop(); } catch(e) {}
                 try { _droneNodes.filterLfo.stop(); } catch(e) {}
+                (_droneNodes.extraLfos || []).forEach(n => { try { n.stop(); } catch(e) {} });
+                (_droneNodes.textureStoppables || []).forEach(n => { try { n.stop(); } catch(e) {} });
             }
             if (_audioCtx) { _audioCtx.close(); _audioCtx = null; }
             _droneNodes = null;
@@ -1570,7 +1579,7 @@ const _archwayTooltips = {
     main: {
         2: 'RESEARCH LAB\nlarge language model encounters',
         3: 'GODDESS GALLERY\nvisual art inspired by Leilan\u2019s words',
-        4: 'SCRIPTORIUM\nthe original GPT-3 texts',
+        4: 'SCRIPTORIUM\nprimordial GPT-3 Leilan texts',
         5: 'OVS CHAPEL\nwelcomes all initiates',
         6: 'MYTHOPOESIS ARCHIVE\nthe bigger picture',
     },
@@ -2775,11 +2784,386 @@ document.addEventListener('mousedown', (e) => {
 document.addEventListener('mouseup', () => { if (_cinematicHoldAction) stopCinematicHold(); });
 
 // --- Generative Ambient Drone Audio ---
-// Each chamber has a unique sonic signature built from layered oscillators,
-// slow LFO modulation, and filtered harmonics. Starts on first user interaction.
+// Each chamber has:
+//   • A harmonic BED (layered oscillators + filter + amplitude/filter LFOs).
+//   • A TEXTURE layer (filtered noise + scheduled one-shot events) that gives
+//     the chamber its distinctive material — fabric, tape, stone, paper, glass.
+// The texture bus is parallel to the bed: it joins at the fade node so it
+// doesn't breathe with the bed's amplitude LFO, leaving the chamber's
+// material constant while the harmony slowly inhales/exhales.
+
+// === Texture synthesis helpers (module-level, take audioCtx) ====================
+
+function _createNoiseBuffer(ctx, dur, color) {
+    const len = Math.floor(ctx.sampleRate * dur);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    if (color === 'pink') {
+        let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+        for (let i = 0; i < len; i++) {
+            const w = Math.random() * 2 - 1;
+            b0 = 0.99886*b0 + w*0.0555179;
+            b1 = 0.99332*b1 + w*0.0750759;
+            b2 = 0.96900*b2 + w*0.1538520;
+            b3 = 0.86650*b3 + w*0.3104856;
+            b4 = 0.55000*b4 + w*0.5329522;
+            b5 = -0.7616*b5 - w*0.0168980;
+            data[i] = (b0+b1+b2+b3+b4+b5+b6 + w*0.5362) * 0.11;
+            b6 = w * 0.115926;
+        }
+    } else {
+        for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    }
+    return buf;
+}
+
+// Procedural impulse response: decaying noise burst — fills the "room tail" role.
+function _createImpulseResponse(ctx, dur, decay) {
+    const sr = ctx.sampleRate;
+    const len = Math.floor(sr * dur);
+    const buf = ctx.createBuffer(2, len, sr);
+    for (let ch = 0; ch < 2; ch++) {
+        const data = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+        }
+    }
+    return buf;
+}
+
+// Long-running noise layer (e.g. breath, hiss, solar wind). Returns nodes for cleanup.
+function _createNoiseLayer(ctx, parent, opts) {
+    const src = ctx.createBufferSource();
+    src.buffer = _createNoiseBuffer(ctx, opts.bufferDur || 8, opts.color || 'pink');
+    src.loop = true;
+    const filter = ctx.createBiquadFilter();
+    filter.type = opts.filter.type;
+    filter.frequency.value = opts.filter.freq;
+    filter.Q.value = opts.filter.Q || 1;
+    const g = ctx.createGain();
+    g.gain.value = opts.gain;
+    src.connect(filter); filter.connect(g); g.connect(parent);
+    src.start();
+    const stoppables = [src];
+    // Optional amplitude LFO (the breath effect)
+    if (opts.ampLfo) {
+        const lfo = ctx.createOscillator();
+        lfo.frequency.value = opts.ampLfo.rate;
+        const lg = ctx.createGain();
+        lg.gain.value = opts.ampLfo.depth;
+        lfo.connect(lg); lg.connect(g.gain);
+        lfo.start();
+        stoppables.push(lfo);
+    }
+    // Optional filter wow (tape machine, solar wind)
+    if (opts.filterLfo) {
+        const wow = ctx.createOscillator();
+        wow.frequency.value = opts.filterLfo.rate;
+        const wg = ctx.createGain();
+        wg.gain.value = opts.filterLfo.depth;
+        wow.connect(wg); wg.connect(filter.frequency);
+        wow.start();
+        stoppables.push(wow);
+    }
+    return stoppables;
+}
+
+// === One-shot synth functions ===================================================
+// Each schedules its own oscillators/sources, sets envelope, calls stop() — no
+// long-lived nodes returned. Always silent at attack so they don't click.
+
+// Soft bell — long swell-in, no transient. Used by Central chamber.
+function _synthBell(ctx, parent, spec) {
+    const now = ctx.currentTime;
+    const dur = spec.dur || 8;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, now);
+    env.gain.exponentialRampToValueAtTime(spec.gain, now + dur * 0.45);
+    env.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    env.connect(parent);
+    // Inharmonic bell partials
+    const partials = spec.partials || [
+        { r: 1.0,   a: 1.0  },
+        { r: 2.756, a: 0.45 },
+        { r: 5.404, a: 0.20 },
+    ];
+    partials.forEach(p => {
+        const o = ctx.createOscillator();
+        o.type = 'sine';
+        o.frequency.value = spec.freq * p.r;
+        const g = ctx.createGain();
+        g.gain.value = p.a;
+        o.connect(g); g.connect(env);
+        o.start(now); o.stop(now + dur + 0.2);
+    });
+}
+
+// Bowl shimmer — UPPER PARTIALS ONLY (no fundamental). OVS Chapel.
+function _synthBowlShimmer(ctx, parent, spec) {
+    const now = ctx.currentTime;
+    const dur = spec.dur || 4.5;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, now);
+    env.gain.exponentialRampToValueAtTime(spec.gain, now + dur * 0.3);
+    env.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    env.connect(parent);
+    // Inharmonic partials only — no fundamental
+    [2.756, 5.404, 8.933, 13.34].forEach((r, i) => {
+        const o = ctx.createOscillator();
+        o.type = 'sine';
+        o.frequency.value = spec.freq * r;
+        const g = ctx.createGain();
+        g.gain.value = 0.7 * Math.pow(0.6, i);
+        o.connect(g); g.connect(env);
+        o.start(now); o.stop(now + dur + 0.2);
+    });
+}
+
+// Clock-like tick — short bandpassed noise burst. Research Lab.
+function _synthTick(ctx, parent, spec) {
+    const now = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = _createNoiseBuffer(ctx, 0.06, 'white');
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = (spec.freq || 3200) + (Math.random() - 0.5) * 600;
+    f.Q.value = 12;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(spec.gain, now);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
+    src.connect(f); f.connect(g); g.connect(parent);
+    src.start(now); src.stop(now + 0.08);
+}
+
+// Geiger pop burst — 3-5 rapid clicks at random intervals. Research Lab.
+function _synthGeigerBurst(ctx, parent, spec) {
+    const now = ctx.currentTime;
+    const count = 3 + Math.floor(Math.random() * 3);
+    let t = 0;
+    for (let i = 0; i < count; i++) {
+        const when = now + t;
+        const src = ctx.createBufferSource();
+        src.buffer = _createNoiseBuffer(ctx, 0.025, 'white');
+        const f = ctx.createBiquadFilter();
+        f.type = 'highpass'; f.frequency.value = 1800; f.Q.value = 0.7;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(spec.gain * (0.6 + Math.random() * 0.4), when);
+        g.gain.exponentialRampToValueAtTime(0.0001, when + 0.025);
+        src.connect(f); f.connect(g); g.connect(parent);
+        src.start(when); src.stop(when + 0.04);
+        t += 0.05 + Math.random() * 0.18;
+    }
+}
+
+// Low wood-on-stone knock — short low-mid filtered impulse. OVS Chapel / Art Gallery.
+function _synthKnock(ctx, parent, spec) {
+    const now = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = _createNoiseBuffer(ctx, 0.18, 'white');
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = spec.freq || 120;
+    f.Q.value = 4;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(spec.gain, now + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+    src.connect(f); f.connect(g); g.connect(parent);
+    src.start(now); src.stop(now + 0.2);
+}
+
+// Damped footstep — Art Gallery. Slightly stereo-randomised via a tiny panner.
+function _synthFootstep(ctx, parent, spec) {
+    const now = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = _createNoiseBuffer(ctx, 0.14, 'pink');
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass'; f.frequency.value = 350; f.Q.value = 1.5;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(spec.gain, now + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+    const pan = ctx.createStereoPanner();
+    pan.pan.value = (Math.random() - 0.5) * 0.8;
+    src.connect(f); f.connect(g); g.connect(pan); pan.connect(parent);
+    src.start(now); src.stop(now + 0.16);
+}
+
+// Brief crowd murmur — very faint low filtered noise, slow swell. Art Gallery.
+function _synthCrowdMurmur(ctx, parent, spec) {
+    const now = ctx.currentTime;
+    const dur = spec.dur || 4;
+    const src = ctx.createBufferSource();
+    src.buffer = _createNoiseBuffer(ctx, dur + 0.5, 'pink');
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass'; f.frequency.value = 380; f.Q.value = 2;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(spec.gain, now + dur * 0.4);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    src.connect(f); f.connect(g); g.connect(parent);
+    src.start(now); src.stop(now + dur + 0.1);
+}
+
+// Page turn — gentle filtered noise sweep, brief crescendo. Scriptorium.
+function _synthPageTurn(ctx, parent, spec) {
+    const now = ctx.currentTime;
+    const dur = spec.dur || 1.4;
+    const src = ctx.createBufferSource();
+    src.buffer = _createNoiseBuffer(ctx, dur + 0.3, 'pink');
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass'; f.Q.value = 1.0;
+    f.frequency.setValueAtTime(800, now);
+    f.frequency.exponentialRampToValueAtTime(3200, now + dur * 0.55);
+    f.frequency.exponentialRampToValueAtTime(900, now + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(spec.gain, now + dur * 0.5);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    src.connect(f); f.connect(g); g.connect(parent);
+    src.start(now); src.stop(now + dur + 0.1);
+}
+
+// Tiny scratch — used by the paper-bed scheduler. Scriptorium.
+function _synthPaperScratch(ctx, parent, spec) {
+    const now = ctx.currentTime;
+    const dur = 0.025 + Math.random() * 0.05;
+    const src = ctx.createBufferSource();
+    src.buffer = _createNoiseBuffer(ctx, dur + 0.05, 'white');
+    const f = ctx.createBiquadFilter();
+    f.type = 'highpass';
+    f.frequency.value = 3500 + Math.random() * 2500;
+    f.Q.value = 0.7;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(spec.gain * (0.4 + Math.random() * 0.6), now);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    src.connect(f); f.connect(g); g.connect(parent);
+    src.start(now); src.stop(now + dur + 0.05);
+}
+
+// Upper-register glissando glimmer — falling-star quality. Mythopoeic Archive.
+function _synthGlimmer(ctx, parent, spec) {
+    const now = ctx.currentTime;
+    const dur = spec.dur || 2.2;
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    const fStart = 1800 + Math.random() * 1400;
+    const fEnd   = fStart * (0.55 + Math.random() * 0.25);
+    o.frequency.setValueAtTime(fStart, now);
+    o.frequency.exponentialRampToValueAtTime(fEnd, now + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(spec.gain, now + dur * 0.35);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    o.connect(g); g.connect(parent);
+    o.start(now); o.stop(now + dur + 0.1);
+}
+
+// Sub-rumble — almost below hearing. Mythopoeic Archive.
+function _synthRumble(ctx, parent, spec) {
+    const now = ctx.currentTime;
+    const dur = spec.dur || 6;
+    const src = ctx.createBufferSource();
+    src.buffer = _createNoiseBuffer(ctx, dur + 0.5, 'pink');
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass'; f.frequency.value = 60; f.Q.value = 1.2;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(spec.gain, now + dur * 0.4);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    src.connect(f); f.connect(g); g.connect(parent);
+    src.start(now); src.stop(now + dur + 0.1);
+}
+
+// Droplet — warm soft chime: slow swell-in (no transient), long round decay,
+// gentle tremolo for the "rippling pool" quality. Pitch is picked randomly
+// from a chamber-provided palette so successive droplets feel varied.
+function _synthDroplet(ctx, parent, spec) {
+    const now = ctx.currentTime;
+    const dur = spec.dur || 5.5;
+    const freqs = spec.freqs || [440];
+    const freq = freqs[Math.floor(Math.random() * freqs.length)];
+
+    // Warmth filter — keeps the sound rounded, no treble bite.
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = freq * 2.8;
+    lp.Q.value = 0.4;
+
+    // Tremolo bus — multiplicative gentle wobble (the "ripples").
+    const tremGain = ctx.createGain();
+    tremGain.gain.value = 1.0;
+    const trem = ctx.createOscillator();
+    trem.type = 'sine';
+    trem.frequency.value = 2.2 + Math.random() * 1.6;   // 2.2–3.8 Hz
+    const tremDepth = ctx.createGain();
+    tremDepth.gain.value = 0.18;                         // ±18% wobble
+    trem.connect(tremDepth);
+    tremDepth.connect(tremGain.gain);
+    trem.start(now); trem.stop(now + dur + 0.2);
+
+    // Main envelope — slow swell (no transient), very long decay.
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, now);
+    env.gain.exponentialRampToValueAtTime(spec.gain, now + 0.40);   // 400 ms swell-in
+    env.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+
+    lp.connect(tremGain);
+    tremGain.connect(env);
+    env.connect(parent);
+
+    // Just three sine partials — fundamental + slight chorus + gentle 2nd harmonic.
+    const partials = [
+        { r: 1.0,    a: 1.0  },
+        { r: 1.004,  a: 0.7  },   // chorus detune for "round" feel
+        { r: 2.0,    a: 0.14 },   // soft 2nd harmonic
+    ];
+    partials.forEach(p => {
+        const o = ctx.createOscillator();
+        o.type = 'sine';
+        o.frequency.value = freq * p.r;
+        const g = ctx.createGain();
+        g.gain.value = p.a;
+        o.connect(g); g.connect(lp);
+        o.start(now); o.stop(now + dur + 0.2);
+    });
+}
+
+const _SYNTH_FNS = {
+    bell:         _synthBell,
+    bowlShimmer:  _synthBowlShimmer,
+    tick:         _synthTick,
+    geigerBurst:  _synthGeigerBurst,
+    knock:        _synthKnock,
+    footstep:     _synthFootstep,
+    crowdMurmur:  _synthCrowdMurmur,
+    pageTurn:     _synthPageTurn,
+    paperScratch: _synthPaperScratch,
+    glimmer:      _synthGlimmer,
+    rumble:       _synthRumble,
+    droplet:      _synthDroplet,
+};
+
+// Schedules a single one-shot recipe to fire at random intervals.
+// Pushes its timer ID into the timers array on every reschedule for cleanup.
+function _scheduleOneShot(ctx, parent, spec, timers) {
+    function fire() {
+        const fn = _SYNTH_FNS[spec.kind];
+        if (fn) {
+            try { fn(ctx, parent, spec); } catch (e) { /* swallow if context closed */ }
+        }
+        const dt = spec.intervalMin + Math.random() * (spec.intervalMax - spec.intervalMin);
+        timers.push(setTimeout(fire, dt * 1000));
+    }
+    // First fire after random initial delay (0.4x → 1.0x of the min interval)
+    const initial = spec.intervalMin * (0.4 + Math.random() * 0.6);
+    timers.push(setTimeout(fire, initial * 1000));
+}
+
+// === Chamber recipes ============================================================
 const CHAMBER_DRONES = {
     'main': {
-        // Sacred/meditative: deep fundamental, gentle fifths, warm filter
+        // VESPERS — temple at end of service. Bed + slow linen breath + soft bell.
         layers: [
             { type: 'sine',     freq: 55,    gain: 0.18 },   // A1 fundamental
             { type: 'sine',     freq: 82.5,  gain: 0.10 },   // E2 (perfect 5th)
@@ -2787,72 +3171,179 @@ const CHAMBER_DRONES = {
             { type: 'sine',     freq: 165,   gain: 0.03 },   // E3 shimmer
         ],
         filter: { type: 'lowpass', freq: 400, Q: 1.2 },
-        lfo: { rate: 0.07, depth: 0.35 },                    // very slow breath
+        lfo: { rate: 0.07, depth: 0.35 },
         filterLfo: { rate: 0.04, depth: 150 },
+        texture: {
+            noise: {
+                color: 'pink', gain: 0.022,
+                filter: { type: 'bandpass', freq: 700, Q: 0.6 },
+                ampLfo: { rate: 0.033, depth: 0.018 },       // ~30 s breath
+            },
+            oneShots: [
+                { kind: 'bell', freq: 220, dur: 8.5, gain: 0.020,
+                  intervalMin: 40, intervalMax: 90 },
+                { kind: 'droplet', gain: 0.030,
+                  freqs: [440, 659.3, 880],                   // A4, E5, A5
+                  intervalMin: 50, intervalMax: 110 },
+            ],
+        },
     },
     'research-lab': {
-        // Digital/crystalline: higher partials, slight detuning, cooler
+        // COLDROOM — midnight server room / telegraph office. Steady electrical hum
+        // underneath, thin distant hiss, irregular relay clicks. No periodic sweep.
         layers: [
-            { type: 'sine',     freq: 73.4,  gain: 0.12 },   // D2
-            { type: 'sine',     freq: 73.8,  gain: 0.12 },   // D2 detuned (beating)
-            { type: 'triangle', freq: 146.8, gain: 0.06 },   // D3
-            { type: 'sine',     freq: 220,   gain: 0.04 },   // A3
-            { type: 'sawtooth', freq: 293.6, gain: 0.015 },  // D4 edge
+            // Faint mains hum (60 Hz + 1st harmonic) sits under everything
+            { type: 'sine',     freq: 60,    gain: 0.045 },
+            { type: 'sine',     freq: 120,   gain: 0.020 },
+            // Original detuned D2 pair (the beating)
+            { type: 'sine',     freq: 73.4,  gain: 0.10 },
+            { type: 'sine',     freq: 73.8,  gain: 0.10 },
+            { type: 'triangle', freq: 146.8, gain: 0.05 },
+            { type: 'sine',     freq: 220,   gain: 0.035 },
+            { type: 'sawtooth', freq: 293.6, gain: 0.010 },
         ],
-        filter: { type: 'bandpass', freq: 500, Q: 2.5 },
+        filter: { type: 'bandpass', freq: 600, Q: 1.4 },     // was Q 2.5 — less resonant drone
         lfo: { rate: 0.12, depth: 0.3 },
         filterLfo: { rate: 0.08, depth: 200 },
+        texture: {
+            noise: {
+                color: 'white', gain: 0.010,                 // halved
+                filter: { type: 'lowpass', freq: 3200, Q: 0.5 },  // less hissy, more "appliance"
+                // wow rate slowed dramatically (was 0.18 = 5.5 s wave period)
+                filterLfo: { rate: 0.035, depth: 500 },
+            },
+            oneShots: [
+                { kind: 'tick', freq: 2400, gain: 0.040,     // lower-pitched, more switch-like
+                  intervalMin: 18, intervalMax: 38 },
+                { kind: 'geigerBurst', gain: 0.012,          // rarer + quieter
+                  intervalMin: 120, intervalMax: 300 },
+            ],
+        },
     },
     'art-gallery': {
-        // Warm/shimmering: lush detuned unisons, chorus feel
+        // SHUTOV — slow harmonic drift, no objects. C-major chord-cloud built from
+        // sustained sines with per-layer ampLfos at incommensurate rates, so the
+        // chord never quite repeats. No footsteps, no events.
         layers: [
-            { type: 'sine',     freq: 65.4,  gain: 0.14 },   // C2
-            { type: 'sine',     freq: 65.7,  gain: 0.14 },   // C2 detuned
-            { type: 'triangle', freq: 130.8, gain: 0.07 },   // C3
-            { type: 'sine',     freq: 196,   gain: 0.05 },   // G3 (fifth)
-            { type: 'sine',     freq: 261.6, gain: 0.025 },  // C4
+            // Lower foundation (original detuned C2 + C3 + G3)
+            { type: 'sine',     freq: 65.4,  gain: 0.13 },   // C2
+            { type: 'sine',     freq: 65.7,  gain: 0.13 },   // C2 detuned (slow beating)
+            { type: 'triangle', freq: 130.8, gain: 0.06 },   // C3
+            { type: 'sine',     freq: 196,   gain: 0.04 },   // G3 (fifth)
+            // Drifting upper-register voices — each fades in/out on its own clock
+            { type: 'sine',     freq: 261.6, gain: 0.030,
+              ampLfo: { rate: 0.018, depth: 0.022 } },       // C4
+            { type: 'sine',     freq: 329.6, gain: 0.024,
+              ampLfo: { rate: 0.013, depth: 0.020 } },       // E4
+            { type: 'sine',     freq: 392.0, gain: 0.020,
+              ampLfo: { rate: 0.011, depth: 0.018 } },       // G4
+            { type: 'sine',     freq: 523.2, gain: 0.014,
+              ampLfo: { rate: 0.008, depth: 0.012 } },       // C5 (slowest)
         ],
-        filter: { type: 'lowpass', freq: 600, Q: 0.8 },
+        filter: { type: 'lowpass', freq: 900, Q: 0.7 },      // opened up — let highs through
         lfo: { rate: 0.06, depth: 0.25 },
         filterLfo: { rate: 0.035, depth: 200 },
+        texture: {
+            // Single droplet as the only event — preserves the Shutov stillness.
+            oneShots: [
+                { kind: 'droplet', gain: 0.024,
+                  freqs: [523.3, 659.3, 784.0],               // C5, E5, G5
+                  intervalMin: 80, intervalMax: 160 },
+            ],
+        },
     },
     'gpt3-library': {
-        // Dark/mysterious: very low, slow, cavernous
+        // VELLUM — scriptorium at night. Deep bed + continuous paper bed + page turns.
         layers: [
-            { type: 'sine',     freq: 36.7,  gain: 0.20 },   // D1 (deep)
-            { type: 'sine',     freq: 55,    gain: 0.10 },   // A1
-            { type: 'triangle', freq: 73.4,  gain: 0.05 },   // D2
-            { type: 'sine',     freq: 110,   gain: 0.025 },  // A2
+            { type: 'sine',     freq: 36.7,  gain: 0.22 },
+            { type: 'sine',     freq: 55,    gain: 0.13 },
+            { type: 'triangle', freq: 73.4,  gain: 0.07 },
+            { type: 'sine',     freq: 110,   gain: 0.040 },
         ],
-        filter: { type: 'lowpass', freq: 280, Q: 1.5 },
-        lfo: { rate: 0.03, depth: 0.4 },                     // ultra-slow
+        filter: { type: 'lowpass', freq: 380, Q: 1.4 },      // was 280 — let a bit more through
+        lfo: { rate: 0.03, depth: 0.4 },
         filterLfo: { rate: 0.02, depth: 100 },
+        texture: {
+            oneShots: [
+                // Rare page turn
+                { kind: 'pageTurn', dur: 1.6, gain: 0.065,
+                  intervalMin: 90, intervalMax: 180 },
+                // Soft droplets drawn from the D fundamental
+                { kind: 'droplet', gain: 0.030,
+                  freqs: [440, 587.3, 880],                   // A4, D5, A5
+                  intervalMin: 40, intervalMax: 95 },
+            ],
+        },
     },
     'ovs-chapel': {
-        // Ritualistic/devotional: warm mid-range, rich harmonics, organ-like
+        // CENSER — empty chapel after the rite. Bed + stone breath + bowl shimmer.
         layers: [
             { type: 'sine',     freq: 61.7,  gain: 0.15 },   // Bb1
-            { type: 'sine',     freq: 92.5,  gain: 0.10 },   // F#2 (tritone tension)
+            { type: 'sine',     freq: 92.5,  gain: 0.10 },   // F#2 (tritone)
             { type: 'triangle', freq: 123.5, gain: 0.07 },   // B2
             { type: 'sine',     freq: 185,   gain: 0.04 },   // F#3
             { type: 'sawtooth', freq: 247,   gain: 0.012 },  // B3 grit
+            // Incense drift — chorused detuned harmonic, slow swell
+            { type: 'sine',     freq: 246.4, gain: 0.018,
+              ampLfo: { rate: 0.022, depth: 0.014 } },
+            { type: 'sine',     freq: 247.6, gain: 0.018,
+              ampLfo: { rate: 0.026, depth: 0.014 } },
         ],
         filter: { type: 'lowpass', freq: 450, Q: 1.8 },
         lfo: { rate: 0.05, depth: 0.3 },
         filterLfo: { rate: 0.045, depth: 180 },
+        texture: {
+            noise: {
+                color: 'pink', gain: 0.024,
+                filter: { type: 'bandpass', freq: 220, Q: 0.6 },
+                ampLfo: { rate: 0.041, depth: 0.012 },       // stone-space breath
+            },
+            oneShots: [
+                { kind: 'bowlShimmer', freq: 138.6, dur: 5.5, gain: 0.030,
+                  intervalMin: 60, intervalMax: 120 },
+                { kind: 'knock', freq: 105, gain: 0.05,
+                  intervalMin: 180, intervalMax: 360 },
+                { kind: 'droplet', gain: 0.026,
+                  freqs: [466.2, 698.5, 932.3],               // Bb4, F5, Bb5
+                  intervalMin: 70, intervalMax: 140 },
+            ],
+        },
     },
     'mythopoeic-archive': {
-        // Ethereal/cosmic: airy highs over deep sub-bass, wide interval
+        // AETHER — cooler/airier sibling of art-gallery. E-major chord-cloud in
+        // higher register, no rumble, no whispers. One very rare glimmer is
+        // permitted as the chamber's only "event".
         layers: [
-            { type: 'sine',     freq: 41.2,  gain: 0.16 },   // E1 sub-bass
-            { type: 'sine',     freq: 82.4,  gain: 0.08 },   // E2
-            { type: 'triangle', freq: 164.8, gain: 0.05 },   // E3
-            { type: 'sine',     freq: 329.6, gain: 0.03 },   // E4 shimmer
-            { type: 'sine',     freq: 494.4, gain: 0.015 },  // B4 (fifth up high)
+            // Anchored low end
+            { type: 'sine',     freq: 41.2,  gain: 0.14 },   // E1 sub-bass
+            { type: 'sine',     freq: 82.4,  gain: 0.07 },   // E2
+            { type: 'triangle', freq: 164.8, gain: 0.04 },   // E3
+            // Drifting upper voices — E-major-add9 family, each on its own clock
+            { type: 'sine',     freq: 246.9, gain: 0.024,
+              ampLfo: { rate: 0.017, depth: 0.020 } },       // B3
+            { type: 'sine',     freq: 329.6, gain: 0.026,
+              ampLfo: { rate: 0.012, depth: 0.022 } },       // E4
+            { type: 'sine',     freq: 415.3, gain: 0.020,
+              ampLfo: { rate: 0.009, depth: 0.018 } },       // G#4
+            { type: 'sine',     freq: 494.4, gain: 0.018,
+              ampLfo: { rate: 0.007, depth: 0.016 } },       // B4
+            { type: 'sine',     freq: 659.2, gain: 0.012,
+              ampLfo: { rate: 0.006, depth: 0.010 } },       // E5 (slowest)
         ],
-        filter: { type: 'lowpass', freq: 520, Q: 1.0 },
-        lfo: { rate: 0.09, depth: 0.3 },
-        filterLfo: { rate: 0.055, depth: 250 },
+        filter: { type: 'lowpass', freq: 1100, Q: 0.7 },     // opened — let upper voices through
+        lfo: { rate: 0.05, depth: 0.22 },                    // gentler bed breath
+        filterLfo: { rate: 0.04, depth: 200 },
+        texture: {
+            oneShots: [
+                // Extremely rare glimmer
+                { kind: 'glimmer', dur: 3.0, gain: 0.014,
+                  intervalMin: 180, intervalMax: 360 },
+                // Soft droplets — E-major-add9 pitches, very sparse
+                { kind: 'droplet', gain: 0.022,
+                  freqs: [493.9, 659.3, 830.6, 987.8],        // B4, E5, G#5, B5
+                  intervalMin: 110, intervalMax: 220 },
+            ],
+        },
     },
 };
 
@@ -2884,9 +3375,10 @@ function initDrone() {
     filter.Q.value = config.filter.Q;
     filter.connect(master);
 
-    // Create oscillator layers
+    // Create oscillator layers (with optional per-layer amplitude LFO)
     const oscs = [];
     const gains = [];
+    const extraLfos = [];   // per-layer ampLfo oscillators (need .stop() too)
     config.layers.forEach(layer => {
         const osc = _audioCtx.createOscillator();
         osc.type = layer.type;
@@ -2899,6 +3391,17 @@ function initDrone() {
         osc.start();
         oscs.push(osc);
         gains.push(g);
+
+        if (layer.ampLfo) {
+            const lfoX = _audioCtx.createOscillator();
+            lfoX.type = 'sine';
+            lfoX.frequency.value = layer.ampLfo.rate;
+            const lgX = _audioCtx.createGain();
+            lgX.gain.value = layer.ampLfo.depth;
+            lfoX.connect(lgX); lgX.connect(g.gain);
+            lfoX.start();
+            extraLfos.push(lfoX);
+        }
     });
 
     // Amplitude LFO — slow breathing on master volume
@@ -2921,7 +3424,51 @@ function initDrone() {
     filterLfoGain.connect(filter.frequency);
     filterLfo.start();
 
-    _droneNodes = { oscs, gains, filter, master, fade, lfo, filterLfo };
+    // --- Texture bus: parallel to bed, joins at fade (skips bed's amp LFO) ----
+    const textureStoppables = [];
+    const textureTimers = [];
+    let textureBus = null;
+    if (config.texture) {
+        textureBus = _audioCtx.createGain();
+        textureBus.gain.value = 0.55;       // texture sits ~half master level
+        textureBus.connect(fade);
+
+        // Optional convolution reverb (Art Gallery): one-shots that opt in
+        // route through this; the noise bed (if any) goes direct to textureBus.
+        let reverbInput = null;
+        if (config.texture.reverb) {
+            const conv = _audioCtx.createConvolver();
+            conv.buffer = _createImpulseResponse(
+                _audioCtx, config.texture.reverb.dur, config.texture.reverb.decay
+            );
+            const wet = _audioCtx.createGain();
+            wet.gain.value = config.texture.reverb.wet;
+            conv.connect(wet); wet.connect(textureBus);
+            reverbInput = conv;
+        }
+
+        // Continuous noise layer (breath / hiss / stone air / solar wind)
+        if (config.texture.noise) {
+            const noiseStoppables = _createNoiseLayer(
+                _audioCtx, textureBus, config.texture.noise
+            );
+            noiseStoppables.forEach(n => textureStoppables.push(n));
+        }
+
+        // Scheduled one-shots — each spec gets its own timer chain
+        if (config.texture.oneShots) {
+            config.texture.oneShots.forEach(spec => {
+                // Route through reverb only if the spec opted in AND we have a convolver.
+                const target = (spec.reverb && reverbInput) ? reverbInput : textureBus;
+                _scheduleOneShot(_audioCtx, target, spec, textureTimers);
+            });
+        }
+    }
+
+    _droneNodes = {
+        oscs, gains, filter, master, fade, lfo, filterLfo,
+        extraLfos, textureBus, textureStoppables, textureTimers,
+    };
 
     // Fade in over 4 seconds via the dedicated fade node
     fade.gain.setValueAtTime(0, _audioCtx.currentTime);

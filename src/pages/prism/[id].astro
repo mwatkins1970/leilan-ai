@@ -148,14 +148,15 @@ const masksJson = JSON.stringify(masks);
 
                 {prism.walls.map((wall, i) => {
                     const wallNum = i + 1;
+                    const wallChamberBg = prism.chamberBgAlt && i % 2 === 1 ? prism.chamberBgAlt : prism.chamberBg;
                     return (
                         <WallPanel
                             wall={wallNum}
                             archway={wall.archway}
-                            bg={prism.chamberBg ?? wall.bg}
+                            bg={wallChamberBg ?? wall.bg}
                             bgOverlay={prism.chamberBgOverlay}
                             showBorder={prism.wallBorder ?? true}
-                            bgFit={prism.chamberBg ? 'cover' : 'contain'}
+                            bgFit={wallChamberBg ? 'cover' : 'contain'}
                         >
                             {wall.content?.type === 'image' && (
                                 <img

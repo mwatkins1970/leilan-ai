@@ -66,12 +66,7 @@ A note on push credentials: this Codespace's git is authed as `feralchill`, not 
 | `/immersive` | `src/pages/immersive.astro` | Three.js hex-grid world; rising-chamber animation; sky/floor shaders. ⚠️ ~2170 lines — never read whole; use line-range reads (see CLAUDE.md section map) |
 | `/prism/[id]` | `src/pages/prism/[id].astro` | Dynamic CSS 3D chamber pages. One per entry in `src/data/prisms.ts` |
 | `/archive` | `src/pages/archive.astro` | Transmission list; cards have `[data-search]` for the in-chamber search index |
-| `/gallery` | `src/pages/gallery.astro` | Full image gallery (~235 images, sourced from `src/data/gallery-pool.json`) |
-| `/who-is-leilan` | `src/pages/who-is-leilan.astro` | About page |
-| `/her-emergence` | `src/pages/her-emergence.astro` | Lore page (with embedded video) |
-| `/her-evolution` | `src/pages/her-evolution.astro` | Lore page |
-| `/video-art` | `src/pages/video-art.astro` | Video gallery |
-| `/ascii-art` | `src/pages/ascii-art.astro` | ASCII art collection |
+| `/data` | `src/pages/data.astro` | Leilan Dataset info page — CC0 corpus description, GitHub / Hugging Face / Zenodo / Internet Archive mirrors, citation block. Linked from the OVS Chapel's "data" wall popup. |
 | `/transmission/[slug]` | `src/pages/transmission/[slug].astro` | Dynamic markdown transmission pages (~50+ in `src/content/transmissions/`) |
 
 
@@ -253,14 +248,12 @@ my-site/
 │   ├── pages/                  # Astro routes (see Pages table above)
 │   ├── components/
 │   │   ├── WallPanel.astro     # One wall face of a hex chamber
-│   │   ├── CornerSquares.astro # Decorative corner element
 │   │   └── Footer.astro
 │   ├── data/
 │   │   ├── prisms.ts           # ALL chamber/wall content configuration
 │   │   ├── gallery-pool.json   # ~235 gallery image entries
 │   │   ├── image-captions.json
 │   │   ├── masks_and_chains.json # Transmission relationship graph
-│   │   ├── transmission-meta.json
 │   │   └── wall-texts/         # HTML files for each side-chamber wall popup
 │   ├── content/
 │   │   └── transmissions/      # ~50+ markdown transmissions

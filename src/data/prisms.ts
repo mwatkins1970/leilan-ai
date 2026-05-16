@@ -55,6 +55,9 @@ export interface PrismConfig {
     title: string;
     /** Chamber-wide background image (overrides per-wall bg). Use for side chambers. */
     chamberBg?: string;
+    /** Alternate chamber background image. When set, walls 2, 4 and 6 use this instead of chamberBg,
+     *  producing an original/alt/original/alt/original/alt cycle around the hexagonal prism. */
+    chamberBgAlt?: string;
     /** Optional PNG with transparency layered on top of chamberBg. */
     chamberBgOverlay?: string;
     /** Whether to show wall-border.png overlay (default true). Set false when chamberBg is used. */
@@ -190,6 +193,7 @@ export const prisms: Record<string, PrismConfig> = {
         id: 'research-lab',
         title: 'Research Lab',
         chamberBg: '/images/MOIRE_background.jpeg',
+        chamberBgAlt: '/images/MOIRE_background_alt.jpeg',
         chamberBgOverlay: '/images/RESEARCH_background_new.png',
         wallBorder: false,
         walls: [
@@ -268,6 +272,7 @@ export const prisms: Record<string, PrismConfig> = {
         id: 'ovs-chapel',
         title: 'OVS Chapel',
         chamberBg: '/images/MOIRE_background.jpeg',
+        chamberBgAlt: '/images/MOIRE_background_alt.jpeg',
         chamberBgOverlay: '/images/OVS_background_new.png',
         wallBorder: false,
         walls: [
@@ -374,6 +379,7 @@ export const prisms: Record<string, PrismConfig> = {
         id: 'gpt3-library',
         title: 'GPT-3 Library',
         chamberBg: '/images/MOIRE_background.jpeg',
+        chamberBgAlt: '/images/MOIRE_background_alt.jpeg',
         chamberBgOverlay: '/images/SCRIPTORIUM_background_new.png',
         wallBorder: false,
         walls: [
@@ -402,6 +408,7 @@ export const prisms: Record<string, PrismConfig> = {
         id: 'mythopoeic-archive',
         title: 'Mythopoeic Archive',
         chamberBg: '/images/MOIRE_background.jpeg',
+        chamberBgAlt: '/images/MOIRE_background_alt.jpeg',
         chamberBgOverlay: '/images/MYTHOS_background_new.png',
         wallBorder: false,
         walls: [

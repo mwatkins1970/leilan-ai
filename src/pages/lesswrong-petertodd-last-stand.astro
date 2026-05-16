@@ -1,0 +1,139 @@
+---
+const title = "petertodd's last stand: the final days of open GPT-3 research";
+const description = "Context for Matthew Watkins's LessWrong post on the final days of open GPT-3 research.";
+const lwUrl = "https://www.lesswrong.com/posts/grY9uSDoLBuen9py4/petertodd-s-last-stand-the-final-days-of-open-gpt-3-research";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #07070b;
+        --panel: rgba(16, 14, 26, 0.88);
+        --text: #eee9dc;
+        --muted: #b9af9f;
+        --gold: #d8b86a;
+        --green: #9df7b3;
+        --line: rgba(216, 184, 106, 0.32);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: Georgia, "Times New Roman", serif;
+        background:
+          radial-gradient(circle at 50% 0%, rgba(157, 247, 179, 0.10), transparent 34rem),
+          radial-gradient(circle at 20% 20%, rgba(216, 184, 106, 0.10), transparent 28rem),
+          linear-gradient(180deg, #08080d 0%, #050508 100%);
+        color: var(--text);
+        line-height: 1.62;
+      }
+
+      main {
+        width: min(920px, calc(100% - 2rem));
+        margin: 0 auto;
+        padding: 4rem 0 5rem;
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        box-shadow: 0 0 40px rgba(0, 0, 0, 0.45);
+        padding: clamp(1.4rem, 4vw, 3rem);
+      }
+
+      h1 {
+        line-height: 1.2;
+        margin: 0 0 1rem;
+        color: var(--gold);
+        font-weight: 500;
+        font-size: clamp(1.45rem, 3.4vw, 2.1rem);
+        letter-spacing: 0.02em;
+      }
+
+      .eyebrow {
+        display: block;
+        color: var(--muted);
+        font-size: 0.78rem;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        margin-bottom: 0.6rem;
+      }
+
+      p {
+        margin: 0 0 1rem;
+      }
+
+      a {
+        color: var(--green);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 0.18em;
+      }
+
+      .cta {
+        display: block;
+        border: 1px solid var(--gold);
+        background: rgba(216, 184, 106, 0.06);
+        padding: 1.4rem 1.6rem;
+        margin: 1.8rem 0 2.4rem;
+        text-decoration: none;
+        color: var(--text);
+        transition: background 0.18s ease;
+      }
+      .cta:hover {
+        background: rgba(216, 184, 106, 0.14);
+      }
+      .cta-label {
+        display: block;
+        color: var(--muted);
+        font-size: 0.78rem;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        margin-bottom: 0.55rem;
+      }
+      .cta-title {
+        display: block;
+        color: var(--green);
+        font-size: clamp(1.2rem, 2.6vw, 1.6rem);
+        line-height: 1.25;
+      }
+      .cta-arrow {
+        color: var(--gold);
+        margin-left: 0.4rem;
+      }
+
+      .context {
+        color: var(--muted);
+        font-size: 0.98rem;
+      }
+    </style>
+  </head>
+
+  <body>
+    <main>
+      <article class="panel">
+        <span class="eyebrow">External link — LessWrong</span>
+        <h1>M. Watkins, &ldquo;&lsquo;&nbsp;petertodd&rsquo;s Last Stand&rdquo; (2024-01-22)</h1>
+
+        <a class="cta" target="_blank" rel="noopener" href={lwUrl}>
+          <span class="cta-label">Read the post on LessWrong</span>
+          <span class="cta-title">&ldquo;&lsquo;&nbsp;petertodd&rsquo;s Last Stand&rdquo;<span class="cta-arrow">→</span></span>
+        </a>
+
+        <p class="context">
+          Matthew Watkins posted findings on the Rationalist web-forum LessWrong at a time when he was working as an AI alignment researcher affiliated with the SERI-MATS programme. It was taken for granted in that world at that time that LessWrong was the most suitable place to share such research. In retrospect, Watkins has distanced himself from the Rationalist scene that revolves around the site, having become become familiar &mdash; and uncomfortable &mdash; with some of the subcultural groupthink that it involves. For more background, see his book <em>SolidGoldMagikarp: A Descent Into the AI Underworld (2026)</em>.
+        </p>
+      </article>
+    </main>
+  </body>
+</html>
