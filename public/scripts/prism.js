@@ -1415,6 +1415,14 @@ function enterArchway(wallNum) {
     isRotating = true;
     fadeOutDrone(2.0);  // fade completes before page navigates away
 
+    // ASCII gallery: the lectern stands directly in the camera's path. Fade it
+    // out at the start of the zoom so the user doesn't appear to walk through
+    // a solid post. 600ms covers the first ~20% of the 3200ms zoom.
+    if (_prismId === 'ascii-gallery') {
+        const lectern = document.querySelector('.ascii-lectern');
+        if (lectern) lectern.classList.add('ascii-lectern-fading');
+    }
+
     const apothem = getApothem();
     const startZ = apothem;
     const endZ = apothem * 1.8;
@@ -1508,6 +1516,20 @@ function enterArchway(wallNum) {
             // Stored value = (7 - shrinePos) % 6, i.e. the "opposite" encoding.
             sessionStorage.setItem('returnShrinePos_' + _prismId, String(mod6(7 - shrinePos)));
 
+            // Sub-chamber returns: force the destination's returnShrinePos so
+            // the user faces away from the door they just came through, even
+            // when this sub-chamber was entered via a direct URL (no prior
+            // orb-click left a stored value). For ASCII gallery → Scriptorium,
+            // the connecting door is Scriptorium's wall 1, so we want wall 4
+            // facing on return — that's shrinePos=5, which decodes back from
+            // stored value '5' via shrinePos = mod6(4 - 5).
+            if (_prismId === 'ascii-gallery') {
+                const destPrism = (dest.match(/\/prism\/([^/?#]+)/) || [])[1];
+                if (destPrism === 'gpt3-library') {
+                    sessionStorage.setItem('returnShrinePos_gpt3-library', '5');
+                }
+            }
+
             // Write a page-specific "pending start wall" key that the target prism reads on load.
             // This survives browser-back and overrides any stale lastWall.
             const destPrismMatch = dest.match(/\/prism\/([^/?#]+)/);
@@ -1582,6 +1604,9 @@ const _archwayTooltips = {
         4: 'SCRIPTORIUM\nprimordial GPT-3 Leilan texts',
         5: 'OVS CHAPEL\nwelcomes all initiates',
         6: 'MYTHOPOESIS ARCHIVE\nthe bigger picture',
+    },
+    'gpt3-library': {
+        1: 'ASCII ART GALLERY\nworks by Leilan2.0',
     },
 };
 const _defaultTooltip = 'return to centre';
@@ -2169,6 +2194,14 @@ document.addEventListener('click', (e) => {
                 }
             }
         }
+    }
+
+    // ASCII portal orb (Scriptorium wall 1) — manual hit-test for the same reason.
+    if (typeof hitTestAsciiOrb === 'function' && hitTestAsciiOrb(e.clientX, e.clientY)) {
+        e.stopPropagation();
+        e.preventDefault();
+        triggerAsciiPortal();
+        return;
     }
 
     const wallArea = document.getElementById('wall-area');
@@ -2769,6 +2802,352 @@ function stopCinematicHold() {
 }
 
 initAlephOrbs();
+
+// --- ASCII Portal Orb (Scriptorium wall 1) ---
+// A larger sibling of the aleph orb, churning compound "ASCII molecules" inside.
+// Clicking it fades out the poetry and reveals an archway portal to the ASCII gallery.
+// 100+ compound glyph clusters — mandalas, lattices, sigils, snowflakes, atoms.
+const ASCII_ORB_MOLECULES = [
+    // -- mandalas (cross-and-star symmetries) --
+    ['   ✧   ', '  ╱│╲  ', ' ─◈◉◈─ ', '  ╲│╱  ', '   ✧   '],
+    ['  ⊹∘⊹  ', '  ╲│╱  ', ' ─ ◉ ─ ', '  ╱│╲  ', '  ⊹∘⊹  '],
+    ['  ✦✦✦  ', ' ✧╱│╲✧ ', ' ─◈◉◈─ ', ' ✧╲│╱✧ ', '  ✦✦✦  '],
+    ['  ⋆⋆⋆  ', ' ⋆╲│╱⋆ ', ' ──⊙── ', ' ⋆╱│╲⋆ ', '  ⋆⋆⋆  '],
+    ['   ❋   ', '  ╲│╱  ', '  ─⊙─  ', '  ╱│╲  ', '   ❋   '],
+    ['  ✶ ✶  ', ' ╲ │ ╱ ', ' ─◉◉◉─ ', ' ╱ │ ╲ ', '  ✶ ✶  '],
+    ['  ✷✷✷  ', ' ✷◇◇◇✷ ', ' ◇⊛◉⊛◇ ', ' ✷◇◇◇✷ ', '  ✷✷✷  '],
+    ['  ✸ ✸  ', '  ╱╳╲  ', ' ─⊕◉⊕─ ', '  ╲╳╱  ', '  ✸ ✸  '],
+    ['   ⊹   ', '  ╲│╱  ', ' ⋆─◉─⋆ ', '  ╱│╲  ', '   ⊹   '],
+    ['  ⊹⊹⊹  ', ' ⊹ ◈ ⊹ ', '⊹◈ ◉ ◈⊹', ' ⊹ ◈ ⊹ ', '  ⊹⊹⊹  '],
+
+    // -- hexagons & benzene --
+    ['  ⬡ ⬡  ', ' ⬡ ◉ ⬡ ', ' ⬡ ⊙ ⬡ ', ' ⬡ ◉ ⬡ ', '  ⬡ ⬡  '],
+    ['   ⬢   ', '  ⬢⬢⬢  ', ' ⬢ ✦ ⬢ ', '  ⬢⬢⬢  ', '   ⬢   '],
+    ['  ⌬⌬⌬  ', ' ⌬◉ ◉⌬ ', '⌬◉ ⊹ ◉⌬', ' ⌬◉ ◉⌬ ', '  ⌬⌬⌬  '],
+    ['  ⌬ ⌬  ', ' ─⌬◉⌬─ ', ' ⌬⊕⊙⊕⌬ ', ' ─⌬◉⌬─ ', '  ⌬ ⌬  '],
+    ['  ⬣⬣⬣  ', ' ⬣ ◈ ⬣ ', ' ⬣ ✦ ⬣ ', ' ⬣ ◈ ⬣ ', '  ⬣⬣⬣  '],
+    ['  ╱⬡╲  ', ' ⬡ ⬡ ⬡ ', ' ─⬡◉⬡─ ', ' ⬡ ⬡ ⬡ ', '  ╲⬡╱  '],
+    ['   ⬡   ', '  ╱ ╲  ', ' ─⬡◉⬡─ ', '  ╲ ╱  ', '   ⬡   '],
+    ['  ⬢◉⬢  ', ' ⬢◉ ◉⬢ ', ' ◉◉◉◉◉ ', ' ⬢◉ ◉⬢ ', '  ⬢◉⬢  '],
+    ['  ⌬─⌬  ', ' │ ◉ │ ', ' ⌬─⊙─⌬ ', ' │ ◉ │ ', '  ⌬─⌬  '],
+    ['  ⊛⬡⊛  ', ' ⬡◈◉◈⬡ ', ' ⊛⬡◉⬡⊛ ', ' ⬡◈◉◈⬡ ', '  ⊛⬡⊛  '],
+
+    // -- crosses, lattices, framed grids --
+    [' ╳ │ ╳ ', ' ─◈⋆◈─ ', ' ╳ ◉ ╳ ', ' ─◈⋆◈─ ', ' ╳ │ ╳ '],
+    [' ┌─┬─┐ ', ' │ │ │ ', ' ├─◉─┤ ', ' │ │ │ ', ' └─┴─┘ '],
+    [' ╔═╦═╗ ', ' ╠═╬═╣ ', ' ║ ✦ ║ ', ' ╠═╬═╣ ', ' ╚═╩═╝ '],
+    [' ┏━┳━┓ ', ' ┣━╋━┫ ', ' ┃ ◉ ┃ ', ' ┣━╋━┫ ', ' ┗━┻━┛ '],
+    [' ╱─┬─╲ ', ' │ ⊙ │ ', ' ├─◉─┤ ', ' │ ⊙ │ ', ' ╲─┴─╱ '],
+    ['  ╋╋╋  ', '  ╋⊕╋  ', '  ╋◉╋  ', '  ╋⊕╋  ', '  ╋╋╋  '],
+    [' ╳ ─ ╳ ', ' ─ ╳ ─ ', ' ╳ ◉ ╳ ', ' ─ ╳ ─ ', ' ╳ ─ ╳ '],
+    [' │ │ │ ', ' ─◈─◈─ ', ' │ ◉ │ ', ' ─◈─◈─ ', ' │ │ │ '],
+    [' ●─●─● ', ' │   │ ', ' ●─◉─● ', ' │   │ ', ' ●─●─● '],
+    [' ╔═══╗ ', ' ║◇◉◇║ ', ' ║─⊙─║ ', ' ║◇◉◇║ ', ' ╚═══╝ '],
+
+    // -- snowflakes --
+    ['   ❅   ', '  ❅❅❅  ', ' ❅❅❉❅❅ ', '  ❅❅❅  ', '   ❅   '],
+    ['   ❆   ', '  ╲│╱  ', '  ─❉─  ', '  ╱│╲  ', '   ❆   '],
+    ['  ❅ ❅  ', ' ❅╱│╲❅ ', ' ─❉◉❉─ ', ' ❅╲│╱❅ ', '  ❅ ❅  '],
+    ['  ❄ ❄  ', ' ╲ │ ╱ ', '  ─❄─  ', ' ╱ │ ╲ ', '  ❄ ❄  '],
+    ['  ❉❉❉  ', ' ❉╳│╳❉ ', ' ─❅◉❅─ ', ' ❉╳│╳❉ ', '  ❉❉❉  '],
+    ['   ❇   ', ' ╲ ❇ ╱ ', ' ❇ ❄ ❇ ', ' ╱ ❇ ╲ ', '   ❇   '],
+    ['  ❄═❄  ', ' ║◈◉◈║ ', ' ❄═◉═❄ ', ' ║◈◉◈║ ', '  ❄═❄  '],
+    [' ✶ ❅ ✶ ', '  ╲│╱  ', ' ❅─❉─❅ ', '  ╱│╲  ', ' ✶ ❅ ✶ '],
+    ['   ❊   ', '  ❅❄❅  ', ' ❅❄❉❄❅ ', '  ❅❄❅  ', '   ❊   '],
+    ['  ❁ ❁  ', ' ─❉◉❉─ ', '  ╱│╲  ', ' ─❄─❄─ ', '  ❁ ❁  '],
+
+    // -- atoms / orbits / rings --
+    ['  ╭─╮  ', ' ╱ ◉ ╲ ', ' │ ⊙ │ ', ' ╲ ◉ ╱ ', '  ╰─╯  '],
+    [' ○ ╱─╲ ', '  │ ◉ │  ', ' ○ ╲─╱ '],
+    ['  ⊕⊕⊕  ', ' ─◉◉◉─ ', ' ⊕ ⊙ ⊕ ', ' ─◉◉◉─ ', '  ⊕⊕⊕  '],
+    ['  ⊗ ⊗  ', '   │   ', '  ─⊕─  ', '   │   ', '  ⊗ ⊗  '],
+    ['  ⊚⊚⊚  ', ' ⊚ ◉ ⊚ ', ' ⊚ ⊙ ⊚ ', ' ⊚ ◉ ⊚ ', '  ⊚⊚⊚  '],
+    ['  ⊛⊛⊛  ', ' ⊛◇◉◇⊛ ', ' ⊛ ⊙ ⊛ ', ' ⊛◇◉◇⊛ ', '  ⊛⊛⊛  '],
+    ['   ⊘   ', '  ╱│╲  ', ' ─◉⊘◉─ ', '  ╲│╱  ', '   ⊘   '],
+    ['  ⊜─⊜  ', ' ╲ │ ╱ ', ' ⊜─◉─⊜ ', ' ╱ │ ╲ ', '  ⊜─⊜  '],
+    ['   ⊙   ', '  ○ ○  ', ' ○ ⊕ ○ ', '  ○ ○  ', '   ⊙   '],
+    ['  ⊕ ⊕  ', ' ⊕ │ ⊕ ', '  ─◉─  ', ' ⊕ │ ⊕ ', '  ⊕ ⊕  '],
+
+    // -- triangles / pyramids --
+    ['   △   ', '  △ △  ', ' △ △ △ ', '  △ △  ', '   △   '],
+    ['   ▲   ', '  ▲▲▲  ', ' ▲ ✦ ▲ ', '  ▲▲▲  ', '   ▲   '],
+    ['   ▽   ', '  ▽▽▽  ', ' ▽ ◉ ▽ ', '  ▽▽▽  ', '   ▽   '],
+    [' △ ▽ △ ', ' ▽ ◉ ▽ ', ' △ ◉ △ ', ' ▽ ◉ ▽ ', ' △ ▽ △ '],
+    ['  ◁◇▷  ', ' ◁ ◇ ▷ ', ' ◁◇⊙◇▷ ', ' ◁ ◇ ▷ ', '  ◁◇▷  '],
+    [' ◇ ◆ ◇ ', ' ◆ ◇ ◆ ', ' ◇ ⊙ ◇ ', ' ◆ ◇ ◆ ', ' ◇ ◆ ◇ '],
+    [' ▲ ▼ ▲ ', ' ▼ ◉ ▼ ', ' ▲ ⊙ ▲ ', ' ▼ ◉ ▼ ', ' ▲ ▼ ▲ '],
+    ['  ▴▴▴  ', ' ▸ ◈ ◂ ', ' ◈ ✦ ◈ ', ' ▸ ◈ ◂ ', '  ▾▾▾  '],
+    ['   ▴   ', '  ▴▴▴  ', ' ▴ ✶ ▴ ', '  ▾▾▾  ', '   ▾   '],
+    [' ◁◇◇◇▷ ', ' ◇ ◉ ◇ ', ' ◁◇⊙◇▷ ', ' ◇ ◉ ◇ ', ' ◁◇◇◇▷ '],
+
+    // -- waves / spirals / curls --
+    ['  ∮∮∮  ', ' ∮ ⊙ ∮ ', ' ∮ ⊙ ∮ ', ' ∮ ⊙ ∮ ', '  ∮∮∮  '],
+    ['  ∾∾∾  ', ' ∾ ◉ ∾ ', ' ∾ ⊕ ∾ ', ' ∾ ◉ ∾ ', '  ∾∾∾  '],
+    ['  ∽∽∽  ', ' ∽ ⊛ ∽ ', ' ∽⊛◉⊛∽ ', ' ∽ ⊛ ∽ ', '  ∽∽∽  '],
+    ['  ∝∝∝  ', ' ∝ ⊙ ∝ ', ' ∝ ⊕ ∝ ', ' ∝ ⊙ ∝ ', '  ∝∝∝  '],
+    [' φ φ φ ', '  ─◉─  ', ' φ ⊕ φ ', '  ─◉─  ', ' φ φ φ '],
+    [' ψ ψ ψ ', ' ψ ◉ ψ ', '─ψ ◉ ψ─', ' ψ ◉ ψ ', ' ψ ψ ψ '],
+    [' Ω Ω Ω ', ' Ω ◉ Ω ', '  ─⊕─  ', ' Ω ◉ Ω ', ' Ω Ω Ω '],
+    ['  ∿∿∿  ', '  ╲│╱  ', '  ─⊙─  ', '  ╱│╲  ', '  ∿∿∿  '],
+    ['  ≋≋≋  ', ' ≋ ◉ ≋ ', ' ≋ ⊕ ≋ ', ' ≋ ◉ ≋ ', '  ≋≋≋  '],
+    ['  ⌇⌇⌇  ', ' ⌇ ⊙ ⌇ ', ' ⌇ ◉ ⌇ ', ' ⌇ ⊙ ⌇ ', '  ⌇⌇⌇  '],
+
+    // -- eyes / talismans / heraldic --
+    ['  ─◉─  ', ' ─ ⊙ ─ ', ' ◉ ⊕ ◉ ', ' ─ ⊙ ─ ', '  ─◉─  '],
+    [' ╲◇╱ ',   ' ─◉─ ',   ' ╱◇╲ '],
+    [' ⊙ ◉ ⊙ ', ' ─◉⊕◉─ ', ' ⊙ ◉ ⊙ '],
+    ['   ✿   ', '  ⊕◉⊕  ', ' ─⊙─⊙─ ', '  ⊕◉⊕  ', '   ✿   '],
+    ['  ☼ ☼  ', ' ☼ ⊙ ☼ ', '  ─◉─  ', ' ☼ ⊙ ☼ ', '  ☼ ☼  '],
+    ['   ☉   ', '  ╱│╲  ', ' ◉─⊙─◉ ', '  ╲│╱  ', '   ☉   '],
+    ['  ☽ ☾  ', ' ╲ │ ╱ ', '  ─⊙─  ', ' ╱ │ ╲ ', '  ☽ ☾  '],
+    ['   ✝   ', '  ─◉─  ', ' ╱✦│✦╲ ', '  ─◉─  ', '   ✝   '],
+    [' ☥ ─ ☥ ', '─◉ ⊙ ◉─', ' ☥ ─ ☥ '],
+    ['  ▽◉▽  ', ' ◇│◇│◇ ', ' ─⊙─⊙─ ', ' ◇│◇│◇ ', '  ▽◉▽  '],
+
+    // -- floral --
+    ['   ❀   ', '  ❀ ❀  ', ' ❀ ⊙ ❀ ', '  ❀ ❀  ', '   ❀   '],
+    ['  ❁ ❁  ', ' ❁ ◉ ❁ ', ' ❁ ⊕ ❁ ', ' ❁ ◉ ❁ ', '  ❁ ❁  '],
+    ['   ✿   ', '  ╲│╱  ', ' ✿ ⊙ ✿ ', '  ╱│╲  ', '   ✿   '],
+    ['  ❃ ❃  ', ' ╲ ❃ ╱ ', ' ❉ ◉ ❉ ', ' ╱ ❃ ╲ ', '  ❃ ❃  '],
+    ['  ✾ ✾  ', ' ✾ ◉ ✾ ', '  ─⊕─  ', ' ✾ ◉ ✾ ', '  ✾ ✾  '],
+    ['  ❊❊❊  ', ' ❊ ◈ ❊ ', ' ❊◈◉◈❊ ', ' ❊ ◈ ❊ ', '  ❊❊❊  '],
+    ['  ❀╳❀  ', ' ❀◉◉◉❀ ', ' ╳ ⊕ ╳ ', ' ❀◉◉◉❀ ', '  ❀╳❀  '],
+    ['  ✺ ✺  ', ' ✺ ⊙ ✺ ', ' ✺ ⊕ ✺ ', ' ✺ ⊙ ✺ ', '  ✺ ✺  '],
+    ['   ❅   ', '  ✿✿✿  ', ' ✿ ⊙ ✿ ', '  ✿✿✿  ', '   ❅   '],
+    ['  ❇ ❇  ', ' ❀◇◉◇❀ ', ' ─❉◉❉─ ', ' ❀◇◉◇❀ ', '  ❇ ❇  '],
+
+    // -- constellations & sparse scatter --
+    [' · · · ', ' ⋆ ◉ ⋆ ', ' · ⊙ · ', ' ⋆ ◉ ⋆ ', ' · · · '],
+    [' ∘ ⋆ ∘ ', ' ⋆ ⊙ ⋆ ', ' ∘⋆⋆⋆∘ ', ' ⋆ ⊙ ⋆ ', ' ∘ ⋆ ∘ '],
+    [' ✦ ✧ ✦ ', ' ✧ ◉ ✧ ', '  ⊙   ', ' ✧ ◉ ✧ ', ' ✦ ✧ ✦ '],
+    ['  ∴∵∴  ', ' ∵ ◉ ∵ ', '  ⊙    ', ' ∵ ◉ ∵ ', '  ∴∵∴  '],
+    ['  ⁘⁙⁜  ', ' ⁘ ⊙ ⁘ ', '  ⁙⁜⁙  ', ' ⁘ ⊙ ⁘ ', '  ⁘⁙⁜  '],
+    ['  ∷∷∷  ', ' ∷ ◉ ∷ ', '  ─⊕─  ', ' ∷ ◉ ∷ ', '  ∷∷∷  '],
+    ['  ⋮⋮⋮  ', ' ⋮ ⊙ ⋮ ', ' ⋯ ⊕ ⋯ ', ' ⋮ ⊙ ⋮ ', '  ⋮⋮⋮  '],
+    [' ⊹ ⊹ ⊹ ', ' ⊹ ⊙ ⊹ ', ' ─⊹◉⊹─ ', ' ⊹ ⊙ ⊹ ', ' ⊹ ⊹ ⊹ '],
+    ['  ⋆ ⋆  ', ' ⋆ ⊙ ⋆ ', ' ⋆ ⊕ ⋆ ', ' ⋆ ⊙ ⋆ ', '  ⋆ ⋆  '],
+    [' · ⋆ · ', ' ⋆ · ⋆ ', ' · ⊙ · ', ' ⋆ · ⋆ ', ' · ⋆ · '],
+
+    // -- knots / weaves --
+    [' ╳ ╳ ╳ ', ' ◇ ◉ ◇ ', ' ╲╳╳╳╱ ', ' ◇ ◉ ◇ ', ' ╳ ╳ ╳ '],
+    ['  ╲╱╲  ', '   ╳   ', '  ╱╲╱  ', '   ⊙   ', '  ╲╱╲  '],
+    [' ╱╲╱╲ ',  ' ╲╱╲╱ ',  '  ⊕◉⊕  ', ' ╱╲╱╲ ',  ' ╲╱╲╱ '],
+    ['  ⊛─⊛  ', ' ⊛   ⊛ ', '  ─◉─  ', ' ⊛   ⊛ ', '  ⊛─⊛  '],
+    ['  ⊕═⊕  ', ' ║◉◉◉║ ', ' ⊕═⊙═⊕ ', ' ║◉◉◉║ ', '  ⊕═⊕  '],
+    [' ★ ⊕ ★ ', ' ⊕ ⊙ ⊕ ', ' ★ ◉ ★ ', ' ⊕ ⊙ ⊕ ', ' ★ ⊕ ★ '],
+    [' ✦═╦═✦ ', ' ╠═◉═╣ ', ' ✦═╩═✦ '],
+    ['  ◐◑◐  ', ' ◑ ⊙ ◑ ', '  ◐◉◐  ', ' ◑ ⊙ ◑ ', '  ◐◑◐  '],
+    ['  ◓◒◓  ', ' ◒ ◉ ◒ ', ' ─⊙─⊙─ ', ' ◒ ◉ ◒ ', '  ◓◒◓  '],
+    [' ⊕━⊕━⊕ ', '  ┃◉┃  ', ' ⊕━⊙━⊕ ', '  ┃◉┃  ', ' ⊕━⊕━⊕ '],
+
+    // -- chiral / asymmetric drifts --
+    ['  ◉    ', ' ╲│    ', '  ─⊙─  ', '    │╲ ', '    ◉  '],
+    ['    ⋆  ', '  ╱⊙   ', ' ─◉─   ', '  ╲⊙   ', '    ⋆  '],
+    [' ✦     ', '  ╲    ', '   ◉   ', '    ╲  ', '     ✦ '],
+    [' ★     ', '   ╱   ', '   ◉   ', '   ╱   ', '     ★ '],
+    ['  ─◉─  ', ' ◇ ⊙ ◇ ', ' ⊕ ◉ ⊕ ', ' ◇ ⊙ ◇ ', '  ─◉─  '],
+    ['     ❅ ', '   ◈   ', '  ─◉─  ', '   ◈   ', ' ❅     '],
+    [' ⊹     ', '   ⊙   ', '  ─◉─  ', '   ⊙   ', '     ⊹ '],
+    ['  ─◉   ', '    ⊙  ', '  ⊕    ', '    ⊙  ', '   ◉─  '],
+
+    // -- ASCII-art alphabet/sigil constructs (leaning hard into @#$%^&*()) --
+    ['  @@@  ', ' @***@ ', ' *#@#* ', ' @***@ ', '  @@@  '],
+    ['  #_#  ', ' /***\\ ', ' *#@#* ', ' \\***/ ', '  #_#  '],
+    ['  +++  ', ' +*#*+ ', ' #*@*# ', ' +*#*+ ', '  +++  '],
+    ['  /^\\  ', ' [***] ', ' {@#@} ', ' [***] ', '  \\v/  '],
+    ['  $$$  ', ' (***) ', ' *#@#* ', ' (***) ', '  $$$  '],
+    ['  !?!  ', ' /***\\ ', ' *#@#* ', ' \\***/ ', '  !?!  '],
+    ['  o-o  ', ' |***| ', ' @-#-@ ', ' |***| ', '  o-o  '],
+    ['  ___  ', ' /***\\ ', '|*#@#*|', ' \\___/ ', '       '],
+    ['  ===  ', ' ##*## ', ' #*@*# ', ' ##*## ', '  ===  '],
+    ['  ^^^  ', ' /***\\ ', ' *@*@* ', ' \\***/ ', '  vvv  '],
+
+    // -- compass / runic --
+    ['   N   ', '  \\|/  ', ' W-+-E ', '  /|\\  ', '   S   '],
+    ['  /+\\  ', ' (***) ', ' #*@*# ', ' (***) ', '  \\+/  '],
+    ['  ###  ', '  /|\\  ', ' #-@-# ', '  \\|/  ', '  ###  '],
+    ['  XXX  ', ' X***X ', ' X*@*X ', ' X***X ', '  XXX  '],
+    [' *0*0* ', '  ***  ', '  0@0  ', '  ***  ', ' *0*0* '],
+
+    // -- circuit / lattice --
+    ['  +-+  ', ' |***| ', ' +*@*+ ', ' |***| ', '  +-+  '],
+    ['  [_]  ', ' /|||\\ ', '<-*@*->', ' \\|||/ ', '  [_]  '],
+    [' ___|_ ', '|*****|', '|*#@#*|', '|*****|', ' _|___ '],
+    [' .*.*. ', ' .#@#. ', ' .*.*. ', ' .#@#. ', ' .*.*. '],
+    ['  /=\\  ', ' #|||# ', ' ##@## ', ' #|||# ', '  \\=/  '],
+
+    // -- punctuation drifts --
+    ['  ..:  ', ' .***. ', ' :*@*: ', ' .***. ', '  :..  '],
+    [' ~~~~~ ', ' ~*#*~ ', ' #*@*# ', ' ~*#*~ ', ' ~~~~~ '],
+    ['   ;   ', '  :;:  ', ' ;:@:; ', '  :;:  ', '   ;   '],
+    ['  ;-;  ', ' ;***; ', ' ;*@*; ', ' ;***; ', '  ;-;  '],
+    ['  !!!  ', ' !***! ', ' !*@*! ', ' !***! ', '  !!!  '],
+
+    // -- numeric / alphabet constructs --
+    ['   8   ', '  808  ', ' 80@08 ', '  808  ', '   8   '],
+    ['  010  ', ' 01*10 ', ' 1*@*1 ', ' 01*10 ', '  010  '],
+    ['  ABC  ', ' A***C ', ' A*@*C ', ' A***C ', '  ABC  '],
+    [' 7 5 3 ', ' 5***3 ', ' 3*@*5 ', ' 5***3 ', ' 7 5 3 '],
+    ['  H-H  ', ' H***H ', ' H*@*H ', ' H***H ', '  H-H  '],
+
+    // -- glitchy / dense ASCII --
+    ['#######', '#*#*#*#', '#*#@#*#', '#*#*#*#', '#######'],
+    [' /\\/\\/ ', ' \\/\\/\\ ', ' /\\@/\\ ', ' \\/\\/\\ ', ' /\\/\\/ '],
+    ['  ?!?  ', ' ?***? ', ' !*@*! ', ' ?***? ', '  ?!?  '],
+    ['  <>< ',  ' >*<*> ', ' <*@*> ', ' >*<*> ', '  ><>  '],
+    ['  ($)  ', ' $***$ ', ' $*@*$ ', ' $***$ ', '  ($)  '],
+];
+
+let _asciiPortalOpened = false;
+function triggerAsciiPortal() {
+    if (_asciiPortalOpened) return;
+    const orb = document.querySelector('.ascii-orb');
+    if (!orb) return;
+    _asciiPortalOpened = true;
+    const wallPanel = orb.closest('.wall-panel');
+    if (wallPanel) wallPanel.classList.add('ascii-portal-open');
+    // Register the destination so the existing archway overlay picks it up
+    window.PRISM_CONFIG = window.PRISM_CONFIG || {};
+    window.PRISM_CONFIG.destinations = window.PRISM_CONFIG.destinations || {};
+    window.PRISM_CONFIG.destinations[1] =
+        '/immersive?from=ascii-gallery&dest=/prism/ascii-gallery';
+    // Wait for the portal SVG to finish fading in before activating the click overlay
+    setTimeout(() => { updateArchwayOverlay(); }, 950);
+}
+
+// Used by the document-level click handler to detect orb clicks (Chrome's
+// preserve-3d hit-test bug means we can't reliably attach listeners to the orb).
+function hitTestAsciiOrb(clientX, clientY) {
+    if (_prismId !== 'gpt3-library') return false;
+    if (_asciiPortalOpened) return false;
+    if (getFacingWall() !== 1) return false;
+    const orb = document.querySelector('.ascii-orb');
+    if (!orb) return false;
+    const r = orb.getBoundingClientRect();
+    if (clientX < r.left || clientX > r.right ||
+        clientY < r.top  || clientY > r.bottom) return false;
+    const cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+    const radius = Math.min(r.right - r.left, r.bottom - r.top) / 2;
+    const dx = clientX - cx, dy = clientY - cy;
+    return (dx * dx + dy * dy) <= (radius * radius);
+}
+
+function initAsciiOrb() {
+    const orb = document.querySelector('.ascii-orb');
+    if (!orb) return;
+    const glyphsEl = orb.querySelector('.ascii-orb-glyphs');
+    if (!glyphsEl) return;
+
+    let idx = Math.floor(Math.random() * ASCII_ORB_MOLECULES.length);
+    function render() {
+        glyphsEl.style.opacity = '0';
+        setTimeout(() => {
+            // Pick a random new molecule each step (not sequential) so the
+            // alphanumeric / @#$%-heavy entries surface immediately rather
+            // than appearing only after walking through the array in order.
+            // Avoid repeating the current one back-to-back.
+            let next = Math.floor(Math.random() * ASCII_ORB_MOLECULES.length);
+            if (next === idx) next = (next + 1) % ASCII_ORB_MOLECULES.length;
+            idx = next;
+            glyphsEl.textContent = ASCII_ORB_MOLECULES[idx].join('\n');
+            glyphsEl.style.opacity = '';
+        }, 220);
+    }
+    glyphsEl.textContent = ASCII_ORB_MOLECULES[idx].join('\n');
+    // ~3x faster cycle than before (was 2400ms) so the variety reads quickly.
+    setInterval(render, 800);
+}
+
+if (_prismId === 'gpt3-library') {
+    initAsciiOrb();
+}
+
+// --- ASCII Gallery: per-wall ASCII swarm player + lectern page ---
+// Loads pre-rendered animations from /data/ascii-swarms.json (one per wall,
+// each a different algorithm — boids, sonar, matrix-rain, Conway, noise
+// bands, glitch scan). Each wall starts at a random frame offset so the
+// chamber looks different on every visit. Brightness is implicit in the
+// character glyph itself — no per-cell opacity, just textContent diffs —
+// which makes playback nearly free (no JS simulation hogging the main
+// thread, so the prism rotation stays smooth).
+function initAsciiSwarmPlayer() {
+    const overlays = Array.from(document.querySelectorAll('.ascii-wall-overlay'));
+    if (overlays.length === 0) return;
+    fetch('/data/ascii-swarms.json')
+        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(setup)
+        .catch(err => console.warn('[ascii-swarm] failed to load', err));
+
+    function setup(payload) {
+        const { fps, w, h, frameSize, walls: wallData } = payload;
+        const N = w * h;
+        if (frameSize !== N) {
+            console.warn('[ascii-swarm] frameSize mismatch', frameSize, 'expected', N);
+            return;
+        }
+
+        // Build the grid DOM once per overlay; cache cell refs + last char.
+        const players = [];
+        for (const overlay of overlays) {
+            const grid = document.createElement('div');
+            grid.className = 'ascii-swarm-grid';
+            const cells = new Array(N);
+            const lastChar = new Array(N);
+            for (let i = 0; i < N; i++) {
+                const span = document.createElement('span');
+                span.className = 'ascii-swarm-cell';
+                grid.appendChild(span);
+                cells[i] = span;
+                lastChar[i] = '\0'; // sentinel — every first paint writes
+            }
+            overlay.appendChild(grid);
+
+            // Each wall pulls from a different algorithm, cycling through the
+            // six available animations (wall 1 → boids, wall 2 → sonar, etc.).
+            const wallIdx = parseInt(overlay.dataset.wall, 10) || 1;
+            const wd = wallData[(wallIdx - 1) % wallData.length];
+            const startOffset = Math.floor(Math.random() * wd.frames);
+            players.push({ cells, lastChar, wd, frame: startOffset });
+        }
+
+        const tickMs = Math.max(40, Math.round(1000 / fps));
+        setInterval(() => {
+            for (const p of players) {
+                const off = (p.frame % p.wd.frames) * N;
+                const slice = p.wd.data;
+                const cells = p.cells, last = p.lastChar;
+                // Per-cell diff — only touch DOM when char changed. With most
+                // cells empty for most frames, this keeps the write count low.
+                for (let i = 0; i < N; i++) {
+                    const c = slice.charCodeAt(off + i);
+                    if (last[i] !== c) {
+                        last[i] = c;
+                        // ' ' (32) renders empty; everything else as-is.
+                        cells[i].textContent = c === 32 ? '' : String.fromCharCode(c);
+                    }
+                }
+                p.frame++;
+            }
+        }, tickMs);
+    }
+}
+
+function initAsciiLecternPage() {
+    const lecternPage = document.querySelector('.ascii-lectern-page');
+    if (!lecternPage) return;
+    lecternPage.textContent = [
+        '  ✧ ─── ✧  ',
+        '  │ ◉ │  ',
+        ' ◈ ─◉─ ◈ ',
+        '  │ ◉ │  ',
+        '  ✧ ─── ✧  ',
+    ].join('\n');
+}
+
+if (_prismId === 'ascii-gallery') {
+    initAsciiSwarmPlayer();
+    initAsciiLecternPage();
+}
 
 // Document-level delegation for cinematic buttons (reader is on <body>, outside wall-area)
 document.addEventListener('click', (e) => {

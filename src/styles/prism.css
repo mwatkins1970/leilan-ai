@@ -1449,6 +1449,371 @@ body:not(.sky-mode) .sky-toggle { display: none; }
     color: rgba(3, 36, 26, 0.62);
 }
 
+/* ----- Wall 1: orb + half-height poetry + hidden portal ----- */
+/* On the wall facing the user on entry, the poetry panel is squeezed into
+   the lower half and the upper half houses the ASCII portal orb.
+   (Was 52% — bumped 20% taller per request.) */
+[data-prism-id="gpt3-library"] .wall-panel[data-wall="1"] .wall-poetry-passage {
+    inset: 45% 8% 14% 8%;
+}
+[data-prism-id="gpt3-library"] .wall-panel[data-wall="1"] .poetry-card {
+    /* Tighter padding so the squeezed area still breathes */
+    padding: 1.1em 1.2em 0.9em;
+}
+
+/* Smooth fade for poetry when the portal is revealed */
+[data-prism-id="gpt3-library"] .wall-panel[data-wall="1"] .wall-poetry-passage {
+    transition: opacity 0.7s ease;
+}
+[data-prism-id="gpt3-library"] .wall-panel[data-wall="1"].ascii-portal-open .wall-poetry-passage {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* ===== ASCII portal orb (Scriptorium wall 1) ===== */
+/* Three times across an aleph orb (6vh → 18vh), occupying the upper half of the wall.
+   Brass rim, deep teal void, animated ASCII molecules churning inside. */
+.ascii-orb {
+    position: absolute;
+    top: 12%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 18vh;
+    height: 18vh;
+    border-radius: 50%;
+    border: 4px solid;
+    border-color: #c9a84c #b8963e #a07830 #bfa044;
+    background:
+        radial-gradient(circle at 35% 28%, rgba(220, 240, 220, 0.30), transparent 42%),
+        radial-gradient(circle at 50% 50%, rgba(15, 60, 45, 0.97), rgba(8, 36, 28, 0.97) 55%, rgba(3, 18, 14, 0.99) 88%);
+    box-shadow:
+        0 0 6px 2px rgba(200, 170, 80, 0.75),
+        0 0 22px 7px rgba(94, 239, 162, 0.40),
+        0 0 50px 18px rgba(94, 239, 162, 0.22),
+        0 0 90px 28px rgba(94, 239, 162, 0.10),
+        inset -4px -4px 12px rgba(0, 0, 0, 0.55),
+        inset 4px 4px 12px rgba(140, 220, 175, 0.18);
+    cursor: pointer;
+    z-index: 14;
+    overflow: hidden;
+    transition: box-shadow 0.4s ease, border-color 0.4s ease, opacity 0.7s ease, transform 0.7s ease;
+}
+.ascii-orb:hover {
+    border-color: #dbb85a #cca84e #b89040 #d2b052;
+    box-shadow:
+        0 0 8px 3px rgba(220, 190, 100, 0.85),
+        0 0 28px 10px rgba(94, 239, 162, 0.55),
+        0 0 55px 22px rgba(94, 239, 162, 0.30),
+        0 0 100px 36px rgba(94, 239, 162, 0.14),
+        inset -4px -4px 12px rgba(0, 0, 0, 0.55),
+        inset 4px 4px 12px rgba(140, 220, 175, 0.22);
+}
+/* Glass specular highlight */
+.ascii-orb::before {
+    content: '';
+    position: absolute;
+    top: 10%;
+    left: 16%;
+    width: 36%;
+    height: 36%;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 50%, rgba(255, 255, 255, 0.30), transparent 65%);
+    pointer-events: none;
+    z-index: 2;
+}
+/* Once the portal opens, the orb gently recedes upward and dims */
+[data-prism-id="gpt3-library"] .wall-panel[data-wall="1"].ascii-portal-open .ascii-orb {
+    opacity: 0.35;
+    transform: translateX(-50%) translateY(-3%) scale(0.92);
+    pointer-events: none;
+}
+
+/* The morphing glyph payload */
+.ascii-orb-glyphs {
+    position: absolute;
+    inset: 12%;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: clamp(0.82rem, 1.55vh, 1.42rem);
+    line-height: 1.05;
+    color: rgba(94, 239, 162, 0.92);
+    text-shadow: 0 0 4px rgba(94, 239, 162, 0.55), 0 0 12px rgba(94, 239, 162, 0.25);
+    pointer-events: none;
+    white-space: pre;
+    z-index: 1;
+    animation: orbBreathe 4.2s ease-in-out infinite;
+    transition: opacity 0.2s ease;
+}
+@keyframes orbBreathe {
+    0%, 100% { opacity: 0.78; transform: scale(0.97); }
+    50%      { opacity: 1;    transform: scale(1.04); }
+}
+
+/* The hidden archway portal that appears when the orb is clicked */
+.wall-archway.ascii-portal-svg {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.9s ease;
+}
+[data-prism-id="gpt3-library"] .wall-panel[data-wall="1"].ascii-portal-open .ascii-portal-svg {
+    opacity: 1;
+}
+
+/* ===== ASCII Art Gallery (sub-chamber south of Scriptorium) ===== */
+
+/* Dark Terminal walls. The default wall-bg is an <img> pointing at
+   /images/wall-bg.jpg (a moiré sheet) — hide it entirely, and paint the
+   panel itself near-black so the green swarm reads as luminous Terminal text. */
+[data-prism-id="ascii-gallery"] .wall-bg,
+[data-prism-id="ascii-gallery"] .wall-bg-overlay,
+[data-prism-id="ascii-gallery"] .wall-border-overlay {
+    display: none !important;
+}
+[data-prism-id="ascii-gallery"] .wall-panel {
+    background-color: #06080a;
+}
+/* Vertical edge highlights — a thin green-tinged glow on each wall's left and
+   right edges makes the joins between walls visible (otherwise solid dark grey
+   walls merge into one ambiguous surface). */
+[data-prism-id="ascii-gallery"] .wall-panel::before,
+[data-prism-id="ascii-gallery"] .wall-panel::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    pointer-events: none;
+    z-index: 5;
+    background: linear-gradient(180deg,
+        transparent 0%,
+        rgba(94, 239, 162, 0.10) 14%,
+        rgba(94, 239, 162, 0.18) 50%,
+        rgba(94, 239, 162, 0.10) 86%,
+        transparent 100%);
+    box-shadow: 0 0 6px rgba(94, 239, 162, 0.25);
+}
+[data-prism-id="ascii-gallery"] .wall-panel::before { left: 0; }
+[data-prism-id="ascii-gallery"] .wall-panel::after  { right: 0; }
+
+/* Hide the legacy single-line drift overlay; the swarm grid replaces it. */
+[data-prism-id="ascii-gallery"] .ascii-wall-molecules { display: none; }
+
+/* The default archway fill is 92% opaque (rgba(2,1,5,0.92)) — fine over the
+   MOIRE chambers but the residual 8% reveals the swarm grid behind it on the
+   wall-4 door. Force fully-opaque dark fill for this chamber only. */
+[data-prism-id="ascii-gallery"] .wall-archway path {
+    fill: #04050a;
+}
+
+.ascii-wall-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+/* ===== ASCII Swarm Grid (25×25 cellular-automata flocking overlay) =====
+   Each cell is a span with a single character. Energy field is driven from
+   JS (initAsciiSwarm in prism.js) — see that for the agent + diffusion model.
+   Visual rule: Terminal-green characters against the dark wall, opacity
+   modulates with energy. */
+.ascii-swarm-grid {
+    position: absolute;
+    inset: 6% 8%;
+    display: grid;
+    grid-template-columns: repeat(20, 1fr);
+    grid-template-rows: repeat(20, 1fr);
+    font-family: 'IBM Plex Mono', 'Menlo', monospace;
+    font-weight: 500;
+    pointer-events: none;
+    overflow: hidden;
+}
+.ascii-swarm-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    font-size: clamp(0.9rem, 2.0vh, 1.7rem);
+    font-weight: 600;
+    color: rgb(120, 255, 170);
+    /* Tightened halo: crisp 1px inner edge + small 3-4px bloom. Wider blurs
+       (14–28px) read as fuzz when 400 cells overlap, so we keep them small. */
+    text-shadow:
+        0 0 1px rgba(190, 255, 210, 1.00),
+        0 0 4px rgba(94, 239, 162, 0.85);
+    will-change: contents;
+}
+
+/* ===== ASCII gallery: central lectern ===== */
+/* The lectern lives at the centre of the prism-container's preserve-3d space,
+   so it floats at the centre of the hex chamber. Geometry is layered divs with
+   gradient shading — no real 3D model, just a contemplative silhouette. */
+.ascii-lectern {
+    position: absolute;
+    left: 50%;
+    bottom: 5%;
+    width: 22vh;
+    height: 53vh;
+    /* rotateY(180deg) flips the whole lectern so the plate's readable face
+       points AWAY from the entry wall (wall 1). On entry the user sees the
+       back of the slab; the book becomes visible only after rotating around. */
+    transform: translateX(-50%) translateZ(0) rotateY(180deg);
+    /* Preserve 3D so the tilted top plate is a real slab in world space —
+       its slope is visible from every chamber rotation, not just head-on. */
+    transform-style: preserve-3d;
+    pointer-events: none;
+    z-index: 4;
+}
+
+/* Foot — wide, low base */
+.ascii-lectern-base {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    height: 12%;
+    background:
+        radial-gradient(ellipse at 50% 30%, rgba(200, 170, 90, 0.95), rgba(120, 90, 50, 0.95) 60%, rgba(50, 35, 20, 0.97) 100%);
+    border-radius: 35% / 70%;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.55), inset 0 -4px 8px rgba(0,0,0,0.45);
+}
+
+/* Column — cylindrical support. The child .ascii-lectern-column-face elements
+   are 4 rectangles rotated around Y (0°, 45°, 90°, 135°); together with their
+   back-facing counterparts they form an 8-faced approximation of a cylinder. */
+.ascii-lectern-column {
+    position: absolute;
+    bottom: 9%;
+    left: 50%;
+    transform: translateX(-50%);
+    transform-style: preserve-3d;
+    width: 9%;
+    /* Terminate at the plate's centroid (≈ 50% from container bottom): with
+       bottom 9% that's a 41% column. Earlier 53% pushed the top through the
+       plate, since the plate's centre sits at 50%. */
+    height: 41%;
+    pointer-events: none;
+}
+.ascii-lectern-column-face {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg,
+        rgba(60, 42, 22, 0.97) 0%,
+        rgba(150, 120, 65, 0.95) 28%,
+        rgba(215, 185, 115, 0.97) 50%,
+        rgba(150, 120, 65, 0.95) 72%,
+        rgba(60, 42, 22, 0.97) 100%);
+    box-shadow: inset 0 2px 4px rgba(255,255,255,0.10), inset 0 -2px 4px rgba(0,0,0,0.35);
+    backface-visibility: visible;
+}
+
+/* Top tilted plate with open book — pivots at its CENTRE so the column
+   attaches under the plate's centroid (not at its bottom-front edge). The
+   plate's bottom-front edge then hangs slightly forward of the column, top
+   leans back, as on a traditional lectern. */
+.ascii-lectern-top {
+    position: absolute;
+    bottom: 50%;
+    left: 50%;
+    transform: translateX(-50%) translateY(50%) rotateX(55deg);
+    transform-origin: 50% 50%;
+    transform-style: preserve-3d;
+    width: 100%;
+    height: 24%;
+    background:
+        linear-gradient(180deg,
+            rgba(220, 190, 110, 0.95) 0%,
+            rgba(160, 130, 70, 0.95) 100%);
+    border: 1px solid rgba(80, 60, 30, 0.7);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.55), inset 0 -3px 6px rgba(0,0,0,0.3);
+}
+/* Parallel underside translated into the plate's local -Z — gives the slab
+   real thickness rather than reading as a sheet of paper. */
+.ascii-lectern-top::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg,
+        rgba(90, 65, 35, 0.95) 0%,
+        rgba(50, 35, 18, 0.97) 100%);
+    border: 1px solid rgba(40, 28, 14, 0.85);
+    transform: translateZ(-0.7vh);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.45);
+    pointer-events: none;
+    z-index: -1;
+}
+
+/* When the user steps into the wall-4 archway, fade the whole lectern away
+   so the camera doesn't appear to walk through it. */
+.ascii-lectern.ascii-lectern-fading {
+    opacity: 0;
+    transition: opacity 0.6s ease-out;
+}
+
+/* Open book sitting on the tilted plate */
+.ascii-lectern-book {
+    position: absolute;
+    inset: 12% 8% 14% 8%;
+    background: linear-gradient(180deg,
+        rgba(250, 245, 230, 0.97) 0%,
+        rgba(230, 220, 200, 0.95) 100%);
+    box-shadow: inset 0 0 0 1px rgba(80, 60, 30, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+/* Spine groove down the middle of the book */
+.ascii-lectern-book::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 6%;
+    background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(80, 60, 30, 0.25) 40%,
+        rgba(80, 60, 30, 0.40) 50%,
+        rgba(80, 60, 30, 0.25) 60%,
+        transparent 100%);
+    pointer-events: none;
+}
+
+.ascii-lectern-page {
+    margin: 0;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: clamp(0.45rem, 0.75vh, 0.7rem);
+    line-height: 1.05;
+    color: rgba(40, 28, 12, 0.78);
+    text-align: center;
+    white-space: pre;
+    user-select: none;
+}
+
+/* Soft halo above the lectern — implies a focused light without using a light */
+.ascii-lectern::after {
+    content: '';
+    position: absolute;
+    top: -8%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 220%;
+    height: 60%;
+    background: radial-gradient(ellipse at 50% 80%,
+        rgba(94, 239, 162, 0.10) 0%,
+        rgba(94, 239, 162, 0.05) 35%,
+        transparent 70%);
+    pointer-events: none;
+    z-index: -1;
+}
+
 /* ===== Reading overlay (shrine skyward reading mode) ===== */
 
 .reading-overlay {

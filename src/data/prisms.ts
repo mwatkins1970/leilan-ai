@@ -18,7 +18,8 @@ export type WallContent =
     | { type: 'word-panel'; label: string; text: string }
     | { type: 'shrine-search' }
     | { type: 'ovs-star' }
-    | { type: 'poetry-passage'; maxChars?: number };
+    | { type: 'poetry-passage'; maxChars?: number }
+    | { type: 'ascii-wall' };
 
 export interface HeavensTilt {
     /** Title shown in the heavens overlay */
@@ -383,8 +384,11 @@ export const prisms: Record<string, PrismConfig> = {
         chamberBgOverlay: '/images/SCRIPTORIUM_background_new.png',
         wallBorder: false,
         walls: [
-            // Wall 1 — facing on entry
-            { archway: false, bg: '/images/wall-bg.jpg', content: { type: 'poetry-passage' } },
+            // Wall 1 — facing on entry — shares the wall with the ASCII orb,
+            // so passages are capped at ~half the corpus mean length (688
+            // passages, mean ≈ 283 chars) to keep them legible in the
+            // smaller panel.
+            { archway: false, bg: '/images/wall-bg.jpg', content: { type: 'poetry-passage', maxChars: 141 } },
             // Wall 2
             { archway: false, bg: '/images/wall-bg.jpg', content: { type: 'poetry-passage' } },
             // Wall 3
@@ -395,6 +399,41 @@ export const prisms: Record<string, PrismConfig> = {
             { archway: false, bg: '/images/wall-bg.jpg', content: { type: 'poetry-passage' } },
             // Wall 6
             { archway: false, bg: '/images/wall-bg.jpg', content: { type: 'poetry-passage' } },
+        ],
+    },
+
+    // -----------------------------------------------------------------------
+    // ascii-gallery — sub-chamber off the south wall of gpt3-library
+    // Entry: via the ASCII orb portal on Scriptorium wall 1. User lands facing
+    // wall 1 (south). The door back to Scriptorium is on wall 4 (north).
+    // Walls show subtly-animated ASCII molecules over MOIRE; a lectern stands
+    // at the centre of the floor (not yet interactive).
+    // -----------------------------------------------------------------------
+    'ascii-gallery': {
+        id: 'ascii-gallery',
+        title: 'ASCII Art Gallery',
+        // No chamber background — walls render as solid dark grey via CSS
+        // ([data-prism-id="ascii-gallery"] .wall-bg). The Terminal-green ASCII
+        // swarm overlay (initAsciiSwarm) is what fills each wall visually.
+        wallBorder: false,
+        walls: [
+            // Wall 1 — facing on entry — ASCII molecules only
+            { archway: false, bg: '/images/wall-bg.jpg', content: { type: 'ascii-wall' } },
+            // Wall 2
+            { archway: false, bg: '/images/wall-bg.jpg', content: { type: 'ascii-wall' } },
+            // Wall 3
+            { archway: false, bg: '/images/wall-bg.jpg', content: { type: 'ascii-wall' } },
+            // Wall 4 — door back to Scriptorium (face Scriptorium wall 1, the orb wall)
+            {
+                archway: true,
+                destination: '/prism/gpt3-library?wall=1',
+                bg: '/images/wall-bg.jpg',
+                content: { type: 'ascii-wall' },
+            },
+            // Wall 5
+            { archway: false, bg: '/images/wall-bg.jpg', content: { type: 'ascii-wall' } },
+            // Wall 6
+            { archway: false, bg: '/images/wall-bg.jpg', content: { type: 'ascii-wall' } },
         ],
     },
 

@@ -279,9 +279,41 @@ const masksJson = JSON.stringify(masks);
                                     </div>
                                 </div>
                             )}
+                            {prism.id === 'gpt3-library' && wallNum === 1 && (
+                                <>
+                                    <div class="ascii-orb" data-wall={wallNum} aria-label="ASCII art portal">
+                                        <pre class="ascii-orb-glyphs"></pre>
+                                    </div>
+                                    <svg class="wall-archway ascii-portal-svg" data-wall={wallNum} viewBox="0 0 100 100" preserveAspectRatio="xMidYMax meet" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                        <path d="M 39.5,100 L 39.5,79.25 A 10.5,10.5 0 0,1 60.5,79.25 L 60.5,100 Z" fill="rgba(2,1,5,0.92)" stroke="url(#serpGrad)" stroke-width="0.5"/>
+                                    </svg>
+                                </>
+                            )}
+                            {wall.content?.type === 'ascii-wall' && (
+                                <div class="ascii-wall-overlay" data-wall={wallNum} aria-hidden="true">
+                                    <pre class="ascii-wall-molecules"></pre>
+                                </div>
+                            )}
                         </WallPanel>
                     );
                 })}
+
+                {prism.id === 'ascii-gallery' && (
+                    <div class="ascii-lectern" aria-hidden="true">
+                        <div class="ascii-lectern-base"></div>
+                        <div class="ascii-lectern-column">
+                            <div class="ascii-lectern-column-face" style="transform: rotateY(0deg)"></div>
+                            <div class="ascii-lectern-column-face" style="transform: rotateY(45deg)"></div>
+                            <div class="ascii-lectern-column-face" style="transform: rotateY(90deg)"></div>
+                            <div class="ascii-lectern-column-face" style="transform: rotateY(135deg)"></div>
+                        </div>
+                        <div class="ascii-lectern-top">
+                            <div class="ascii-lectern-book">
+                                <pre class="ascii-lectern-page"></pre>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 <!-- 3D rim: real triangular-prism wedges + flat half-wedges at corners.
                      Lives outside .wall-panel so wall-panel can keep its 2D-flat content

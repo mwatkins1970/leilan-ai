@@ -211,8 +211,12 @@
         let lastRealTime = Date.now() * 0.001;
 
         // --- Which archway brought us here (0 = first visit from landing page) ---
-        const fromWall = parseInt(new URL(location.href).searchParams.get('from')) || 0;
-        const isReturn = fromWall >= 2 && fromWall <= 6;
+        const fromParam = new URL(location.href).searchParams.get('from');
+        const fromWall = parseInt(fromParam) || 0;
+        const isMainAdjacentReturn = fromWall >= 2 && fromWall <= 6;
+        // Sub-chamber entries — currently only ascii-gallery (south of gpt3-library).
+        const isAsciiGalleryEntry = fromParam === 'ascii-gallery';
+        const isReturn = isMainAdjacentReturn || isAsciiGalleryEntry;
         const destUrl = new URL(location.href).searchParams.get('dest') || '/prism/main';
         const CODE_VERSION = 15;
         console.log('[immersive] CODE_VERSION=' + CODE_VERSION + ' fromWall=' + fromWall + ' isReturn=' + isReturn + ' dest=' + destUrl);
@@ -667,7 +671,7 @@
         const prismCenterXZ = prism1.centerXZ;
 
         // Set up extra prisms for return visits
-        if (isReturn) {
+        if (isMainAdjacentReturn) {
             // The entering chamber (animates rising)
             const [dr, dc] = WALL_DIRECTIONS[fromWall];
             const p2row = PRISM_CENTER_ROW + dr;
@@ -685,6 +689,60 @@
             visitedChamberIds.forEach(id => {
                 const wallNum = CHAMBER_WALLS[id];
                 if (wallNum === fromWall) return; // already the entering prism
+                if (!WALL_DIRECTIONS[wallNum]) return;
+                const [vdr, vdc] = WALL_DIRECTIONS[wallNum];
+                const vrow = PRISM_CENTER_ROW + vdr;
+                const vcol = PRISM_CENTER_COL + vdc;
+                const vp = makePrismState(vrow, vcol);
+                vp.gridCompleteTime = startTime;
+                const vph = hexLookup.get(`${vrow},${vcol}`);
+                vp.centerXZ = vph
+                    ? new THREE.Vector2(vph.x, vph.z)
+                    : new THREE.Vector2(prism1.centerXZ.x + vdr * 0.866, prism1.centerXZ.y + vdc * 0.75);
+                vp._isStatic = true;
+                extraPrisms.push(vp);
+            });
+        } else if (isAsciiGalleryEntry) {
+            // Sub-chamber: ASCII gallery rises south of gpt3-library, which is itself
+            // south of central. The new chamber's centre is at row -2 (off-grid below)
+            // — only the top portion will render. The user's mind fills in the rest.
+            const [gdr, gdc] = WALL_DIRECTIONS[4]; // gpt3-library lives south of main
+            const gptRow = PRISM_CENTER_ROW + gdr;
+            const gptCol = PRISM_CENTER_COL + gdc;
+            const asciiRow = gptRow + gdr;
+            const asciiCol = gptCol + gdc;
+
+            // ASCII gallery — the entering (animating) chamber
+            enteringPrism = makePrismState(asciiRow, asciiCol);
+            enteringPrism.gridCompleteTime = startTime;
+            const hexWidth = hexSize * Math.sqrt(3);
+            const hexHeight = hexSize * 1.5;
+            const xOff = (((asciiRow % 2) + 2) % 2) * (hexWidth / 2);
+            const wx = asciiCol * hexWidth + xOff - (45 * hexWidth / 2);
+            const wz = -asciiRow * hexHeight - 2;
+            enteringPrism.centerXZ = new THREE.Vector2(wx, wz);
+            // The centre row is off-grid (-2), so getRegionHexes would only return
+            // the upper sliver and the wall geometry would collapse to a flat
+            // chord. Pre-populate with a synthetic full hex disk instead.
+            enteringPrism.regionHexes = getSyntheticRegionHexes(asciiRow, asciiCol, PRISM_RADIUS);
+            enteringPrism.hexSet = new Set(enteringPrism.regionHexes.map(({ hex }) => `${hex.row},${hex.col}`));
+            console.log('[immersive] ascii-gallery enteringPrism row=' + asciiRow + ' col=' + asciiCol + ' worldX=' + wx.toFixed(2) + ' worldZ=' + wz.toFixed(2) + ' regionHexes=' + enteringPrism.regionHexes.length);
+            extraPrisms.push(enteringPrism);
+
+            // gpt3-library — the chamber the user just came from, always shown risen.
+            const gptPrism = makePrismState(gptRow, gptCol);
+            gptPrism.gridCompleteTime = startTime;
+            const gptHex = hexLookup.get(`${gptRow},${gptCol}`);
+            gptPrism.centerXZ = gptHex
+                ? new THREE.Vector2(gptHex.x, gptHex.z)
+                : new THREE.Vector2(0, -2 + (-gdr) * hexHeight);
+            gptPrism._isStatic = true;
+            extraPrisms.push(gptPrism);
+
+            // Any other previously visited side chambers — also shown risen for context
+            visitedChamberIds.forEach(id => {
+                if (id === 'gpt3-library') return;
+                const wallNum = CHAMBER_WALLS[id];
                 if (!WALL_DIRECTIONS[wallNum]) return;
                 const [vdr, vdc] = WALL_DIRECTIONS[wallNum];
                 const vrow = PRISM_CENTER_ROW + vdr;
@@ -1079,6 +1137,34 @@
             return result;
         }
 
+        // Synthesise a full hex region around any (row, col) — including off-grid
+        // centres where the live 35×45 grid stops short. Used for the ASCII
+        // Gallery sub-chamber, whose centre is row -2 (below the visible grid)
+        // so that only the chamber's top portion peeks above the horizon.
+        // Returned items mimic real hexes: { hex: {row, col, x, z}, dist }.
+        function getSyntheticRegionHexes(centerRow, centerCol, radius) {
+            const hexWidth = hexSize * Math.sqrt(3);
+            const hexHeight = hexSize * 1.5;
+            const cols = 45;
+            const result = [];
+            for (let dz = -radius; dz <= radius; dz++) {
+                for (let dx = -radius; dx <= radius; dx++) {
+                    const dy = -dx - dz;
+                    const dist = Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz));
+                    if (dist > radius) continue;
+                    const row = centerRow + dz;
+                    const col = (centerCol - Math.floor(centerRow / 2)) + dx + Math.floor(row / 2);
+                    const parity = ((row % 2) + 2) % 2;
+                    const xOffset = parity * (hexWidth / 2);
+                    const x = col * hexWidth + xOffset - (cols * hexWidth / 2);
+                    const z = -row * hexHeight - 2;
+                    result.push({ hex: { row, col, x, z }, dist });
+                }
+            }
+            result.sort((a, b) => a.dist - b.dist);
+            return result;
+        }
+
         // --- Easing functions ---
         function easeOutQuart(t) {
             // Smooth deceleration — heavy stone coming to rest
@@ -1465,7 +1551,10 @@
             if (!prism.edges) return null;
             const rimY = riseHeight * (1 - RIM_FRAC);
             const bandW = 0.14;
-            const centerHex = hexLookup.get(`${prism.centerRow},${prism.centerCol}`);
+            // Off-grid prisms (e.g. ASCII gallery at row -2) have no hexLookup entry —
+            // fall back to centerXZ, which we always populate.
+            const centerHex = hexLookup.get(`${prism.centerRow},${prism.centerCol}`)
+                || (prism.centerXZ && { x: prism.centerXZ.x, z: prism.centerXZ.y });
             if (!centerHex) return null;
 
             const posArr = [];
@@ -1509,7 +1598,9 @@
         function createCapEdgeHalo(riseHeight, prism) {
             if (!prism.edges) return null;
             const haloW = 0.10;
-            const centerHex = hexLookup.get(`${prism.centerRow},${prism.centerCol}`);
+            // Fall back to centerXZ when the centre row/col is off-grid.
+            const centerHex = hexLookup.get(`${prism.centerRow},${prism.centerCol}`)
+                || (prism.centerXZ && { x: prism.centerXZ.x, z: prism.centerXZ.y });
             if (!centerHex) return null;
 
             const posArr = [];
@@ -1986,6 +2077,7 @@
                             }
                         }
                         prism.rimOutlines = createRimOutlines(PRISM_RISE_HEIGHT, prism);
+                        if (prism === enteringPrism) console.log('[immersive] enteringPrism rising — rimOutlines=' + (prism.rimOutlines ? 'YES' : 'NULL') + ' regionHexes=' + (prism.regionHexes && prism.regionHexes.length));
                         if (prism.rimOutlines) {
                             scene.add(prism.rimOutlines);
                             const rlArr = prism.rimOutlines.geometry.getAttribute('position').array;
@@ -1993,6 +2085,7 @@
                             prism.rimOutlines.geometry.getAttribute('position').needsUpdate = true;
                         }
                         prism.capBorders = createCapBorders(PRISM_RISE_HEIGHT, prism);
+                        if (prism === enteringPrism) console.log('[immersive] enteringPrism rising — capBorders=' + (prism.capBorders ? 'YES' : 'NULL') + ' edges=' + (prism.edges && prism.edges.length));
                         if (prism.capBorders) {
                             scene.add(prism.capBorders);
                             const cbArr = prism.capBorders.geometry.getAttribute('position').array;
