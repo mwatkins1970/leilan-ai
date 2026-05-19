@@ -2257,15 +2257,25 @@
                     const prismScale = 1.0 + (TARDIS_SCALE - 1.0) * easeT;
                     const scaledTopY = topY * TARDIS_SCALE;
 
-                    // Publish current scale so the floor's un-scale uniform tracks it,
-                    // and feed the cap's own un-scale so its hex pattern stays locked
-                    // to its (now 5×) hex cells instead of detaching.
+                    // Publish current scale so the floor's un-scale uniform tracks
+                    // it, and feed every prism's cap its own un-scale so the hex
+                    // pattern stays locked to its (now 5×) hex cells instead of
+                    // detaching. Pattern-un-scale must apply to ALL visible caps
+                    // since they all scale by the same factor below.
                     prism._tardisScale = prismScale;
-                    if (prism.capMat) {
-                        prism.capMat.uniforms.uPatternScale.value = 1.0 / prismScale;
-                    }
+                    const setCapPattern = (p) => {
+                        if (p && p.capMat) {
+                            p.capMat.uniforms.uPatternScale.value = 1.0 / prismScale;
+                        }
+                    };
+                    setCapPattern(prism);
+                    if (prism !== prism1) setCapPattern(prism1);
+                    extraPrisms.forEach(p => { if (p !== prism) setCapPattern(p); });
 
-                    // Cubic Bezier — adjusted for prism at row 14
+                    // Cubic Bezier — endpoints parameterised on the entering prism's
+                    // centre, so the curve automatically retargets to whichever
+                    // chamber is diving (pairwise-symmetric for the four side
+                    // chambers; almost vertical for the ASCII gallery).
                     const p0 = { x: 0,  y: 9,             z: 3 };
                     const p1 = { x: 0,  y: 9.5,           z: pz * 0.4 };
                     const p2 = { x: px, y: topY + 4,      z: pz + 1.5 };
@@ -2275,58 +2285,93 @@
                     const l2 = { x: px, y: topY * 0.6,    z: pz };
                     const l3 = { x: px, y: scaledTopY * 0.4, z: pz - 3 };
 
-                    const sOff = (axis) => axis * (1 - prismScale);
-                    if (prism.wallMesh) {
-                        prism.wallMesh.scale.set(prismScale, prismScale, prismScale);
-                        prism.wallMesh.position.set(sOff(px), 0, sOff(pz));
+                    // Scale every visible chamber by the same factor around the
+                    // entering prism's centre. With identical mesh.scale and
+                    // identical mesh.position offset (cx*(1-s), cz*(1-s)) applied
+                    // across all prisms, the whole constellation undergoes a rigid
+                    // uniform expansion: each chamber grows around its own centre
+                    // AND its centre translates radially away from (cx, cz) by the
+                    // same factor — so adjacent walls that started co-planar stay
+                    // co-planar (rims locked in the same y=15 plane at full scale).
+                    // Without this, only the entering prism would balloon and its
+                    // rim would float above the others' (issue from the screenshots).
+                    const cx = px, cz = pz;
+                    const offsetX = cx * (1 - prismScale);
+                    const offsetZ = cz * (1 - prismScale);
+
+                    function applyDiveTransform(p) {
+                        if (!p) return;
+                        if (p.wallMesh) {
+                            p.wallMesh.scale.set(prismScale, prismScale, prismScale);
+                            p.wallMesh.position.set(offsetX, 0, offsetZ);
+                        }
+                        if (p.capMesh) {
+                            p.capMesh.scale.set(prismScale, prismScale, prismScale);
+                            p.capMesh.position.set(offsetX, 0, offsetZ);
+                        }
+                        if (p.wallpaperMesh) {
+                            p.wallpaperMesh.scale.set(prismScale, prismScale, prismScale);
+                            p.wallpaperMesh.position.set(offsetX, 0, offsetZ);
+                        }
+                        if (p.rimOutlines) {
+                            p.rimOutlines.scale.set(prismScale, prismScale, prismScale);
+                            p.rimOutlines.position.set(offsetX, 0, offsetZ);
+                        }
+                        if (p.capBorders) {
+                            p.capBorders.scale.set(prismScale, prismScale, prismScale);
+                            p.capBorders.position.set(offsetX, 0, offsetZ);
+                        }
+                        if (p.capHalo) {
+                            p.capHalo.scale.set(prismScale, prismScale, prismScale);
+                            p.capHalo.position.set(offsetX, 0, offsetZ);
+                        }
+                        if (p.rimPerimeter) {
+                            p.rimPerimeter.scale.set(prismScale, prismScale, prismScale);
+                            p.rimPerimeter.position.set(offsetX, 0, offsetZ);
+                        }
+                        if (p.hingeLines) {
+                            p.hingeLines.scale.set(prismScale, prismScale, prismScale);
+                            p.hingeLines.position.set(offsetX, 0, offsetZ);
+                        }
+                        if (p.groundGlow) {
+                            p.groundGlow.scale.set(prismScale, 1, prismScale);
+                            p.groundGlow.position.set(offsetX, PRISM_RISE_HEIGHT * prismScale, offsetZ);
+                            p.groundGlow.material.opacity = 0;
+                        }
                     }
-                    if (prism.capMesh) {
-                        prism.capMesh.scale.set(prismScale, prismScale, prismScale);
-                        prism.capMesh.position.set(sOff(px), 0, sOff(pz));
-                    }
-                    if (prism.wallpaperMesh) {
-                        prism.wallpaperMesh.scale.set(prismScale, prismScale, prismScale);
-                        prism.wallpaperMesh.position.set(sOff(px), 0, sOff(pz));
-                    }
-                    if (prism.rimOutlines) {
-                        prism.rimOutlines.scale.set(prismScale, prismScale, prismScale);
-                        prism.rimOutlines.position.set(sOff(px), 0, sOff(pz));
-                    }
-                    if (prism.capBorders) {
-                        prism.capBorders.scale.set(prismScale, prismScale, prismScale);
-                        prism.capBorders.position.set(sOff(px), 0, sOff(pz));
-                    }
-                    if (prism.capHalo) {
-                        prism.capHalo.scale.set(prismScale, prismScale, prismScale);
-                        prism.capHalo.position.set(sOff(px), 0, sOff(pz));
-                    }
-                    if (prism.rimPerimeter) {
-                        prism.rimPerimeter.scale.set(prismScale, prismScale, prismScale);
-                        prism.rimPerimeter.position.set(sOff(px), 0, sOff(pz));
-                    }
-                    if (prism.hingeLines) {
-                        prism.hingeLines.scale.set(prismScale, prismScale, prismScale);
-                        prism.hingeLines.position.set(sOff(px), 0, sOff(pz));
-                    }
-                    if (prism.groundGlow) {
-                        prism.groundGlow.scale.set(prismScale, 1, prismScale);
-                        prism.groundGlow.position.set(sOff(px), PRISM_RISE_HEIGHT * prismScale, sOff(pz));
-                    }
+
+                    applyDiveTransform(prism);
+                    if (prism !== prism1) applyDiveTransform(prism1);
+                    extraPrisms.forEach(p => { if (p !== prism) applyDiveTransform(p); });
+
+                    // Roof dissolve — only on the entering prism. The other
+                    // chambers' hex outlines scale with the constellation but stay
+                    // fully visible so the user keeps spatial context.
                     if (prism.regionHexes) {
                         const dissolveT = ct * 1.8;
                         prism.regionHexes.forEach(({ hex, dist }) => {
                             if (hex.lineGroup) {
                                 hex.lineGroup.scale.set(prismScale, 1, prismScale);
-                                hex.lineGroup.position.set(sOff(px), PRISM_RISE_HEIGHT * prismScale, sOff(pz));
+                                hex.lineGroup.position.set(offsetX, PRISM_RISE_HEIGHT * prismScale, offsetZ);
                                 const delay = dist / PRISM_RADIUS * 0.6;
                                 const t = Math.max(0, Math.min(1, (dissolveT - delay) / 0.5));
                                 hex.lineGroup.children.forEach(c => { c.material.opacity = (1 - t) * 0.7; });
                             }
                         });
                     }
-                    if (prism.groundGlow) {
-                        prism.groundGlow.material.opacity = 0;
+                    // Scale (but don't fade) the non-entering prisms' hex outlines
+                    // so they ride the rigid expansion instead of sliding apart.
+                    function scaleHexes(p) {
+                        if (!p || !p.regionHexes) return;
+                        p.regionHexes.forEach(({ hex }) => {
+                            if (hex.lineGroup) {
+                                hex.lineGroup.scale.set(prismScale, 1, prismScale);
+                                hex.lineGroup.position.set(offsetX, PRISM_RISE_HEIGHT * prismScale, offsetZ);
+                            }
+                        });
                     }
+                    if (prism !== prism1) scaleHexes(prism1);
+                    extraPrisms.forEach(p => { if (p !== prism) scaleHexes(p); });
 
                     // Floor stays fully visible — whiteout at s>0.48 covers any TARDIS mismatch
 
@@ -2479,18 +2524,18 @@
             }
             extraPrisms.forEach(p => {
                 if (p._isStatic) return;
-                updatePrismPhase(time, p, true); // stay idle — fade-to-dest handles nav
-
-                // After entering prism has been idle for 2s, fade to black and navigate
-                if (p === enteringPrism && p.phase === 'idle' && !fadeStarted && time - p.phaseStartTime >= 2.0) {
-                    fadeStarted = true;
-                    fadeOutImmersiveSoundscape(1.2);
-                    console.log('[immersive] entering prism idle — navigating to:', destUrl);
-                    fadeOverlay.style.background = '#000';
-                    fadeOverlay.style.transition = 'opacity 1.2s ease-in';
-                    fadeOverlay.style.opacity = '1';
-                    setTimeout(() => { window.location.href = destUrl; }, 1200);
-                }
+                // The entering prism (the one that just rose) now gets the full
+                // dive sequence — camera_move's existing Bezier curve is already
+                // parameterised on prism.centerXZ, so the trajectory automatically
+                // adapts to each chamber's position. Bezier behaviour for the four
+                // side chambers is pairwise symmetric (walls 2/6 and walls 3/5 are
+                // mirrored across x). The Scriptorium (wall 4, south of central)
+                // is on-axis but closer to the camera, so its dive feels like a
+                // shorter version of the central one. The ASCII gallery, even
+                // further south at z≈-0.5, gives a near-vertical drop.
+                // The dive's own fade-to-black at s>0.48 navigates to destUrl.
+                const stayIdle = (p !== enteringPrism);
+                updatePrismPhase(time, p, stayIdle);
             });
 
             // --- Hex outline phase colour cycling ---

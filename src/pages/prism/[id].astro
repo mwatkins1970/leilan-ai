@@ -309,9 +309,15 @@ const masksJson = JSON.stringify(masks);
                         </div>
                         <div class="ascii-lectern-top">
                             <div class="ascii-lectern-book">
-                                <pre class="ascii-lectern-page"></pre>
+                                <!-- Two layered images for crossfade on refresh.
+                                     Active layer (opacity 1) shows the current piece;
+                                     refresh loads the new src into the inactive layer
+                                     then swaps opacities for a smooth dissolve. -->
+                                <img class="ascii-lectern-page" data-layer="0" src="" alt="" decoding="async" />
+                                <img class="ascii-lectern-page" data-layer="1" src="" alt="" decoding="async" />
                             </div>
                         </div>
+                        <button class="lectern-close-btn" type="button" aria-label="Dissolve lectern">&times;</button>
                     </div>
                 )}
 

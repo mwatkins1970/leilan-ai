@@ -1107,6 +1107,7 @@ function afterRotation() {
     updateMinimap();
     updatePointerEvents();
     if (typeof updateArchwayOverlay === 'function') updateArchwayOverlay();
+    if (typeof _maybeRefreshLectern === 'function') _maybeRefreshLectern();
 }
 
 function clearFacingTag() {
@@ -1562,6 +1563,14 @@ document.body.appendChild(archwayTip);
 function updateArchwayOverlay() {
     if (!archwayOverlay) return;
     if (!window.PRISM_CONFIG?.destinations?.[getFacingWall()] || isSkyView || archwayAnimating) {
+        archwayOverlay.style.display = 'none';
+        archwayTip.style.opacity = '0';
+        return;
+    }
+    // ASCII gallery: the wall-4 archway is concealed until the lectern is melted.
+    // Until then the click-overlay must not respond, even though the destination
+    // mapping exists in PRISM_CONFIG.
+    if (_prismId === 'ascii-gallery' && !_lecternMelted) {
         archwayOverlay.style.display = 'none';
         archwayTip.style.opacity = '0';
         return;
@@ -2151,6 +2160,31 @@ document.addEventListener('click', (e) => {
     _lastClickTime = _now;
     if (e.target.closest('.archway-click-overlay, .nav-arrow, .prism-minimap, .sky-toggle')) return;
 
+    // Lectern zoom mode: click outside the artwork → close; inside → reset idle
+    // timer. Clicks landing on the zoom controls (slider, +/-, close X) are
+    // handled by their own listeners — let them through without intercepting
+    // so the slider's mouse-drag works normally.
+    if (_lecternZoomed && !_lecternZoomTransitioning) {
+        if (e.target.closest && e.target.closest('.lectern-zoom-controls')) {
+            _startLecternIdleTimer();
+            return;
+        }
+        e.stopPropagation();
+        e.preventDefault();
+        const overlay = document.getElementById('lectern-zoom-overlay');
+        const img = overlay?.querySelector('.lectern-zoom-img');
+        if (img) {
+            const r = img.getBoundingClientRect();
+            const inside = e.clientX >= r.left && e.clientX <= r.right &&
+                           e.clientY >= r.top  && e.clientY <= r.bottom;
+            if (!inside) leaveLecternZoom();
+            else _startLecternIdleTimer();
+        } else {
+            leaveLecternZoom();
+        }
+        return;
+    }
+
     // Cinematic reader is position:fixed on <body> — handle its buttons before wall-area logic
     if (_activeCinematicWall) {
         const reader = document.body.querySelector('.cinematic-reader.visible');
@@ -2201,6 +2235,23 @@ document.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
         triggerAsciiPortal();
+        return;
+    }
+
+    // ASCII gallery lectern close-button — must check before the book itself,
+    // since the X sits inside the book element's bounding rect when projected.
+    if (typeof hitTestLecternClose === 'function' && hitTestLecternClose(e.clientX, e.clientY)) {
+        e.stopPropagation();
+        e.preventDefault();
+        meltLectern();
+        return;
+    }
+
+    // ASCII gallery lectern (centred in chamber) — manual hit-test on the book element.
+    if (typeof hitTestLectern === 'function' && hitTestLectern(e.clientX, e.clientY)) {
+        e.stopPropagation();
+        e.preventDefault();
+        triggerLecternZoom();
         return;
     }
 
@@ -3011,8 +3062,10 @@ function triggerAsciiPortal() {
     window.PRISM_CONFIG.destinations = window.PRISM_CONFIG.destinations || {};
     window.PRISM_CONFIG.destinations[1] =
         '/immersive?from=ascii-gallery&dest=/prism/ascii-gallery';
-    // Wait for the portal SVG to finish fading in before activating the click overlay
-    setTimeout(() => { updateArchwayOverlay(); }, 950);
+    // Activate the click overlay immediately so the door responds as soon as
+    // it starts fading into view — the user shouldn't have to wait for the
+    // (now 5.4s) opacity transition to finish before they can click through.
+    updateArchwayOverlay();
 }
 
 // Used by the document-level click handler to detect orb clicks (Chrome's
@@ -3132,16 +3185,426 @@ function initAsciiSwarmPlayer() {
     }
 }
 
+// ASCII art pool: 51 JPEGs in /public/ascii_art/ named ASCII_001.jpeg … ASCII_051.jpeg.
+// The lectern displays one at a time on its open book. Selection only changes when
+// the user can't see the book (rotated to face wall 1, the back-of-lectern side), or
+// after returning from a zoomed full-screen view — so the image never changes mid-view.
+const ASCII_ART_POOL_SIZE = 51;
+let _currentLecternArt = null; // numeric index 1..ASCII_ART_POOL_SIZE
+let _lecternZoomed = false;
+let _lecternZoomTransitioning = false;
+let _lecternIdleTimer = null;
+let _lecternMelting = false;
+let _lecternMelted = false;
+const LECTERN_MELT_MS = 1800; // must match @keyframes lectern-melt duration
+// User-driven zoom on the full-screen ASCII art (1.0 = natural fit, 5.0 = 500%).
+// Reset on every triggerLecternZoom so the chamber always returns to 100% on exit.
+let _userZoom = 1;
+const USER_ZOOM_MIN = 1;
+const USER_ZOOM_MAX = 5;
+// Psychedelic melt: the whole chamber dissolves through colour-cycling,
+// blur, and saturation before the ASCII art emerges on its own. Long enough
+// to feel ceremonious — not instantaneous.
+const LECTERN_ZOOM_MS = 2800;
+const LECTERN_AUTO_DRIFT_MS = 24000;
+
+function _lecternArtPath(idx) {
+    return `/ascii_art/ASCII_${String(idx).padStart(3, '0')}.jpeg`;
+}
+
+function pickLecternArt() {
+    let pick;
+    do {
+        pick = 1 + Math.floor(Math.random() * ASCII_ART_POOL_SIZE);
+    } while (pick === _currentLecternArt && ASCII_ART_POOL_SIZE > 1);
+    _currentLecternArt = pick;
+}
+
+// Active layer index for the crossfade (0 or 1). The lectern has two
+// .ascii-lectern-page <img> elements stacked at the same position; one is
+// visible (opacity 1) and the other is hidden (opacity 0). Refreshing
+// loads the new src into the hidden layer, then swaps opacities so the
+// CSS transition cross-fades between them — no src-change flash.
+let _lecternFrontLayer = 0;
+
+function refreshLecternArt() {
+    pickLecternArt();
+    const imgs = document.querySelectorAll('.ascii-lectern-page');
+    if (imgs.length === 0) return;
+    const path = _lecternArtPath(_currentLecternArt);
+    // Fallback: if there's only one <img> for any reason, snap it.
+    if (imgs.length === 1) {
+        imgs[0].src = path;
+        imgs[0].style.opacity = '1';
+        return;
+    }
+    const nextLayer = 1 - _lecternFrontLayer;
+    const fadeIn  = imgs[nextLayer];
+    const fadeOut = imgs[_lecternFrontLayer];
+    fadeIn.src = path;
+    // Defer the opacity swap one frame to make sure the new src has been
+    // committed before the transition starts — otherwise Chrome can paint
+    // the in-flight image at low opacity before the swap registers.
+    requestAnimationFrame(() => {
+        fadeIn.style.opacity = '1';
+        fadeOut.style.opacity = '0';
+    });
+    _lecternFrontLayer = nextLayer;
+}
+
+// Called from afterRotation. Fires only on the ASCII gallery, and only when the
+// user has rotated to face wall 1 — at that point the book is on the far side of
+// the lectern (slab is rotateY(180deg) so its readable face points away from wall 1),
+// so swapping the image is invisible. By the time the user rotates back around to
+// face the book, the fresh image is already in place.
+function _maybeRefreshLectern() {
+    if (_prismId !== 'ascii-gallery') return;
+    if (_lecternZoomed || _lecternZoomTransitioning) return;
+    if (getFacingWall() === 1) refreshLecternArt();
+}
+
 function initAsciiLecternPage() {
-    const lecternPage = document.querySelector('.ascii-lectern-page');
-    if (!lecternPage) return;
-    lecternPage.textContent = [
-        '  ✧ ─── ✧  ',
-        '  │ ◉ │  ',
-        ' ◈ ─◉─ ◈ ',
-        '  │ ◉ │  ',
-        '  ✧ ─── ✧  ',
-    ].join('\n');
+    pickLecternArt();
+    const imgs = document.querySelectorAll('.ascii-lectern-page');
+    if (imgs.length === 0) return;
+    const path = _lecternArtPath(_currentLecternArt);
+    // Initial load: snap the front layer to visible without the 900ms fade
+    // so the lectern doesn't appear empty as the scene curtain lifts.
+    const front = imgs[0];
+    if (front) {
+        front.style.transition = 'none';
+        front.src = path;
+        front.style.opacity = '1';
+        // Flush the no-transition state before restoring it, so subsequent
+        // opacity changes (driven by refreshLecternArt) animate normally.
+        void front.offsetHeight;
+        front.style.transition = '';
+    }
+    _lecternFrontLayer = 0;
+}
+
+// Zoom hit-test: the book is most visible from facing walls 3, 4, 5 (away from
+// the back-of-slab side). The same Chrome preserve-3d hit-routing bug as the
+// orb applies, so we do a manual screen-rect test against the book element.
+function hitTestLectern(clientX, clientY) {
+    if (_prismId !== 'ascii-gallery') return false;
+    if (_lecternZoomed || _lecternZoomTransitioning) return false;
+    if (_lecternMelted || _lecternMelting) return false;
+    if (isRotating || archwayAnimating) return false;
+    const facing = getFacingWall();
+    if (facing !== 3 && facing !== 4 && facing !== 5) return false;
+    const book = document.querySelector('.ascii-lectern-book');
+    if (!book) return false;
+    const r = book.getBoundingClientRect();
+    return clientX >= r.left && clientX <= r.right &&
+           clientY >= r.top  && clientY <= r.bottom;
+}
+
+// Close-button hit-test: button is a 3D child of the lectern, so its
+// projected bounding rect can be oversized along one axis under perspective.
+// Use a circular zone derived from the SMALLER rect dimension so an
+// oversized projection in one direction can't steal clicks from the book.
+// Allowed from the same wall set as visibility: 3, 4, 5 (front-facing).
+function hitTestLecternClose(clientX, clientY) {
+    if (_prismId !== 'ascii-gallery') return false;
+    if (_lecternMelted || _lecternMelting) return false;
+    if (_lecternZoomed || _lecternZoomTransitioning) return false;
+    if (isRotating || archwayAnimating) return false;
+    const facing = getFacingWall();
+    if (facing !== 3 && facing !== 4 && facing !== 5) return false;
+    const btn = document.querySelector('.lectern-close-btn');
+    if (!btn) return false;
+    const r = btn.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) return false;
+    const cx = (r.left + r.right) / 2;
+    const cy = (r.top + r.bottom) / 2;
+    const radius = Math.min(r.width, r.height) / 2 + 4;
+    const dx = clientX - cx, dy = clientY - cy;
+    return (dx * dx + dy * dy) <= (radius * radius);
+}
+
+function meltLectern() {
+    if (_lecternMelted || _lecternMelting) return;
+    if (_prismId !== 'ascii-gallery') return;
+    const lectern = document.querySelector('.ascii-lectern');
+    if (!lectern) return;
+    _lecternMelting = true;
+    lectern.classList.add('lectern-melting');
+    window.setTimeout(() => {
+        _lecternMelting = false;
+        _lecternMelted = true;
+        lectern.classList.add('lectern-gone');
+        document.body.classList.add('lectern-melted');
+        // Archway-click-overlay was gated off; refresh its position now that
+        // the destination on wall 4 is reachable.
+        if (typeof updateArchwayOverlay === 'function') updateArchwayOverlay();
+    }, LECTERN_MELT_MS);
+}
+
+function ensureLecternZoomOverlay() {
+    let overlay = document.getElementById('lectern-zoom-overlay');
+    if (overlay) return overlay;
+    overlay = document.createElement('div');
+    overlay.id = 'lectern-zoom-overlay';
+    overlay.setAttribute('aria-hidden', 'true');
+    // The conic-gradient psychedelic swirl is a ::before pseudo on the overlay (CSS).
+    const stage = document.createElement('div');
+    stage.className = 'lectern-zoom-stage';
+    const img = document.createElement('img');
+    img.className = 'lectern-zoom-img';
+    img.alt = '';
+    img.decoding = 'async';
+    img.draggable = false;
+    stage.appendChild(img);
+
+    // Controls bar at the bottom: zoom slider (with -/+ buttons) and close X.
+    const controls = document.createElement('div');
+    controls.className = 'lectern-zoom-controls';
+    controls.innerHTML = `
+        <button class="zoom-btn" type="button" data-zoom-action="out" aria-label="Zoom out">&minus;</button>
+        <input class="zoom-slider" type="range" min="100" max="500" value="100" step="5" aria-label="Zoom level" />
+        <button class="zoom-btn" type="button" data-zoom-action="in" aria-label="Zoom in">+</button>
+        <button class="lectern-close-fullscreen-btn" type="button" aria-label="Close">&times;</button>
+    `;
+    stage.appendChild(controls);
+    overlay.appendChild(stage);
+    document.body.appendChild(overlay);
+
+    _setupZoomControls(overlay, img);
+    _setupBrowserZoomInterception(overlay);
+    _setupDragPan(img);
+    return overlay;
+}
+
+function setUserZoom(value) {
+    _userZoom = Math.max(USER_ZOOM_MIN, Math.min(USER_ZOOM_MAX, value));
+    const overlay = document.getElementById('lectern-zoom-overlay');
+    if (!overlay) return;
+    const img = overlay.querySelector('.lectern-zoom-img');
+    if (img) {
+        img.style.setProperty('--user-zoom', _userZoom.toFixed(3));
+        _updateCursor(img);
+    }
+    const slider = overlay.querySelector('.zoom-slider');
+    const sliderVal = Math.round(_userZoom * 100);
+    if (slider && parseInt(slider.value, 10) !== sliderVal) {
+        slider.value = String(sliderVal);
+    }
+    // Zoom changed → pan bounds change too. Re-clamp; if zoom <= 1, pan is forced to 0.
+    if (_userZoom <= 1) _resetPan();
+    else _applyPan();
+}
+
+function _setupZoomControls(overlay, img) {
+    const slider = overlay.querySelector('.zoom-slider');
+    const closeBtn = overlay.querySelector('.lectern-close-fullscreen-btn');
+    const zoomBtns = overlay.querySelectorAll('.zoom-btn');
+    if (slider) {
+        slider.addEventListener('input', (e) => {
+            setUserZoom(parseInt(e.target.value, 10) / 100);
+            _startLecternIdleTimer();
+        });
+    }
+    zoomBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const dir = btn.dataset.zoomAction === 'in' ? +0.2 : -0.2;
+            setUserZoom(_userZoom + dir);
+            _startLecternIdleTimer();
+        });
+    });
+    if (closeBtn) {
+        closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            leaveLecternZoom();
+        });
+    }
+}
+
+// Browser-level zoom (Ctrl+wheel, trackpad pinch on Mac, iOS gesture events)
+// would zoom the WHOLE PAGE and persist after the overlay closes — leaving
+// the chamber rendered at the wrong scale. Intercept these on the overlay
+// and route them into our own image-only zoom instead, so the page chrome
+// always returns to 100%.
+function _setupBrowserZoomInterception(overlay) {
+    overlay.addEventListener('wheel', (e) => {
+        if (!_lecternZoomed && !_lecternZoomTransitioning) return;
+        if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            const delta = e.deltaY < 0 ? +0.12 : -0.12;
+            setUserZoom(_userZoom + delta);
+            _startLecternIdleTimer();
+        }
+    }, { passive: false });
+
+    // Safari/iOS: trackpad pinch and touch pinch fire gesture* events.
+    let _gestureStartZoom = 1;
+    overlay.addEventListener('gesturestart', (e) => {
+        e.preventDefault();
+        _gestureStartZoom = _userZoom;
+    });
+    overlay.addEventListener('gesturechange', (e) => {
+        e.preventDefault();
+        setUserZoom(_gestureStartZoom * e.scale);
+        _startLecternIdleTimer();
+    });
+    overlay.addEventListener('gestureend', (e) => { e.preventDefault(); });
+}
+
+// Click-and-drag pan for the full-screen ASCII art. Only active when
+// zoomed in (user-zoom > 1) — at natural fit there's nothing to pan to.
+// _panX / _panY are screen-pixel offsets applied via the --pan-x / --pan-y
+// CSS variables, clamped so the user can't drag the image entirely off
+// the viewport.
+let _panX = 0;
+let _panY = 0;
+let _isPanning = false;
+let _panStart = { x: 0, y: 0, panX: 0, panY: 0 };
+
+function _getNaturalImgSize() {
+    const overlay = document.getElementById('lectern-zoom-overlay');
+    if (!overlay) return { w: 0, h: 0 };
+    const img = overlay.querySelector('.lectern-zoom-img');
+    if (!img || !img.complete || img.naturalWidth === 0) return { w: 0, h: 0 };
+    // Current rect is scaled by --user-zoom and translated by --pan-x/--pan-y;
+    // dividing by the zoom recovers the un-scaled rendered footprint.
+    const rect = img.getBoundingClientRect();
+    return { w: rect.width / _userZoom, h: rect.height / _userZoom };
+}
+
+function _clampPan() {
+    const { w, h } = _getNaturalImgSize();
+    if (w === 0) return;
+    const scaledW = w * _userZoom;
+    const scaledH = h * _userZoom;
+    const maxPanX = Math.max(0, (scaledW - window.innerWidth) / 2);
+    const maxPanY = Math.max(0, (scaledH - window.innerHeight) / 2);
+    if (_panX >  maxPanX) _panX =  maxPanX;
+    if (_panX < -maxPanX) _panX = -maxPanX;
+    if (_panY >  maxPanY) _panY =  maxPanY;
+    if (_panY < -maxPanY) _panY = -maxPanY;
+}
+
+function _applyPan() {
+    _clampPan();
+    const overlay = document.getElementById('lectern-zoom-overlay');
+    if (!overlay) return;
+    const img = overlay.querySelector('.lectern-zoom-img');
+    if (!img) return;
+    img.style.setProperty('--pan-x', _panX.toFixed(1) + 'px');
+    img.style.setProperty('--pan-y', _panY.toFixed(1) + 'px');
+}
+
+function _resetPan() {
+    _panX = 0;
+    _panY = 0;
+    _applyPan();
+}
+
+function _updateCursor(img) {
+    if (_isPanning) img.style.cursor = 'grabbing';
+    else if (_userZoom > 1) img.style.cursor = 'grab';
+    else img.style.cursor = 'default';
+}
+
+function _setupDragPan(img) {
+    function start(clientX, clientY) {
+        if (_userZoom <= 1) return;
+        _isPanning = true;
+        _panStart.x = clientX;
+        _panStart.y = clientY;
+        _panStart.panX = _panX;
+        _panStart.panY = _panY;
+        // Suppress the 220ms transition during active drag, otherwise the
+        // image lags behind the cursor. Restored on drag end.
+        img.style.transition = 'none';
+        _updateCursor(img);
+    }
+    function move(clientX, clientY) {
+        if (!_isPanning) return;
+        _panX = _panStart.panX + (clientX - _panStart.x);
+        _panY = _panStart.panY + (clientY - _panStart.y);
+        _applyPan();
+        if (_lecternZoomed) _startLecternIdleTimer();
+    }
+    function end() {
+        if (!_isPanning) return;
+        _isPanning = false;
+        img.style.transition = '';
+        _updateCursor(img);
+    }
+
+    img.addEventListener('mousedown', (e) => {
+        e.preventDefault(); // suppress native image-drag (ghost-drag image)
+        start(e.clientX, e.clientY);
+    });
+    document.addEventListener('mousemove', (e) => { if (_isPanning) move(e.clientX, e.clientY); });
+    document.addEventListener('mouseup', end);
+    document.addEventListener('mouseleave', end);
+
+    img.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) return;
+        start(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true });
+    document.addEventListener('touchmove', (e) => {
+        if (!_isPanning || e.touches.length !== 1) return;
+        move(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true });
+    document.addEventListener('touchend', end);
+    document.addEventListener('touchcancel', end);
+
+    window.addEventListener('resize', () => { _applyPan(); });
+}
+
+function triggerLecternZoom() {
+    if (_lecternZoomed || _lecternZoomTransitioning) return;
+    if (_currentLecternArt == null) return;
+    _lecternZoomTransitioning = true;
+    const overlay = ensureLecternZoomOverlay();
+    const fullImg = overlay.querySelector('.lectern-zoom-img');
+    fullImg.src = _lecternArtPath(_currentLecternArt);
+    // Fresh viewing: snap user zoom back to 100% and pan to centre so each
+    // open starts clean.
+    _resetPan();
+    setUserZoom(1);
+    document.body.classList.add('lectern-zooming');
+    document.body.classList.add('lectern-zoomed');
+    window.setTimeout(() => {
+        _lecternZoomTransitioning = false;
+        _lecternZoomed = true;
+        document.body.classList.remove('lectern-zooming');
+        _startLecternIdleTimer();
+    }, LECTERN_ZOOM_MS);
+}
+
+function leaveLecternZoom() {
+    if (!_lecternZoomed && !_lecternZoomTransitioning) return;
+    _cancelLecternIdleTimer();
+    _lecternZoomed = false;
+    _lecternZoomTransitioning = true;
+    // Snap zoom back to 100% and pan to centre before the warp-out begins so
+    // the chamber, once re-revealed behind the receding overlay, is at its
+    // natural scale and position.
+    _resetPan();
+    setUserZoom(1);
+    document.body.classList.add('lectern-unzooming');
+    document.body.classList.remove('lectern-zoomed');
+    window.setTimeout(() => {
+        _lecternZoomTransitioning = false;
+        document.body.classList.remove('lectern-unzooming');
+        refreshLecternArt();
+    }, LECTERN_ZOOM_MS);
+}
+
+function _startLecternIdleTimer() {
+    _cancelLecternIdleTimer();
+    _lecternIdleTimer = window.setTimeout(leaveLecternZoom, LECTERN_AUTO_DRIFT_MS);
+}
+function _cancelLecternIdleTimer() {
+    if (_lecternIdleTimer !== null) {
+        clearTimeout(_lecternIdleTimer);
+        _lecternIdleTimer = null;
+    }
 }
 
 if (_prismId === 'ascii-gallery') {
