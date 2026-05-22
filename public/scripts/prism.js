@@ -1919,13 +1919,23 @@ function drawSky(t) {
         clouds.forEach(c => {
             c.x += c.speed * dt;
             if (c.x > 1.3) c.x = -0.3;
-            skyCtx.fillStyle = `rgba(255, 255, 255, ${c.opacity})`;
             const cx = ((c.x + skyRotationOffset) % 1.0 + 1.0) % 1.0 * w;
             const cy = ((c.y + skyTiltOffset) % 1.0 + 1.0) % 1.0 * h;
             for (let b = 0; b < c.blobs; b++) {
                 const bx = cx + b * c.size * 0.6;
                 const by = cy + Math.sin(b * 1.2) * c.size * 0.2;
                 const br = c.size * (0.5 + Math.sin(b * 0.8) * 0.2);
+                // Soft radial gradient per blob (matches immersive.astro):
+                // opaque centre fading to fully transparent edge, so the
+                // overlapping blobs composite into a single fluffy puff
+                // instead of reading as a row of hard-edged discs. Used
+                // here by the MYTHOPOEIC heavens-tilt sky too, since it
+                // shares this `drawSky` renderer.
+                const grad = skyCtx.createRadialGradient(bx, by, 0, bx, by, br);
+                grad.addColorStop(0,   `rgba(255, 255, 255, ${c.opacity})`);
+                grad.addColorStop(0.4, `rgba(255, 255, 255, ${(c.opacity * 0.65).toFixed(3)})`);
+                grad.addColorStop(1,    'rgba(255, 255, 255, 0)');
+                skyCtx.fillStyle = grad;
                 skyCtx.beginPath();
                 skyCtx.arc(bx, by, br, 0, Math.PI * 2);
                 skyCtx.fill();

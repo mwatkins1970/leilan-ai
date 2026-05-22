@@ -28,10 +28,17 @@
         }
         #sky-canvas {
             position: fixed;
-            inset: 0;
+            /* Taller than the viewport and extended upward so that the canvas
+               has content to bring into view when it translates down during
+               the chamber-dive (which pitches the camera up, sliding the
+               horizon down the screen). The transform that animates this lives
+               in updateSkyTransform(). */
+            top: -50vh;
+            left: 0;
             width: 100vw;
-            height: 100vh;
+            height: 200vh;
             z-index: 0;
+            will-change: transform;
         }
         #webgl-canvas {
             position: fixed;
@@ -484,18 +491,36 @@
                 float dist = length(worldPos - vec2(0.0, -14.0));
                 float fade = 1.0 - smoothstep(12.0, 25.0, dist);
 
+                // Z-based fade for the FAR edge of the hex grid. The grid
+                // ends at z ≈ -27.5; without this, the radial fade has only
+                // barely engaged there (fade ≈ 0.88) and the grid's natural
+                // hexagonal edge silhouettes sharply against the sky as a
+                // jagged "peaky" line. Dissolving the floor to uHorizonColor
+                // over the last ~10 world-units before the grid edge means
+                // the hex outlines + cap silhouettes ride a background that's
+                // already the sky colour, so the seam disappears.
+                // worldPos here is (x, z); worldPos.y == world Z.
+                float farZFade = smoothstep(-27.5, -18.0, worldPos.y);
+                fade *= farZFade;
+
                 float revealDist = length(worldPos - vec2(0.0, -2.0));
                 float reveal = 1.0 - smoothstep(uRevealRadius - 1.5, uRevealRadius, revealDist);
 
                 col *= reveal;
-                // Night: alpha fades to 0 at the horizon — invisible against the black sky.
-                // Day: keep alpha opaque (=reveal) and blend the colour toward uHorizonColor at
-                // the horizon instead, so daylight clouds never show through the ground.
-                float nightAlpha = fade * reveal;
-                float dayAlpha   = reveal;
-                vec3  dayCol     = mix(uHorizonColor * reveal, col, fade);
-                vec3  finalCol   = mix(col, dayCol, uSkyIsDay);
-                float baseAlpha  = mix(nightAlpha, dayAlpha, uSkyIsDay);
+                // Both night and day modes now fade alpha to 0 at the
+                // plane's edges, so the floor dissolves into whatever the
+                // sky behind it actually IS (black at night, gradient by
+                // day) instead of trying to match a target colour and
+                // betraying the seam as a translucent "aura band". Day's
+                // old worry about clouds showing through the ground no
+                // longer applies — clouds now sit safely above the horizon
+                // (see the c.y range in the skyClouds init), so making the
+                // ground transparent at its edges reveals only the bare
+                // gradient sky in that region. Colour still nudges toward
+                // uHorizonColor on the way out for a smoother visual mix.
+                float baseAlpha = fade * reveal;
+                vec3  dayCol    = mix(uHorizonColor * reveal, col, fade);
+                vec3  finalCol  = mix(col, dayCol, uSkyIsDay);
                 float a = max(baseAlpha, 1.0 - uGlobalAlpha);
                 gl_FragColor = vec4(finalCol * uGlobalAlpha, a);
             }
@@ -513,7 +538,14 @@
                 uPrismCenter: { value: new THREE.Vector2(0, 0) },
                 uPatternScale: { value: 1.0 },
                 uSkyIsDay: { value: 0.0 },
-                uHorizonColor: { value: new THREE.Color(0x2E3070) }
+                // Floor's fade-out target colour — chosen to match the sky
+                // gradient at the visual-horizon level (gradient stop ~0.35,
+                // #111D50) so the floor visually dissolves INTO the sky
+                // instead of fading to a different colour that reads as a
+                // band. The previous value (#2E3070, gradient stop 0.68)
+                // was a far-down-the-gradient purple that didn't match the
+                // dark indigo actually shown at the horizon.
+                uHorizonColor: { value: new THREE.Color(0x111D50) }
             },
             transparent: true,
             side: THREE.DoubleSide,
@@ -767,12 +799,20 @@
         const skyIsNight = sessionStorage.getItem('skyMode') !== 'day';
         serpentMat.uniforms.uSkyIsDay.value = skyIsNight ? 0.0 : 1.0;
 
-        // Day clouds (matching prism.js)
+        // Day clouds. y range is constrained to the UPPER part of the sky
+        // region (well above the visual horizon at ~28vh from the top of
+        // the viewport), otherwise clouds whose centres fall near the
+        // horizon get half-clipped by the WebGL ground and their upper
+        // halves appear as bumpy "auras" disrupting the smooth horizon
+        // curve. With c.y in [0.04, 0.18] and blob radii up to ~3.5vh,
+        // the bottom of any cloud stays clear of the horizon line.
+        // Count reduced from 12 to 6 because the old range had ~10 of the
+        // 12 hidden below ground anyway — keeping the same VISIBLE density.
         const skyClouds = [];
-        for (let i = 0; i < 12; i++) {
+        for (let i = 0; i < 6; i++) {
             skyClouds.push({
                 x: Math.random(),
-                y: 0.15 + Math.random() * 0.7,
+                y: 0.04 + Math.random() * 0.14,
                 speed: 0.003 + Math.random() * 0.005,
                 size: 20 + Math.random() * 40,
                 opacity: 0.3 + Math.random() * 0.4,
@@ -790,9 +830,12 @@
             [255, 242, 204], [255, 209, 179],
         ];
 
-        // Stars: 45 large + 35 small (matching prism page non-sky view)
+        // Stars distributed across a 1.5× viewport-tall sky strip (sky region
+        // + the band above it that comes into view during the dive). Star
+        // count bumped 1.5× from the original (45+35 → 68+52) so per-area
+        // density is preserved.
         const skyStars = [];
-        for (let i = 0; i < 45; i++) {
+        for (let i = 0; i < 68; i++) {
             skyStars.push({
                 x: Math.random(), y: Math.random(),
                 sym: starSymbols[Math.floor(Math.random() * starSymbols.length)],
@@ -804,7 +847,7 @@
                 palIdx: Math.floor(Math.random() * skyPalette.length)
             });
         }
-        for (let i = 0; i < 35; i++) {
+        for (let i = 0; i < 52; i++) {
             skyStars.push({
                 x: Math.random(), y: Math.random(),
                 sym: starSymbols[Math.floor(Math.random() * starSymbols.length)],
@@ -819,8 +862,10 @@
 
         function resizeSkyCanvas() {
             const dpr = Math.min(window.devicePixelRatio, 2);
+            // Canvas is 2× viewport-tall so it has room to translate up/down
+            // with the horizon during camera pitch (see updateSkyTransform).
             skyCanvasEl.width = window.innerWidth * dpr;
-            skyCanvasEl.height = window.innerHeight * dpr;
+            skyCanvasEl.height = window.innerHeight * 2 * dpr;
             skyCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
         }
         resizeSkyCanvas();
@@ -833,24 +878,40 @@
             const dt = 3 / 60;
             const w = window.innerWidth;
             const h = window.innerHeight;
+            // Canvas is 2H tall, positioned with its top 50vh above the
+            // viewport. "skyTop" = canvas-y of the row that lines up with
+            // viewport-top in the no-transform (reference) state. So the
+            // "sky region" (where stars/clouds/gradient live, exactly as in
+            // the old single-viewport canvas) occupies canvas-y [skyTop,
+            // skyTop + h]. The two flanking bands (above/below) are filled
+            // with the appropriate solid colour so when the canvas
+            // translates with the horizon there's never a visible seam.
+            const skyTop = h * 0.5;
+            const canvasH = h * 2;
 
             if (skyIsNight) {
                 // Pure black background — no grain
                 skyCtx.fillStyle = '#000000';
-                skyCtx.fillRect(0, 0, w, h);
+                skyCtx.fillRect(0, 0, w, canvasH);
 
-                // Film grain (matching prism page)
-                for (let i = 0; i < 200; i++) {
+                // Film grain — distributed across the full canvas height so
+                // the "above-sky" band that comes into view during the dive
+                // doesn't read as a flat, grain-free patch against the
+                // grainy sky region.
+                for (let i = 0; i < 400; i++) {
                     const seed = i * 73.137 + skyFrame * 0.01;
                     const nx = ((Math.sin(seed * 1.31) * 0.5 + 0.5) * w + Math.random() * 3) % w;
-                    const ny = ((Math.cos(seed * 0.97) * 0.5 + 0.5) * h + Math.random() * 3) % h;
+                    const ny = ((Math.cos(seed * 0.97) * 0.5 + 0.5) * canvasH + Math.random() * 3) % canvasH;
                     const pal = skyPalette[i % skyPalette.length];
                     const a = 0.06 + Math.random() * 0.12;
                     skyCtx.fillStyle = `rgba(${pal[0]},${pal[1]},${pal[2]},${a})`;
                     skyCtx.fillRect(nx, ny, 1, 1);
                 }
 
-                // Twinkling stars
+                // Twinkling stars — placed in canvas-y [0, skyTop + h] so the
+                // band above the original viewport (which comes into view
+                // during the dive) has stars too. Density per unit area is
+                // preserved because the star count is bumped 1.5× elsewhere.
                 const tMs = t * 1000;
                 skyCtx.textAlign = 'center';
                 skyCtx.textBaseline = 'middle';
@@ -879,34 +940,101 @@
                     const [cr, cg, cb] = skyPalette[s.palIdx];
                     skyCtx.font = `400 ${s.size}px "IBM Plex Mono", monospace`;
                     skyCtx.fillStyle = `rgba(${cr},${cg},${cb},${drawAlpha.toFixed(3)})`;
-                    skyCtx.fillText(s.sym, s.x * w, s.y * h);
+                    // s.y in [0,1] mapped to canvas-y in [0, skyTop+h] = 1.5h
+                    skyCtx.fillText(s.sym, s.x * w, s.y * (skyTop + h));
                 });
             } else {
-                // Twilight sky: deep indigo zenith fading to dusky mauve horizon
-                const grad = skyCtx.createLinearGradient(0, 0, 0, h);
+                // Solid zenith colour above the gradient — fills the band that
+                // comes into view above the viewport when the canvas
+                // translates down (so we never see a black gap at the top
+                // mid-dive).
+                skyCtx.fillStyle = '#06091E';
+                skyCtx.fillRect(0, 0, w, skyTop);
+
+                // Gradient confined to the sky region (canvas-y skyTop to
+                // skyTop+h). Stops match the original (zenith → mauve over
+                // viewport height). Below the gradient sits a band of solid
+                // mauve — hidden by the WebGL ground in normal play, but kept
+                // for safety if the canvas ever translates upward.
+                const grad = skyCtx.createLinearGradient(0, skyTop, 0, skyTop + h);
                 grad.addColorStop(0,    '#06091E');
                 grad.addColorStop(0.35, '#111D50');
                 grad.addColorStop(0.68, '#2E3070');
                 grad.addColorStop(1,    '#6B3F62');
                 skyCtx.fillStyle = grad;
-                skyCtx.fillRect(0, 0, w, h);
+                skyCtx.fillRect(0, skyTop, w, h);
+
+                skyCtx.fillStyle = '#6B3F62';
+                skyCtx.fillRect(0, skyTop + h, w, canvasH - (skyTop + h));
 
                 skyClouds.forEach(c => {
                     c.x += c.speed * dt;
                     if (c.x > 1.3) c.x = -0.3;
-                    skyCtx.fillStyle = `rgba(255, 255, 255, ${c.opacity})`;
                     const cx = c.x * w;
-                    const cy = c.y * h;
+                    // c.y in the upper sky-region range; offset by skyTop
+                    // so the on-screen position matches the canvas-tracking
+                    // reference (no-translate) state.
+                    const cy = skyTop + c.y * h;
                     for (let b = 0; b < c.blobs; b++) {
                         const bx = cx + b * c.size * 0.6;
                         const by = cy + Math.sin(b * 1.2) * c.size * 0.2;
                         const br = c.size * (0.5 + Math.sin(b * 0.8) * 0.2);
+                        // Soft radial gradient per blob — opaque at the
+                        // centre, fading to fully transparent at the edge.
+                        // Adjacent blobs in the row then composite into a
+                        // single smooth puff instead of a row of hard discs
+                        // (which is what made earlier renders look like a
+                        // "peaky/triangular aura" against the dark twilight
+                        // sky). The 0.4 inner stop keeps the centres bright
+                        // while the long taper out to 0 means the cloud
+                        // silhouette has no detectable edges.
+                        const grad = skyCtx.createRadialGradient(bx, by, 0, bx, by, br);
+                        grad.addColorStop(0,   `rgba(255, 255, 255, ${c.opacity})`);
+                        grad.addColorStop(0.4, `rgba(255, 255, 255, ${(c.opacity * 0.65).toFixed(3)})`);
+                        grad.addColorStop(1,    'rgba(255, 255, 255, 0)');
+                        skyCtx.fillStyle = grad;
                         skyCtx.beginPath();
                         skyCtx.arc(bx, by, br, 0, Math.PI * 2);
                         skyCtx.fill();
                     }
                 });
             }
+        }
+
+        // Translate the 2D sky canvas so a fixed point on the FAR EDGE of
+        // the hex plane keeps the same on-screen position. This tracks the
+        // *visual* horizon (where the ground actually appears to end), not
+        // the mathematical horizon at infinity — important because the
+        // bezier camera path briefly tilts almost straight down mid-dive
+        // (~-66°), which would send a math-horizon-based shift swinging
+        // off-screen and drag previously-hidden stars into view above the
+        // plane edge. The far-edge approach naturally accounts for both
+        // camera pitch and camera translation, since both affect the
+        // projected screen position of a finite-distance point.
+        //
+        // Reference point z chosen from the hex grid's far row:
+        //   row 34 → z = -34 * 0.75 - 2 = -27.5
+        const _skyHorizonRef = new THREE.Vector3(0, 0, -27.5);
+        const _skyHorizonProj = new THREE.Vector3();
+        let _skyReferenceNDCy = null;
+        function updateSkyTransform() {
+            // Camera matrices stay stale between position/lookAt mutations
+            // and the next render, so refresh them explicitly before project()
+            // — otherwise we'd be projecting against last frame's pose.
+            camera.updateMatrixWorld();
+            _skyHorizonProj.copy(_skyHorizonRef).project(camera);
+            // Capture the reference NDC y once, from the initial camera pose
+            // (caller is responsible for calling this on a frame when the
+            // camera is still in its initial state — which it is, since
+            // updateSkyTransform runs every animate frame from the start).
+            if (_skyReferenceNDCy === null) {
+                _skyReferenceNDCy = _skyHorizonProj.y;
+            }
+            // NDC y is +1 at top, -1 at bottom; a fall in NDC y means the
+            // reference point moved down on screen, so the canvas should
+            // shift down by the same amount in CSS pixels.
+            const shiftY = (_skyReferenceNDCy - _skyHorizonProj.y) * window.innerHeight * 0.5;
+            skyCanvasEl.style.transform = `translate3d(0, ${shiftY.toFixed(1)}px, 0)`;
         }
 
         // --- Wall sky texture: crisp stars on black (no grain), for outer prism walls ---
@@ -1200,12 +1328,20 @@
                         // Two coplanar black surfaces z-fight invisibly.
                         const angle1 = (Math.PI / 3) * ei + (Math.PI / 6);
                         const angle2 = (Math.PI / 3) * ((ei + 1) % 6) + (Math.PI / 6);
+                        // isShared: this edge faces into ANOTHER prism's interior.
+                        // nKey records the specific neighbour hex so we can collapse the
+                        // corresponding Section A quad once the opposing prism rises —
+                        // the corrugation must stay visible while the chamber is alone,
+                        // then disappear from view once the joint is formed.
+                        const isShared = sharedHexSet ? sharedHexSet.has(key) : false;
                         edges.push({
                             v1x: hex.x + hexSize * Math.cos(angle1),
                             v1z: hex.z + hexSize * Math.sin(angle1),
                             v2x: hex.x + hexSize * Math.cos(angle2),
                             v2z: hex.z + hexSize * Math.sin(angle2),
-                            edgeIdx: ei
+                            edgeIdx: ei,
+                            isShared,
+                            nKey: key
                         });
                     }
                 }
@@ -1235,6 +1371,10 @@
 
         function createPrismWalls(riseHeight, prism, darkInterior) {
             prism.edges = computeBoundaryEdges(prism.regionHexes, prism.hexSet, prism.sharedHexSet);
+            // Section A is emitted for every boundary edge (including shared ones); the
+            // shared-edge quads are collapsed at runtime by updateOverlappingSectionA()
+            // once the opposing prism's wallMesh exists, so a lone chamber stays fully
+            // corrugated and a joined pair reads planar from each interior side.
             const boundaryEdges = prism.edges;
             const rimY = riseHeight * (1 - RIM_FRAC);
 
@@ -1428,6 +1568,48 @@
                 capOrigPositions: new Float32Array(positions.slice(secEEnd))
             };
             return mesh;
+        }
+
+        // Section A back-faces of one prism would otherwise protrude past the opposing
+        // prism's chord. Once the adjacent prism starts rising, we crop each prism's
+        // shared Section A quads from below — bottom Y climbs from 0 up to the OPPOSING
+        // prism's current rise height. While the opposing chamber is partially risen,
+        // the corrugation stays visible above its rim and becomes planar below it; once
+        // fully risen, the quad collapses to zero height and disappears.
+        //
+        // Safe to call any frame: pure function of current uWallHeight values, idempotent.
+        function updateOverlappingSectionA() {
+            const risen = [prism1, ...extraPrisms].filter(
+                p => p && p.wallMesh && p.edges && p.hexSet && p.wallMat
+            );
+            risen.forEach(P => {
+                const myH = P.wallMat.uniforms.uWallHeight.value;
+                const posAttr = P.wallMesh.geometry.getAttribute('position');
+                const posArr = posAttr.array;
+                let modified = false;
+                for (let i = 0; i < P.edges.length; i++) {
+                    const edge = P.edges[i];
+                    if (!edge.isShared) continue;
+                    let oppH = 0;
+                    for (const Q of risen) {
+                        if (Q === P) continue;
+                        if (Q.hexSet.has(edge.nKey)) {
+                            const qh = Q.wallMat.uniforms.uWallHeight.value;
+                            if (qh > oppH) oppH = qh;
+                        }
+                    }
+                    if (oppH === 0) continue;
+                    // Bottom can't exceed my own top (would invert the quad).
+                    const newBot = Math.min(oppH, myH);
+                    const off = i * 18;
+                    if (posArr[off+1] === newBot && posArr[off+4] === newBot && posArr[off+10] === newBot) continue;
+                    posArr[off+1]  = newBot;
+                    posArr[off+4]  = newBot;
+                    posArr[off+10] = newBot;
+                    modified = true;
+                }
+                if (modified) posAttr.needsUpdate = true;
+            });
         }
 
         // --- Rim outline: thin colour-cycling borders on interior rim quads (Section D) ---
@@ -2031,6 +2213,11 @@
                         prism.phaseStartTime = time;
                         prism.wallMesh = createPrismWalls(PRISM_RISE_HEIGHT, prism, prism !== prism1);
                         scene.add(prism.wallMesh);
+                        // Reset uWallHeight to 0 BEFORE updateOverlappingSectionA — otherwise
+                        // already-risen neighbours would see this prism as full-height and
+                        // snap-collapse their shared corrugation in one frame.
+                        prism.wallMat.uniforms.uWallHeight.value = 0;
+                        updateOverlappingSectionA();
                         // Flatten to Y=0 so it doesn't flash at full height for one frame
                         {
                             const L = prism.wallMesh._layout;
@@ -2160,6 +2347,11 @@
                         prism.wallMesh.geometry.computeVertexNormals();
                         prism.wallMat.uniforms.uWallHeight.value = currentHeight;
                     }
+
+                    // Progressively crop shared Section A on every risen prism — the
+                    // visible bottom edge of each shared quad tracks the OPPOSING prism's
+                    // current uWallHeight. Cheap (handful of edges per prism).
+                    updateOverlappingSectionA();
 
                     if (prism.capMesh) {
                         const csArr = prism.capMesh.geometry.getAttribute('position').array;
@@ -2425,6 +2617,7 @@
                 capSharedTime.value = animTime;
                 updateSky(realTime);
                 updateWallSky(realTime);
+                updateSkyTransform();
                 composer.render();
                 return;
             }
@@ -2565,6 +2758,10 @@
             // Update sky glitch + stars
             updateSky(realTime);
             updateWallSky(realTime);
+            // Track the horizon with the 2D sky canvas — keeps stars/clouds
+            // at a fixed vertical distance from the horizon as the camera
+            // pitches during the chamber dive.
+            updateSkyTransform();
 
             composer.render();
         }
@@ -2637,19 +2834,41 @@
             }
         });
 
-        // Unlock AudioContext on first user gesture so hard-reloads don't silence the soundscape.
-        function _unlockAudio() {
-            if (!_imStarted) initImmersiveSoundscape();
-            if (_imAudioCtx && _imAudioCtx.state === 'suspended') {
-                _imAudioCtx.resume();
-            }
+        // Unlock AudioContext on first user gesture so hard-reloads don't
+        // silence the soundscape. Important: listeners must stay attached
+        // until resume() actually transitions the context to 'running' —
+        // detaching on the first event (before the resume promise settles)
+        // means a failed first attempt (browser quirk, race with the
+        // page-load gesture) leaves nothing to try again, and audio stays
+        // dead even though the user keeps moving the mouse. Click and
+        // touchstart added too so mobile/Safari interactions count.
+        function _detachUnlockListeners() {
             document.removeEventListener('pointerdown', _unlockAudio);
             document.removeEventListener('keydown', _unlockAudio);
             document.removeEventListener('mousemove', _unlockAudio);
+            document.removeEventListener('click', _unlockAudio);
+            document.removeEventListener('touchstart', _unlockAudio);
+        }
+        function _unlockAudio() {
+            if (!_imStarted) initImmersiveSoundscape();
+            if (!_imAudioCtx) return;
+            if (_imAudioCtx.state === 'running') {
+                _detachUnlockListeners();
+                return;
+            }
+            if (_imAudioCtx.state === 'suspended') {
+                _imAudioCtx.resume().then(() => {
+                    if (_imAudioCtx && _imAudioCtx.state === 'running') {
+                        _detachUnlockListeners();
+                    }
+                }).catch(() => {});
+            }
         }
         document.addEventListener('pointerdown', _unlockAudio);
         document.addEventListener('keydown', _unlockAudio);
         document.addEventListener('mousemove', _unlockAudio);
+        document.addEventListener('click', _unlockAudio);
+        document.addEventListener('touchstart', _unlockAudio, { passive: true });
 
         // Handle window resize
         window.addEventListener('resize', () => {
@@ -2692,6 +2911,7 @@
             // Build prism1 walls at full height
             prism1.wallMesh = createPrismWalls(PRISM_RISE_HEIGHT, prism1, false);
             scene.add(prism1.wallMesh);
+            updateOverlappingSectionA();
 
             // Cap serpentine overlay for prism1
             {
@@ -2729,6 +2949,7 @@
                 if (!p._isStatic) return;
                 p.wallMesh = createPrismWalls(PRISM_RISE_HEIGHT, p, true);
                 scene.add(p.wallMesh);
+                updateOverlappingSectionA();
                 {
                     const L = p.wallMesh._layout;
                     const srcArr = p.wallMesh.geometry.getAttribute('position').array;
@@ -2791,21 +3012,33 @@
                 _risingToneFired = true;
                 const ctx = _imAudioCtx;
                 const now = ctx.currentTime;
-                // Audible window aligned with RISE_DURATION (6s): fast attack so the
-                // tone is up to volume by the time the chamber visibly starts ascending
-                // (easeOutQuart is front-loaded), short release so the tone is silent
-                // by the time the chamber finishes rising.
-                const dur = 6.0;
+                // Envelope shape: ASCENT — PLATEAU — FADE.
+                //   ascent  (4.0s): pitch climbs C3→C5, matched to the visible rise
+                //   plateau (3.0s): pitch sits at C5 while the chamber settles —
+                //                   the two-tone harmony with the background drone
+                //   fade    (7.0s): long, very gradual release so the high tone
+                //                   dissolves into the drone rather than ending
+                // Total audible window 14s, finishing ~6s into the camera dive.
+                const ascent  = 4.0;
+                const plateau = 3.0;
+                const fade    = 7.0;
+                const dur     = ascent + plateau + fade;   // 14s
+                const top     = ascent + plateau;          // 7s — where fade begins
 
-                // Layer A: Primary rising tone — C3→C5 (audible ascending throughout)
+                // Per-layer peak gains scaled to 75% of the original mix
+                // (0.09→0.0675, 0.05→0.0375, 0.06→0.045) so the rising tone
+                // sits more softly over the background drone.
+
+                // Layer A: Primary rising tone — C3→C5, then sustained at C5
                 const osc1 = ctx.createOscillator();
                 osc1.type = 'sine';
                 osc1.frequency.setValueAtTime(130.8, now);
-                osc1.frequency.exponentialRampToValueAtTime(523.3, now + dur);
+                osc1.frequency.exponentialRampToValueAtTime(523.3, now + ascent);
+                // (No further ramp = frequency holds at 523.3 through plateau+fade)
                 const g1 = ctx.createGain();
                 g1.gain.setValueAtTime(0, now);
-                g1.gain.linearRampToValueAtTime(0.09, now + dur * 0.05);
-                g1.gain.setValueAtTime(0.09, now + dur * 0.88);
+                g1.gain.linearRampToValueAtTime(0.0675, now + ascent * 0.05);
+                g1.gain.setValueAtTime(0.0675, now + top);
                 g1.gain.linearRampToValueAtTime(0, now + dur);
                 osc1.connect(g1);
 
@@ -2813,11 +3046,11 @@
                 const osc2 = ctx.createOscillator();
                 osc2.type = 'triangle';
                 osc2.frequency.setValueAtTime(196.0, now);
-                osc2.frequency.exponentialRampToValueAtTime(784.0, now + dur);
+                osc2.frequency.exponentialRampToValueAtTime(784.0, now + ascent);
                 const g2 = ctx.createGain();
                 g2.gain.setValueAtTime(0, now);
-                g2.gain.linearRampToValueAtTime(0.05, now + dur * 0.08);
-                g2.gain.setValueAtTime(0.05, now + dur * 0.85);
+                g2.gain.linearRampToValueAtTime(0.0375, now + ascent * 0.08);
+                g2.gain.setValueAtTime(0.0375, now + top);
                 g2.gain.linearRampToValueAtTime(0, now + dur);
                 osc2.connect(g2);
 
@@ -2825,20 +3058,21 @@
                 const osc3 = ctx.createOscillator();
                 osc3.type = 'sine';
                 osc3.frequency.setValueAtTime(131.1, now);
-                osc3.frequency.exponentialRampToValueAtTime(524.7, now + dur);
+                osc3.frequency.exponentialRampToValueAtTime(524.7, now + ascent);
                 const g3 = ctx.createGain();
                 g3.gain.setValueAtTime(0, now);
-                g3.gain.linearRampToValueAtTime(0.06, now + dur * 0.07);
-                g3.gain.setValueAtTime(0.06, now + dur * 0.86);
+                g3.gain.linearRampToValueAtTime(0.045, now + ascent * 0.07);
+                g3.gain.setValueAtTime(0.045, now + top);
                 g3.gain.linearRampToValueAtTime(0, now + dur);
                 osc3.connect(g3);
 
-                // Warm lowpass filter that opens as the tone rises
+                // Warm lowpass that opens as the tone rises, then stays open
+                // through plateau + fade — preserves the bright top-of-arc timbre.
                 const riseLP = ctx.createBiquadFilter();
                 riseLP.type = 'lowpass';
                 riseLP.Q.value = 1.2;
                 riseLP.frequency.setValueAtTime(400, now);
-                riseLP.frequency.exponentialRampToValueAtTime(3000, now + dur);
+                riseLP.frequency.exponentialRampToValueAtTime(3000, now + ascent);
 
                 g1.connect(riseLP); g2.connect(riseLP); g3.connect(riseLP);
                 riseLP.connect(_imDroneNodes.master);

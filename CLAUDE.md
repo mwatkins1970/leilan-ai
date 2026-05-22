@@ -352,6 +352,7 @@ Only Crossbones (`/video/crossbones.mp4`) is wired up. Every other word-panel `â
 - Inner wall appearance (April 2026): all sections use sky shader with `faceColors`; `groundGlow` opacity zeroed.
 - Rim outlines (April 2026): now a proper `THREE.Mesh` with thick quad ribbons.
 - isReturn highlight crash (April 2026): null-guarded `prism.groundGlow._rimFills` access.
+- Shared-wall corrugation bleed-through (May 2026): at overlap hexes, each prism's Section A V-tips protruded ~0.25 hexSize into the opposing chamber, occluding its chord from inside. Fix: `computeBoundaryEdges` now tags each edge with `isShared` + `nKey`; `updateOverlappingSectionA()` in `immersive.astro` crops each shared Section A quad's bottom Y to `min(opposingPrism.uWallHeight, ownPrism.uWallHeight)`. Called every frame during a rise â€” exposed outer walls stay corrugated, the band drops with the rising opposing rim, and once joined both interiors read planar at the joint. Wall-agnostic (symmetric for any pair of adjacent prisms).
 
 ---
 
