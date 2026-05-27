@@ -1133,6 +1133,7 @@ function updatePointerEvents() {
 function lookRight() {
     if (isRotating || archwayAnimating || shrineHeavensLocked()) return;
     closeCinematicReader();
+    hideArchwayTip();
     clearFacingTag();
     isRotating = true;
     const oldShrinePos = shrinePos;
@@ -1148,6 +1149,7 @@ function lookRight() {
 function lookLeft() {
     if (isRotating || archwayAnimating || shrineHeavensLocked()) return;
     closeCinematicReader();
+    hideArchwayTip();
     clearFacingTag();
     isRotating = true;
     const oldShrinePos = shrinePos;
@@ -1166,6 +1168,7 @@ function targetShrinePosForFacingWall(targetWall) {
 
 function rotateToWall(targetWall) {
     if (isRotating || archwayAnimating || shrineHeavensLocked() || targetWall === getFacingWall()) return;
+    hideArchwayTip();
     clearFacingTag();
     isRotating = true;
 
@@ -1202,6 +1205,9 @@ if (prismContainer) {
             isRotating = false;
             setFacingTag();
             updateAlephChars();
+            if (archwayOverlay && archwayOverlay.matches(':hover')) {
+                showArchwayTip();
+            }
         }
     });
 }
@@ -1617,6 +1623,9 @@ const _archwayTooltips = {
     'gpt3-library': {
         1: 'ASCII ART GALLERY\nworks by Leilan2.0',
     },
+    'ascii-gallery': {
+        4: 'return to Scriptorium',
+    },
 };
 const _defaultTooltip = 'return to centre';
 
@@ -1627,21 +1636,23 @@ function getArchwayTooltipText(wallNum) {
     return null;
 }
 
+function showArchwayTip() {
+    if (!archwayOverlay) return;
+    const text = getArchwayTooltipText(getFacingWall());
+    if (!text) { archwayTip.style.opacity = '0'; return; }
+    archwayTip.textContent = text;
+    const r = archwayOverlay.getBoundingClientRect();
+    archwayTip.style.left = (r.left + r.width / 2) + 'px';
+    archwayTip.style.top = (r.top + r.height * 0.18) + 'px';
+    archwayTip.style.transform = 'translate(-50%, 0)';
+    archwayTip.style.opacity = '1';
+}
+
+function hideArchwayTip() { archwayTip.style.opacity = '0'; }
+
 if (archwayOverlay) {
-    archwayOverlay.addEventListener('mouseenter', () => {
-        const text = getArchwayTooltipText(getFacingWall());
-        if (!text) { archwayTip.style.opacity = '0'; return; }
-        archwayTip.textContent = text;
-        // Position above the archway overlay
-        const r = archwayOverlay.getBoundingClientRect();
-        archwayTip.style.left = (r.left + r.width / 2) + 'px';
-        archwayTip.style.top = (r.top + r.height * 0.18) + 'px';
-        archwayTip.style.transform = 'translate(-50%, 0)';
-        archwayTip.style.opacity = '1';
-    });
-    archwayOverlay.addEventListener('mouseleave', () => {
-        archwayTip.style.opacity = '0';
-    });
+    archwayOverlay.addEventListener('mouseenter', showArchwayTip);
+    archwayOverlay.addEventListener('mouseleave', hideArchwayTip);
 }
 
 // --- Sky Canvas Animation ---
@@ -2006,6 +2017,15 @@ function closeFrameOnWall(wallNum) {
 }
 
 // --- Video overlay ---
+function _fadeAudioForVideo(out) {
+    if (!_audioCtx || !_droneNodes || !_droneNodes.fade) return;
+    const now = _audioCtx.currentTime;
+    const g = _droneNodes.fade.gain;
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(g.value, now);
+    g.linearRampToValueAtTime(out ? 0 : 1, now + (out ? 3 : 8));
+}
+
 function openWallVideo(wallNum) {
     const wall = document.querySelector(`.wall-panel[data-wall="${wallNum}"]`);
     if (!wall) return;
@@ -2019,6 +2039,9 @@ function openWallVideo(wallNum) {
     // Remove any existing overlay on this wall
     const existing = wall.querySelector('.wall-video-overlay');
     if (existing) existing.remove();
+
+    // Fade chamber audio out before video plays
+    _fadeAudioForVideo(true);
 
     // Create overlay
     const overlay = document.createElement('div');
@@ -2046,12 +2069,22 @@ function openWallVideo(wallNum) {
     video.style.display = 'none';
     overlay.appendChild(video);
 
-    // When enough data is buffered, swap loader for video
+    // Wait for audio fade-out to nearly finish, then start video
+    const openedAt = performance.now();
     video.addEventListener('canplay', () => {
-        const loader = overlay.querySelector('.wall-video-loader');
-        if (loader) loader.remove();
-        video.style.display = '';
-        video.play().catch(() => {}); // autoplay may be blocked
+        const elapsed = performance.now() - openedAt;
+        const remaining = Math.max(0, 2700 - elapsed);
+        setTimeout(() => {
+            const loader = overlay.querySelector('.wall-video-loader');
+            if (loader) loader.remove();
+            video.style.display = '';
+            video.play().catch(() => {});
+        }, remaining);
+    }, { once: true });
+
+    // Fade audio back in when video ends naturally
+    video.addEventListener('ended', () => {
+        _fadeAudioForVideo(false);
     }, { once: true });
 
     // Close button
@@ -2071,6 +2104,8 @@ function closeWallVideo(wallNum) {
     if (video) { video.pause(); video.src = ''; }
     overlay.classList.remove('visible');
     overlay.addEventListener('transitionend', () => overlay.remove(), { once: true });
+    // Fade chamber audio back in
+    _fadeAudioForVideo(false);
 }
 
 function scrollWall(wallNum, direction) {
@@ -4200,7 +4235,7 @@ const CHAMBER_PROFILES = {
             { time: 0.211, gain: 0.11, pan: -0.32 },
             { time: 0.293, gain: 0.07, pan:  0.40 },
         ],
-        masterGain: 2.4,
+        masterGain: 1.56,
         fadeInSec: 5,
     },
 
@@ -4311,7 +4346,7 @@ const CHAMBER_PROFILES = {
             { time: 0.241, gain: 0.10, pan:  0.45 },
             { time: 0.349, gain: 0.06, pan: -0.18 },
         ],
-        masterGain: 2.4,
+        masterGain: 1.52,
         fadeInSec: 5,
     },
 
@@ -4445,7 +4480,7 @@ const CHAMBER_PROFILES = {
             { time: 0.317, gain: 0.06, pan: -0.20 },
             { time: 0.401, gain: 0.04, pan:  0.20 },
         ],
-        masterGain: 2.4,
+        masterGain: 1.08,
         fadeInSec: 5,
     },
 
@@ -4599,7 +4634,7 @@ const CHAMBER_PROFILES = {
             { time: 0.379, gain: 0.07, pan: -0.25 },
             { time: 0.467, gain: 0.05, pan:  0.30 },
         ],
-        masterGain: 2.4,
+        masterGain: 0.72,
         fadeInSec: 6,                     // slightly longer fade than other chambers
     },
 
@@ -4684,17 +4719,17 @@ const CHAMBER_PROFILES = {
             gainPer: 0.06,
             window: 5.0,                   // wide window — pings drift apart
         },
-        // ---- The Shepard descending tone — Mythos's defining feature ----
-        // 5 voices each sweeping from C5 down to C2 (3 octaves) over 150 s,
-        // phase-offset by 1/5 of the cycle. Always descending — feels like
-        // something slowly falling into the deep, without ever ending.
+        // ---- The Shepard ascending tone — Mythos's defining feature ----
+        // 5 voices each sweeping from C2 up to C5 (4 octaves) over 150 s,
+        // phase-offset by 1/5 of the cycle. Always ascending — an endless
+        // rising illusion, archaic and numinous.
         // Heavy reverb send for "cave" depth.
         shepard: {
             fLow: 65.41,                   // C2
             fHigh: 1046.50,                // C5 (4 octaves of sweep range)
             numVoices: 5,
             period: 150,                   // 150 s per full sweep
-            direction: 'down',
+            direction: 'up',
             gain: 0.085,                   // subtle — part of the bed character
             reverbSend: 0.55,              // strong wet — adds to "cave" feel
         },
@@ -4742,8 +4777,216 @@ const CHAMBER_PROFILES = {
             { time: 0.479, gain: 0.07, pan: -0.25 },
             { time: 0.587, gain: 0.05, pan:  0.30 },
         ],
-        masterGain: 2.4,
+        masterGain: 1.20,
         fadeInSec: 7,                       // slowest fade — chamber arrives gradually
+    },
+
+    // -----------------------------------------------------------------------
+    // Scriptorium / GPT-3 Library — airy, intimate, suspended, breathlike.
+    // The quietest chamber. Sparse ink-drop events with long reverb tails.
+    // E minor pentatonic pitch field; no wash, no Shepard.
+    // "Language sleeping, not language being performed."
+    // -----------------------------------------------------------------------
+    'gpt3-library': {
+        pitchPool: {
+            droplet: [
+                164.81,  // E3
+                196.00,  // G3
+                220.00,  // A3
+                246.94,  // B3
+                293.66,  // D4
+                329.63,  // E4
+                392.00,  // G4
+                440.00,  // A4
+                493.88,  // B4
+                587.33,  // D5
+                164.81, 220.00, 329.63, 493.88,  // weight E and B
+                261.63,  // C4 — rare colour
+                369.99,  // F#4 — rare colour
+            ],
+            shimmer: [
+                659.26, 783.99, 987.77, 1318.51,  // E5 G5 B5 E6
+            ],
+        },
+        modalRatios: [
+            { r: 1.000,  a: 1.00, q: 16 },
+            { r: 2.001,  a: 0.44, q: 14 },
+            { r: 2.756,  a: 0.26, q: 12 },
+            { r: 5.404,  a: 0.11, q: 10 },
+        ],
+        droplet: {
+            gainMin: 0.30, gainMax: 0.50,
+            decayMin: 2.0,  decayMax: 6.0,
+            attackMin: 0.02, attackMax: 0.12,
+            glissProb: 0.15,
+            glissCents: 40,
+        },
+        stereoSpread: 0.8,
+        density: {
+            eventsPerMinMin: 4,
+            eventsPerMinMax: 12,
+            cyclePeriod: 240,
+            clusterProbability: 0.04,
+            longPauseProbability: 0.08,
+        },
+        bell: {
+            gain: 0.12,
+            durMin: 8.0, durMax: 13.0,
+            intervalMin: 70,
+            triggerProb: 0.06,
+            fundamentals: [164.81, 246.94, 329.63, 220.00],  // E3 B3 E4 A3
+            partials: [
+                { r: 1.000, a: 1.00 },
+                { r: 2.000, a: 0.50 },
+                { r: 3.003, a: 0.28 },
+                { r: 4.008, a: 0.16 },
+                { r: 6.015, a: 0.08 },
+            ],
+        },
+        shimmer: {
+            intervalMin: 60,
+            triggerProb: 0.08,
+            minCount: 3, maxCount: 6,
+            gainPer: 0.07,
+            window: 4.5,
+        },
+        bed: {
+            layers: [
+                { freq:  82.41, gain: 0.018, type: 'sine' },     // E2 root
+                { freq:  82.71, gain: 0.015, type: 'sine' },     // E2 detune (slow beating)
+                { freq: 123.47, gain: 0.012, type: 'sine' },     // B2 fifth
+                { freq: 164.81, gain: 0.008, type: 'triangle' }, // E3 octave
+                { freq: 220.00, gain: 0.0020, type: 'triangle',
+                  ampLfo: { rate: 0.018, depth: 0.0022 } },      // A3 mid presence
+            ],
+            filter: { type: 'lowpass', freq: 500, Q: 0.7 },
+            filterLfoRate: 0.010,
+            filterLfoDepth: 120,
+            ampLfoRate: 0.009,
+            ampLfoRate2: 0.0038,
+            ampLfoDepth: 0.24,
+            ampLfoDepth2: 0.10,
+            reverbSend: 0.26,
+        },
+        reverb: {
+            dur: 11.0,
+            decay: 2.7,
+            wet: 1.5,
+            damping: 2000,
+        },
+        dryLevel: 0.28,
+        delayTaps: [
+            { time: 0.067, gain: 0.20, pan: -0.45 },
+            { time: 0.131, gain: 0.15, pan:  0.50 },
+            { time: 0.209, gain: 0.11, pan: -0.30 },
+            { time: 0.277, gain: 0.08, pan:  0.35 },
+            { time: 0.337, gain: 0.05, pan: -0.20 },
+        ],
+        masterGain: 2.00,
+        fadeInSec: 6,
+    },
+
+    // -----------------------------------------------------------------------
+    // ASCII Gallery — digital cloister, phosphor-ghost.
+    // Quartal/fifth-based pitch vocabulary (D, G, A, D, E). Metallic-but-soft
+    // modal ratios, narrow stereo, faint phosphor hum in the bed.
+    // Related to Research Lab but more secret and stranger.
+    // -----------------------------------------------------------------------
+    'ascii-gallery': {
+        pitchPool: {
+            droplet: [
+                146.83,  // D3
+                196.00,  // G3
+                220.00,  // A3
+                293.66,  // D4
+                329.63,  // E4
+                392.00,  // G4
+                440.00,  // A4
+                587.33,  // D5
+                146.83, 293.66, 196.00, 220.00,  // weight D, G, A
+            ],
+            shimmer: [
+                587.33, 783.99, 880.00, 1174.66,  // D5 G5 A5 D6
+            ],
+        },
+        modalRatios: [
+            { r: 1.000,  a: 1.00, q: 20 },
+            { r: 2.004,  a: 0.42, q: 16 },
+            { r: 3.003,  a: 0.22, q: 14 },
+            { r: 5.009,  a: 0.10, q: 10 },
+        ],
+        droplet: {
+            gainMin: 0.36, gainMax: 0.58,
+            decayMin: 1.2,  decayMax: 4.0,
+            attackMin: 0.008, attackMax: 0.045,
+            glissProb: 0.08,
+            glissCents: 20,
+        },
+        stereoSpread: 0.6,
+        density: {
+            eventsPerMinMin: 10,
+            eventsPerMinMax: 22,
+            cyclePeriod: 180,
+            clusterProbability: 0.08,
+            longPauseProbability: 0.04,
+        },
+        bell: {
+            gain: 0.14,
+            durMin: 7.0, durMax: 11.0,
+            intervalMin: 55,
+            triggerProb: 0.07,
+            fundamentals: [146.83, 196.00, 220.00, 293.66],  // D3 G3 A3 D4
+            partials: [
+                { r: 1.000, a: 1.00 },
+                { r: 2.000, a: 0.48 },
+                { r: 2.998, a: 0.26 },
+                { r: 4.006, a: 0.14 },
+            ],
+        },
+        shimmer: {
+            intervalMin: 50,
+            triggerProb: 0.10,
+            minCount: 3, maxCount: 7,
+            gainPer: 0.10,
+            window: 3.2,
+        },
+        bed: {
+            layers: [
+                { freq:  73.42, gain: 0.018, type: 'sine' },     // D2 root
+                { freq:  73.72, gain: 0.015, type: 'sine' },     // D2 detune (slow beating)
+                { freq: 110.00, gain: 0.012, type: 'sine' },     // A2 fifth
+                { freq: 146.83, gain: 0.008, type: 'triangle' }, // D3 octave
+                { freq: 196.00, gain: 0.0020, type: 'triangle',
+                  ampLfo: { rate: 0.015, depth: 0.0022 } },      // G3 mid presence
+                // Phosphor hum — extremely quiet ~100 Hz sine suggesting a
+                // dormant CRT transformer. Felt more than heard.
+                { freq: 100.00, gain: 0.004, type: 'sine',
+                  ampLfo: { rate: 0.006, depth: 0.0025 } },
+            ],
+            filter: { type: 'lowpass', freq: 550, Q: 0.6 },
+            filterLfoRate: 0.012,
+            filterLfoDepth: 110,
+            ampLfoRate: 0.013,
+            ampLfoRate2: 0.005,
+            ampLfoDepth: 0.26,
+            ampLfoDepth2: 0.11,
+            reverbSend: 0.24,
+        },
+        reverb: {
+            dur: 9.0,
+            decay: 2.4,
+            wet: 1.35,
+            damping: 2800,
+        },
+        dryLevel: 0.32,
+        delayTaps: [
+            { time: 0.053, gain: 0.20, pan: -0.35 },
+            { time: 0.109, gain: 0.15, pan:  0.40 },
+            { time: 0.173, gain: 0.11, pan: -0.25 },
+            { time: 0.247, gain: 0.07, pan:  0.30 },
+        ],
+        masterGain: 2.00,
+        fadeInSec: 5,
     },
 
 };
@@ -5274,8 +5517,8 @@ function _initEventEngine(prismId) {
         const interval = -Math.log(u) * mean;
         timers.push(setTimeout(tick, interval * 1000));
     }
-    // First event after a short settle (2–4 s)
-    timers.push(setTimeout(tick, 2000 + Math.random() * 2000));
+    // First event after a brief settle (0.8–2 s)
+    timers.push(setTimeout(tick, 800 + Math.random() * 1200));
 
     // Populate _droneNodes in the shape the legacy teardown expects.
     // `oscs`/`lfo`/`filterLfo`/`extraLfos`/`textureStoppables` get .stop()
@@ -5397,29 +5640,6 @@ const CHAMBER_DRONES = {
                 { kind: 'droplet', gain: 0.024,
                   freqs: [523.3, 659.3, 784.0],               // C5, E5, G5
                   intervalMin: 80, intervalMax: 160 },
-            ],
-        },
-    },
-    'gpt3-library': {
-        // VELLUM — scriptorium at night. Deep bed + continuous paper bed + page turns.
-        layers: [
-            { type: 'sine',     freq: 36.7,  gain: 0.22 },
-            { type: 'sine',     freq: 55,    gain: 0.13 },
-            { type: 'triangle', freq: 73.4,  gain: 0.07 },
-            { type: 'sine',     freq: 110,   gain: 0.040 },
-        ],
-        filter: { type: 'lowpass', freq: 380, Q: 1.4 },      // was 280 — let a bit more through
-        lfo: { rate: 0.03, depth: 0.4 },
-        filterLfo: { rate: 0.02, depth: 100 },
-        texture: {
-            oneShots: [
-                // Rare page turn
-                { kind: 'pageTurn', dur: 1.6, gain: 0.065,
-                  intervalMin: 90, intervalMax: 180 },
-                // Soft droplets drawn from the D fundamental
-                { kind: 'droplet', gain: 0.030,
-                  freqs: [440, 587.3, 880],                   // A4, D5, A5
-                  intervalMin: 40, intervalMax: 95 },
             ],
         },
     },
