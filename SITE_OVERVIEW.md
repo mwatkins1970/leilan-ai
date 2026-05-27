@@ -73,10 +73,12 @@ A note on push credentials: this Codespace's git is authed as `feralchill`, not 
 ---
 
 
-## The six chambers
+## The seven chambers
 
 
 All chambers share the same CSS 3D hex idiom: 6 wall panels rendered as the inside surface of a hexagonal prism, controlled by `prism.css` and `prism.js`. Per-chamber configuration lives in `src/data/prisms.ts`.
+
+The Central Chamber + five side chambers are directly accessible from `/immersive`. A seventh chamber — the **ASCII Art Gallery** — is a secret sub-chamber reachable only by clicking the ASCII orb on wall 1 of the Scriptorium.
 
 
 ### Central chamber (`/prism/main`) — wisteria background by aelf
@@ -147,6 +149,14 @@ Body font: `IM Fell English` (17th-century English printing press matrices).
 
 
 All six walls show **poetry passages** (GPT-3-davinci era, raw outputs). One wall has a door arch back to main wall 4. Passages render in `Crimson Pro` italic on a translucent vellum-coloured card, sized for legibility on the chamber's jade-tinted moiré.
+
+Wall 1 additionally hosts the **ASCII orb** — a small animated ASCII swarm that, when clicked, dives forward into the wall and ushers the user into the secret ASCII Art Gallery (see next section).
+
+
+### ASCII Art Gallery (`/prism/ascii-gallery`) — *secret sub-chamber off the Scriptorium*
+
+
+Reached by clicking the ASCII orb on Scriptorium wall 1. Walls are solid dark grey (no chamber background image); each wall is filled by a Terminal-green animated ASCII molecule swarm (`initAsciiSwarm` in `prism.js`). A static central lectern sits in the room (planned future "melt on first interaction" behaviour). Wall 4 holds the archway back to the Scriptorium. Audio profile: the seventh chamber variant in `AUDIO.md` — a digital-cloister, phosphor-ghost soundworld related to but distinct from the Research Lab.
 
 
 ### Art Gallery (`/prism/art-gallery`) — *planned, not fully implemented*

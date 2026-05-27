@@ -3195,12 +3195,22 @@ function initAsciiSwarmPlayer() {
     }
 }
 
-// ASCII art pool: 51 JPEGs in /public/ascii_art/ named ASCII_001.jpeg … ASCII_051.jpeg.
+// ASCII art pool: 46 JPEGs in /public/ascii_art/ named ASCII_001.jpeg … ASCII_046.jpeg.
 // The lectern displays one at a time on its open book. Selection only changes when
 // the user can't see the book (rotated to face wall 1, the back-of-lectern side), or
 // after returning from a zoomed full-screen view — so the image never changes mid-view.
-const ASCII_ART_POOL_SIZE = 51;
+//
+// Sampling rules live in /data/ASCII_chains.json. Some pieces form ordered chains
+// (e.g. once 017 appears, 018→019→020 must follow before random sampling resumes).
+// Two obscure pieces (035, 045) are gated: they cannot appear until at least five
+// other slots (chain-starts or standalones) have already been shown. Each chain
+// counts as one "slot" for the gate threshold.
+const ASCII_ART_POOL_SIZE = 46;
 let _currentLecternArt = null; // numeric index 1..ASCII_ART_POOL_SIZE
+let _asciiChainData = null;    // loaded from /data/ASCII_chains.json
+let _lecternChainQueue = [];   // remaining pieces in active chain (FIFO)
+let _lecternSlotStarts = 0;    // count of chain-starts + standalones shown so far
+let _lecternLastSlotKey = null; // identifier of the previous slot, to avoid back-to-back repeats
 let _lecternZoomed = false;
 let _lecternZoomTransitioning = false;
 let _lecternIdleTimer = null;
@@ -3222,12 +3232,68 @@ function _lecternArtPath(idx) {
     return `/ascii_art/ASCII_${String(idx).padStart(3, '0')}.jpeg`;
 }
 
+async function _loadAsciiChainData() {
+    if (_asciiChainData) return _asciiChainData;
+    try {
+        const r = await fetch('/data/ASCII_chains.json');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        _asciiChainData = await r.json();
+    } catch (err) {
+        console.warn('[ascii-chains] failed to load, falling back to uniform 1..46', err);
+        const standalones = [];
+        for (let i = 1; i <= ASCII_ART_POOL_SIZE; i++) standalones.push(i);
+        _asciiChainData = { poolSize: ASCII_ART_POOL_SIZE, gateThreshold: 0, chains: [], standalones, gated: [] };
+    }
+    return _asciiChainData;
+}
+
 function pickLecternArt() {
-    let pick;
-    do {
-        pick = 1 + Math.floor(Math.random() * ASCII_ART_POOL_SIZE);
-    } while (pick === _currentLecternArt && ASCII_ART_POOL_SIZE > 1);
-    _currentLecternArt = pick;
+    // No-op if chain data hasn't loaded yet; the current image stays put.
+    // initAsciiLecternPage awaits the load before the first pick, and by the
+    // time the user can rotate to trigger another refresh the data is in.
+    if (!_asciiChainData) return;
+
+    // Mid-chain: emit the next piece in order. Slot start count is NOT incremented
+    // for chain continuations — only for new slot openings.
+    if (_lecternChainQueue.length > 0) {
+        _currentLecternArt = _lecternChainQueue.shift();
+        return;
+    }
+
+    const { chains, standalones, gated, gateThreshold } = _asciiChainData;
+    const gateOpen = _lecternSlotStarts >= gateThreshold;
+    const gatedSet = new Set(gated);
+
+    // Build the candidate slot list. Each chain is one slot keyed by its head;
+    // each standalone is its own slot. Gated heads (035, 045) are excluded
+    // until the threshold of prior slot-starts is met.
+    const slots = [];
+    chains.forEach((chain, i) => {
+        const head = chain[0];
+        if (!gateOpen && gatedSet.has(head)) return;
+        slots.push({ kind: 'chain', key: 'c' + i, chain });
+    });
+    standalones.forEach(piece => {
+        if (!gateOpen && gatedSet.has(piece)) return;
+        slots.push({ kind: 'standalone', key: 's' + piece, piece });
+    });
+
+    if (slots.length === 0) return; // defensive — should never happen with valid config
+
+    // Avoid immediately repeating the slot we just finished.
+    const eligible = slots.filter(s => s.key !== _lecternLastSlotKey);
+    const pool = eligible.length > 0 ? eligible : slots;
+    const slot = pool[Math.floor(Math.random() * pool.length)];
+
+    if (slot.kind === 'chain') {
+        _currentLecternArt = slot.chain[0];
+        _lecternChainQueue = slot.chain.slice(1);
+    } else {
+        _currentLecternArt = slot.piece;
+        _lecternChainQueue = [];
+    }
+    _lecternLastSlotKey = slot.key;
+    _lecternSlotStarts += 1;
 }
 
 // Active layer index for the crossfade (0 or 1). The lectern has two
@@ -3273,7 +3339,8 @@ function _maybeRefreshLectern() {
     if (getFacingWall() === 1) refreshLecternArt();
 }
 
-function initAsciiLecternPage() {
+async function initAsciiLecternPage() {
+    await _loadAsciiChainData();
     pickLecternArt();
     const imgs = document.querySelectorAll('.ascii-lectern-page');
     if (imgs.length === 0) return;
@@ -3371,10 +3438,10 @@ function ensureLecternZoomOverlay() {
     const controls = document.createElement('div');
     controls.className = 'lectern-zoom-controls';
     controls.innerHTML = `
-        <button class="zoom-btn" type="button" data-zoom-action="out" aria-label="Zoom out">&minus;</button>
+        <button class="zoom-btn" type="button" data-zoom-action="out" aria-label="Zoom out">-</button>
         <input class="zoom-slider" type="range" min="100" max="500" value="100" step="5" aria-label="Zoom level" />
         <button class="zoom-btn" type="button" data-zoom-action="in" aria-label="Zoom in">+</button>
-        <button class="lectern-close-fullscreen-btn" type="button" aria-label="Close">&times;</button>
+        <button class="lectern-close-fullscreen-btn" type="button" aria-label="Close">X</button>
     `;
     stage.appendChild(controls);
     overlay.appendChild(stage);
@@ -4012,6 +4079,1235 @@ function _scheduleOneShot(ctx, parent, spec, timers) {
     timers.push(setTimeout(fire, initial * 1000));
 }
 
+// === Event-based ambient engine (Shutov Assembly mode) ==========================
+// A sparser, event-driven alternative to CHAMBER_DRONES. Built around modal
+// droplet voices, a damped chamber reverb bus, irregular delay taps, and a
+// near-silent low vapour bed. Per AUDIO.md.
+//
+// Chambers opt in via CHAMBER_PROFILES. initDrone() dispatches here first;
+// chambers without a profile fall through to the legacy CHAMBER_DRONES bed.
+
+const CHAMBER_PROFILES = {
+
+    // -----------------------------------------------------------------------
+    // Central / Shrine chamber — warm, votive, candlelit.
+    // Pitch field: A minor pentatonic + suspended fourths.
+    // -----------------------------------------------------------------------
+    'main': {
+        // Pitch pool (Hz). Droplets pick uniformly from `droplet`, shimmers
+        // and accents from `shimmer`, slow bell tones from `bell.fundamentals`.
+        pitchPool: {
+            droplet: [
+                220.00,  // A3
+                261.63,  // C4
+                293.66,  // D4
+                329.63,  // E4
+                392.00,  // G4
+                440.00,  // A4
+                523.25,  // C5
+                587.33,  // D5
+                659.26,  // E5
+                783.99,  // G5
+                880.00,  // A5
+            ],
+            shimmer: [
+                659.26, 783.99, 880.00, 1046.50, 1318.51,
+            ],
+        },
+        // Slightly inharmonic modal partials — "soft glass" rather than "bright bell"
+        modalRatios: [
+            { r: 1.000,  a: 1.00, q: 16 },
+            { r: 2.001,  a: 0.46, q: 14 },
+            { r: 2.756,  a: 0.28, q: 12 },
+            { r: 5.404,  a: 0.12, q: 10 },
+        ],
+        droplet: {
+            // Per-event peak gain & decay (heard before reverb)
+            gainMin: 0.38, gainMax: 0.65,
+            decayMin: 1.5,  decayMax: 4.5,
+            attackMin: 0.012, attackMax: 0.05,
+        },
+        density: {
+            // Slow modulation of events/minute via a sine over cyclePeriod
+            eventsPerMinMin: 10,
+            eventsPerMinMax: 24,
+            cyclePeriod: 180,           // 3-minute density breath
+            clusterProbability: 0.09,   // chance per scheduled event of a 3-6 droplet cluster
+            longPauseProbability: 0.03, // chance per scheduled event of a 20-45s pause
+        },
+        bell: {
+            // Slow swelling glass bell — accent, not metronome
+            gain: 0.162,
+            durMin: 7.5, durMax: 11,
+            // Min seconds between bells (gate)
+            intervalMin: 40,
+            // Per-event probability of triggering a bell on top of a droplet
+            triggerProb: 0.09,
+            fundamentals: [110.00, 146.83, 164.81, 196.00],  // A2, D3, E3, G3
+        },
+        shimmer: {
+            // Cluster of 4–8 quiet upper pings within a ~4s window
+            intervalMin: 52,
+            triggerProb: 0.12,
+            minCount: 4, maxCount: 8,
+            gainPer: 0.132,
+            window: 4.0,
+        },
+        bed: {
+            // Quiet, slowly modulated low vapour bed. Detuned voices a fifth
+            // apart, sitting in the laptop-speaker sweet spot (110–330 Hz so
+            // the fundamental is actually reproducible). Permitted by
+            // AUDIO.md as "low-level, soft-edged, slowly modulated".
+            layers: [
+                { freq: 110.00, gain: 0.022, type: 'sine' },     // A2
+                { freq: 110.55, gain: 0.019, type: 'sine' },     // A2 detuned (slow beating)
+                { freq: 164.81, gain: 0.015, type: 'sine' },     // E3 fifth
+                { freq: 220.00, gain: 0.010, type: 'triangle' }, // A3 ghost
+                // E3 ghost detune — slightly off the E3 fifth above, with its
+                // own deep slow LFO. Beats softly against the E3 voice instead
+                // of sitting above the bed, so the breathing motion stays
+                // present without ever pushing a "top tone" forward.
+                { freq: 165.30, gain: 0.0018, type: 'sine',
+                  ampLfo: { rate: 0.024, depth: 0.0028 } },        // ~42 s, ±0.0028 swing
+            ],
+            filter: { type: 'lowpass', freq: 700, Q: 0.8 },
+            // Filter LFO: very slow cutoff sweep
+            filterLfoRate: 0.013,   // ~77s sweep
+            filterLfoDepth: 180,
+            // Amp LFO: a real audible swell on the bed amplitude. Two slow
+            // sines summed (incommensurate periods, ~55 s and ~83 s) give an
+            // unpredictable wave-like envelope that never quite repeats.
+            ampLfoRate: 0.018,          // ~55 s primary period
+            ampLfoRate2: 0.0072,        // ~138 s slow tide (irrational against rate1)
+            ampLfoDepth: 0.30,          // ±30% swing — audible "wave" without spiking
+            ampLfoDepth2: 0.12,         // smaller secondary swing
+            // Send a touch of the bed into the reverb so it has chamber-presence
+            reverbSend: 0.30,
+        },
+        reverb: {
+            // Long damped tail — the chamber itself
+            dur: 9.5,
+            decay: 2.6,           // exponent on (1-i/len)
+            wet: 1.6,             // pushed up — the equal-power normalized convolver
+                                  //  attenuates a lot; the chamber should bloom.
+            damping: 2400,        // lowpass on tail
+        },
+        dryLevel: 0.32,           // direct event signal preserves "droplet attack"
+        delayTaps: [
+            // Irregular early-reflection-like taps that feed the reverb input
+            { time: 0.071, gain: 0.22, pan: -0.55 },
+            { time: 0.137, gain: 0.16, pan:  0.62 },
+            { time: 0.211, gain: 0.11, pan: -0.32 },
+            { time: 0.293, gain: 0.07, pan:  0.40 },
+        ],
+        masterGain: 2.4,
+        fadeInSec: 5,
+    },
+
+    // -----------------------------------------------------------------------
+    // Art Gallery — iridescent, reflective, "light on glass".
+    // Per AUDIO.md §4: more shimmer, brighter palette, gentle pitch glissandi,
+    // pentatonic + chromatic colour notes, shorter less-damped reverb.
+    // -----------------------------------------------------------------------
+    'art-gallery': {
+        pitchPool: {
+            // C major pentatonic across two octaves + four chromatic colour notes
+            // (F#4, Bb4, F#5, Bb5) that show up only ~30% of the time via list weight.
+            droplet: [
+                261.63, 293.66, 329.63, 392.00, 440.00,   // C4 D4 E4 G4 A4
+                523.25, 587.33, 659.26, 783.99, 880.00,   // C5 D5 E5 G5 A5
+                261.63, 329.63, 392.00, 523.25, 659.26,   // repeats weight the pentatonic
+                369.99, 466.16,                            // F#4 Bb4 colour notes
+                739.99, 932.33,                            // F#5 Bb5 colour notes
+            ],
+            shimmer: [
+                659.26, 783.99, 880.00,
+                1046.50, 1244.51, 1318.51, 1567.98, 1760.00,   // C6 D#6 E6 G6 A6
+            ],
+        },
+        // Slightly more inharmonic than Shrine — feels glassier, less "bell-like"
+        modalRatios: [
+            { r: 1.000,  a: 1.00, q: 18 },
+            { r: 2.015,  a: 0.48, q: 15 },
+            { r: 2.832,  a: 0.30, q: 13 },
+            { r: 5.486,  a: 0.14, q: 11 },
+        ],
+        droplet: {
+            // Slightly quieter than Shrine per-event (Art is denser, so peaks
+            // need to be softer to avoid pile-up), faster decays = more "glint".
+            gainMin: 0.30, gainMax: 0.52,
+            decayMin: 0.8, decayMax: 3.5,
+            attackMin: 0.008, attackMax: 0.038,
+            // Gentle pitch refraction on ~25% of droplets
+            glissProb: 0.25,
+            glissCents: 75,             // ±75¢ — under a semitone; "shimmer", not "wail"
+        },
+        stereoSpread: 1.8,              // wider than Shrine's 1.6 — more stereo sparkle
+        density: {
+            eventsPerMinMin: 18,
+            eventsPerMinMax: 38,
+            cyclePeriod: 150,           // 2½-minute density breath (faster than Shrine)
+            clusterProbability: 0.12,
+            longPauseProbability: 0.02, // very rare in Art — chamber stays animated
+        },
+        bell: {
+            // Brighter, slightly rarer bell — C/G colour, not the votive A
+            gain: 0.130,
+            durMin: 6.0, durMax: 9.5,
+            intervalMin: 55,
+            triggerProb: 0.06,
+            fundamentals: [130.81, 196.00, 261.63, 392.00],   // C3, G3, C4, G4
+        },
+        shimmer: {
+            // The defining feature of the Art chamber — shimmer-medium-high.
+            intervalMin: 35,
+            triggerProb: 0.22,          // ~3× the Shrine rate
+            minCount: 5, maxCount: 11,
+            gainPer: 0.108,
+            window: 3.5,
+        },
+        bed: {
+            // Lighter chord-cloud, drifting upper voices on independent slow LFOs
+            // so no single tone stays present. C-Lydian-ish field.
+            layers: [
+                { freq: 130.81, gain: 0.020, type: 'sine' },     // C3 root
+                { freq: 131.30, gain: 0.017, type: 'sine' },     // C3 detune (slow beating)
+                { freq: 196.00, gain: 0.013, type: 'sine' },     // G3 fifth
+                { freq: 261.63, gain: 0.008, type: 'triangle' }, // C4 ghost
+                // Two upper "drifting" voices — each has its own deep LFO at
+                // incommensurate rates so they fade in/out independently. No
+                // single voice dominates because they're each quiet AND
+                // randomly absent. (Per AUDIO.md §4 "drifting upper voices".)
+                { freq: 329.63, gain: 0.0020, type: 'sine',
+                  ampLfo: { rate: 0.021, depth: 0.0032 } },      // ~48 s, ±0.0032 swing — E4
+                { freq: 392.00, gain: 0.0017, type: 'sine',
+                  ampLfo: { rate: 0.031, depth: 0.0028 } },      // ~32 s, ±0.0028 swing — G4
+            ],
+            filter: { type: 'lowpass', freq: 1100, Q: 0.7 },   // brighter than Shrine
+            filterLfoRate: 0.017,       // ~59 s sweep
+            filterLfoDepth: 240,
+            // Audible wave swell, slightly gentler than Shrine — Art is busier
+            ampLfoRate: 0.022,
+            ampLfoRate2: 0.0085,
+            ampLfoDepth: 0.26,
+            ampLfoDepth2: 0.10,
+            reverbSend: 0.28,
+        },
+        reverb: {
+            // Shorter and brighter than Shrine — feels like a smaller, more
+            // reflective space (a gallery, not a temple). Less damped to let
+            // upper-mids ring.
+            dur: 7.5,
+            decay: 2.3,
+            wet: 1.4,
+            damping: 4500,
+        },
+        dryLevel: 0.34,                 // slightly more direct than Shrine — events crisper
+        delayTaps: [
+            // Slightly wider stereo spread and one more tap than Shrine
+            { time: 0.059, gain: 0.22, pan: -0.70 },
+            { time: 0.103, gain: 0.18, pan:  0.72 },
+            { time: 0.181, gain: 0.13, pan: -0.40 },
+            { time: 0.241, gain: 0.10, pan:  0.45 },
+            { time: 0.349, gain: 0.06, pan: -0.18 },
+        ],
+        masterGain: 2.4,
+        fadeInSec: 5,
+    },
+
+    // -----------------------------------------------------------------------
+    // Research Lab — cool, lucid, computational, "glass-and-water" / "data
+    // droplets striking transparent surfaces". Per AUDIO.md §2.
+    // Distinguished from the Shrine and Art Gallery by:
+    //   • Whole-tone + quartal pitch field (no tonic, no major/minor colour)
+    //   • Metallic / inharmonic modal ratios (struck glass, not soft bell)
+    //   • Faster, shorter "precise pings"; subtle per-event stereo, wide overall
+    //   • Very low bed level, slightly drier reverb than Shrine/Art
+    // -----------------------------------------------------------------------
+    'research-lab': {
+        pitchPool: {
+            // Whole-tone scale (C D E F# G# Bb), spanning two octaves.
+            // No tonic, no consonant triads — reads as neutral/analytic.
+            droplet: [
+                261.63, 293.66, 329.63, 369.99, 415.30, 466.16,   // C4 D4 E4 F#4 G#4 Bb4
+                523.25, 587.33, 659.26, 739.99, 830.61, 932.33,   // C5 D5 E5 F#5 G#5 Bb5
+                // Repeat the middle-octave pitches to weight the "centre" of the field
+                329.63, 369.99, 415.30, 466.16,
+                587.33, 659.26, 739.99,
+            ],
+            shimmer: [
+                659.26, 739.99, 830.61, 932.33,                   // E5 F#5 G#5 Bb5
+                1046.50, 1174.66, 1318.51, 1479.98, 1661.22,      // C6 D6 E6 F#6 G#6
+                1864.66,                                          // Bb6 (rare upper glint)
+            ],
+        },
+        // Metallic modal ratios — pushed clearly further inharmonic than Shrine
+        // (1, 2.001, 2.756, 5.404) and Art (1, 2.015, 2.832, 5.486). These
+        // ratios are closer to the modes of a thin metal bar / fine struck
+        // glass than to a bell. Higher Qs let each partial ring out cleanly.
+        modalRatios: [
+            { r: 1.000,  a: 1.00, q: 22 },
+            { r: 2.193,  a: 0.46, q: 18 },
+            { r: 3.589,  a: 0.26, q: 15 },
+            { r: 5.872,  a: 0.12, q: 12 },
+        ],
+        droplet: {
+            // Faster, shorter — "precise pings" rather than blooming droplets.
+            gainMin: 0.48, gainMax: 0.80,
+            decayMin: 0.6, decayMax: 3.0,
+            attackMin: 0.005, attackMax: 0.030,
+            // Rare, very narrow gliss — reads as faint "data jitter", not refraction
+            glissProb: 0.06,
+            glissCents: 25,
+        },
+        // Subtle per-event stereo — events feel placed, not splashed.
+        // The overall stereo image is widened by wider delay taps below.
+        stereoSpread: 1.2,
+        density: {
+            eventsPerMinMin: 16,
+            eventsPerMinMax: 35,
+            cyclePeriod: 200,             // slower breath cycle — analytic patience
+            clusterProbability: 0.05,     // rare — events are mostly separated
+            longPauseProbability: 0.05,   // occasional pause for thinking
+        },
+        bell: {
+            // "Occasional distant low tone" — these are the rare deep, slow
+            // tones that the AUDIO.md brief asks for. Quartal fundamentals,
+            // long durations, very rare triggering, lower gain than other
+            // chambers so they read as distant rather than present.
+            gain: 0.168,
+            durMin: 9.0, durMax: 13.0,
+            intervalMin: 80,
+            triggerProb: 0.05,
+            fundamentals: [130.81, 174.61, 196.00, 233.08],   // C3 F3 G3 Bb3 (quartal)
+        },
+        shimmer: {
+            // Medium — between Shrine's low and Art's high. Whole-tone clusters.
+            intervalMin: 50,
+            triggerProb: 0.15,
+            minCount: 4, maxCount: 8,
+            gainPer: 0.160,
+            window: 3.8,
+        },
+        bed: {
+            // Very low bedLevel per AUDIO.md. Quartal stack (C/F/G — fourths
+            // and fifths) with no third, so the bed has no major/minor colour.
+            // Two drifting upper voices on independent slow LFOs add a faint
+            // "computational shimmer" without ever fixing on a single tone.
+            layers: [
+                // Bed dropped a full octave into the sub-bass / low-bass register
+                // to give the chamber genuine low-end weight. Bass voices are
+                // boosted ~2× to compensate for laptop-speaker rolloff below
+                // ~120 Hz. One triangle voice (F2) adds a touch of harmonic
+                // content so the bass remains audible even on small speakers.
+                { freq:  65.41, gain: 0.028, type: 'sine' },     // C2 root
+                { freq:  65.65, gain: 0.024, type: 'sine' },     // C2 detune (very slow beating)
+                { freq:  87.31, gain: 0.020, type: 'triangle' }, // F2 fourth (triangle for warmth)
+                { freq:  98.00, gain: 0.015, type: 'sine' },     // G2 fifth
+                // Drifting mid voices — also dropped an octave (E3 / F#3) so
+                // they no longer sit above the bed as a "top tone"; instead
+                // they fill the mid-bass and beat softly against the
+                // fundamentals. Whole-tone interval between them keeps the
+                // bed neutral.
+                { freq: 164.81, gain: 0.0035, type: 'sine',
+                  ampLfo: { rate: 0.019, depth: 0.0059 } },      // ~53 s, E3
+                { freq: 185.00, gain: 0.0029, type: 'sine',
+                  ampLfo: { rate: 0.029, depth: 0.0047 } },      // ~34 s, F#3
+            ],
+            filter: { type: 'lowpass', freq: 420, Q: 0.6 },     // rolls off mids — bass dominant
+            filterLfoRate: 0.015,         // ~67 s sweep
+            filterLfoDepth: 140,           // gentler sweep at the lower cutoff
+            // Slightly slower waves than Shrine/Art — the Research bed is
+            // more "patient", less actively swelling
+            ampLfoRate: 0.014,
+            ampLfoRate2: 0.0055,
+            ampLfoDepth: 0.28,
+            ampLfoDepth2: 0.12,
+            reverbSend: 0.22,             // less wet than Art (0.28) — drier feel
+        },
+        reverb: {
+            // Medium hall, medium-strong damping. Shorter than Shrine, more
+            // damped than Art — a "different room", neither temple nor gallery.
+            dur: 8.5,
+            decay: 2.5,
+            wet: 1.3,
+            damping: 3000,
+        },
+        dryLevel: 0.36,                   // slightly drier than Shrine/Art — "more separated"
+        delayTaps: [
+            // Wider per-tap stereo spread than the other chambers — even though
+            // each event is panned narrowly, the chamber response paints a
+            // broad stereo image. ("subtle but wide" per AUDIO.md.)
+            { time: 0.043, gain: 0.20, pan: -0.85 },
+            { time: 0.097, gain: 0.16, pan:  0.85 },
+            { time: 0.157, gain: 0.12, pan: -0.55 },
+            { time: 0.227, gain: 0.09, pan:  0.55 },
+            { time: 0.317, gain: 0.06, pan: -0.20 },
+            { time: 0.401, gain: 0.04, pan:  0.20 },
+        ],
+        masterGain: 2.4,
+        fadeInSec: 5,
+    },
+
+    // -----------------------------------------------------------------------
+    // OVS Chapel — cool, glassy, "shimmering hazes and washes of sound,
+    // smeared colours". Per AUDIO.md §6 (remote, sacred, alien, but calm).
+    // Distinguished from the other chambers by:
+    //   • Bb tonal field with austere root+fifth + occasional tritone/2nd colour
+    //   • Long blooming droplets (slow attacks 40-200ms, decays 2.5-6.5s)
+    //   • Heavy use of the new "wash" event (slow swell-in + pitch-smeared partials)
+    //   • Very high glissProb on droplets (50%) for the "smeared" feel
+    //   • Longest reverb of any chamber (12.5s) with cool damping
+    //   • Wide, slow stereo motion
+    // -----------------------------------------------------------------------
+    'ovs-chapel': {
+        pitchPool: {
+            // Bb tonal field: root, fifth, with rare second/tritone colour.
+            // Repeated Bb and F pitches weight the field toward austere
+            // root+fifth; C (second) and E (tritone) appear ~15% of the time.
+            droplet: [
+                233.08, 349.23, 466.16, 698.46, 932.33,     // Bb3 F4 Bb4 F5 Bb5
+                233.08, 349.23, 466.16, 698.46,              // weight Bb/F further
+                174.61, 116.54,                              // F3 Bb2 (lower)
+                // Occasional colour notes
+                261.63, 329.63,                              // C4 E4 (second / tritone)
+                523.25, 659.26,                              // C5 E5
+            ],
+            shimmer: [
+                698.46, 932.33,                              // F5 Bb5
+                1046.50, 1244.51, 1396.91, 1864.66,          // C6 Eb6 F6 Bb6
+                1318.51,                                     // E6 — rare tritone glint
+            ],
+        },
+        // Soft-glass modal ratios — similar to Shrine but with a touch more
+        // resonance on the upper partials so they ring icily into the long reverb.
+        modalRatios: [
+            { r: 1.000,  a: 1.00, q: 18 },
+            { r: 2.001,  a: 0.50, q: 16 },
+            { r: 2.756,  a: 0.32, q: 14 },
+            { r: 5.404,  a: 0.16, q: 12 },
+        ],
+        droplet: {
+            // Blooming droplets — slow attacks, long decays. Each is a
+            // small luminous event that fades into the long reverb tail.
+            gainMin: 0.58, gainMax: 0.95,
+            decayMin: 2.5, decayMax: 6.5,
+            attackMin: 0.04, attackMax: 0.20,
+            // Heavy "smear": ~65% of droplets carry a pitch sweep up to
+            // ±120¢ (just over a semitone) — reads as "colour shifting",
+            // the watercolour blur of the chamber.
+            glissProb: 0.65,
+            glissCents: 120,
+        },
+        stereoSpread: 1.7,              // wider — more stereo wash
+        density: {
+            eventsPerMinMin: 42,
+            eventsPerMinMax: 90,
+            cyclePeriod: 220,           // slow breath cycle preserved
+            clusterProbability: 0.15,
+            longPauseProbability: 0.02, // rare — chamber continuously painted
+        },
+        bell: {
+            // Warm bells — near-harmonic partial stack (1 / 2 / 3 / 4 / 6 with
+            // tiny detunes) gives a clearly-pitched, rounded resonance instead
+            // of the cold inharmonic bell timbre. Read as warm temple tones
+            // blooming through the chamber alongside the cooler washes.
+            gain: 0.22,
+            durMin: 7.0, durMax: 11.5,
+            intervalMin: 18,
+            triggerProb: 0.25,
+            fundamentals: [116.54, 174.61, 233.08, 349.23],   // Bb2, F3, Bb3, F4
+            partials: [
+                { r: 1.000, a: 1.00 },
+                { r: 2.000, a: 0.60 },                        // pure octave
+                { r: 3.005, a: 0.32 },                        // ~12th, slight detune
+                { r: 4.010, a: 0.20 },                        // ~2× octave
+                { r: 6.011, a: 0.10 },                        // ~2 octaves + 5th
+            ],
+        },
+        shimmer: {
+            // Now arrives every ~12 s — small clusters of upper-register glints
+            // contributing to the watercolour feel.
+            intervalMin: 12,
+            triggerProb: 0.55,
+            minCount: 5, maxCount: 11,
+            gainPer: 0.16,
+            window: 4.2,
+        },
+        // Wash events — the defining OVS feature. Slow swell-in, brief peak,
+        // quick decay, with per-partial pitch wobble for the "smeared colour"
+        // quality. Tripled rate so multiple washes overlap continuously and
+        // blend like wet watercolour layers.
+        wash: {
+            gain: 0.28,
+            durMin: 8.0, durMax: 14.0,
+            intervalMin: 12,
+            triggerProb: 0.55,
+            stereoSpread: 1.6,
+            fundamentals: [
+                174.61, 233.08, 349.23,                      // F3, Bb3, F4
+                466.16, 698.46,                              // Bb4, F5
+                261.63, 392.00,                              // C4, G4 (second-colour)
+            ],
+        },
+        bed: {
+            // Bb-tonal bed: root + fifth foundation, plus two drifting mid
+            // voices on independent slow LFOs. Slightly more present than
+            // Research Lab's bed (lowBedLevel: "low-medium" per AUDIO.md)
+            // — provides the "low-mid resonant base".
+            layers: [
+                { freq: 116.54, gain: 0.022, type: 'sine' },     // Bb2 root
+                { freq: 117.03, gain: 0.019, type: 'sine' },     // Bb2 detune (slow beating)
+                { freq: 174.61, gain: 0.015, type: 'triangle' }, // F3 fifth (triangle = warmth)
+                { freq: 233.08, gain: 0.010, type: 'sine' },     // Bb3 octave
+                // Drifting upper voices — F4 and Bb4 with deep slow LFOs.
+                // Wider LFO depths than other chambers so these come and go
+                // dramatically — they create the "haze" feel as they bloom
+                // briefly in and out.
+                { freq: 349.23, gain: 0.0030, type: 'sine',
+                  ampLfo: { rate: 0.014, depth: 0.0050 } },      // ~71 s, F4
+                { freq: 466.16, gain: 0.0024, type: 'sine',
+                  ampLfo: { rate: 0.023, depth: 0.0040 } },      // ~43 s, Bb4
+            ],
+            filter: { type: 'lowpass', freq: 600, Q: 0.7 },     // cool — rolls off treble
+            filterLfoRate: 0.011,         // ~91 s sweep — very slow
+            filterLfoDepth: 160,
+            // Wide slow wave swell — slower than other chambers (sacred patience).
+            ampLfoRate: 0.012,            // ~83 s
+            ampLfoRate2: 0.0048,          // ~208 s slow tide
+            ampLfoDepth: 0.32,            // slightly bigger swing than Research
+            ampLfoDepth2: 0.14,
+            reverbSend: 0.36,             // more wet on the bed — adds to "wash"
+        },
+        reverb: {
+            // Longest reverb of any chamber — 12.5 s tail. Cool damping
+            // (2200 Hz) — slightly more damped than Shrine for the "cold
+            // glass" feel rather than "warm temple".
+            dur: 12.5,
+            decay: 2.8,
+            wet: 1.6,
+            damping: 2200,
+        },
+        dryLevel: 0.24,                   // lower than other chambers — events feel washy/blurred
+        delayTaps: [
+            // Slow wide stereo — 6 taps spread out, with longer pre-delays
+            // than Research, giving the chamber a wider, deeper feel.
+            { time: 0.083, gain: 0.20, pan: -0.80 },
+            { time: 0.139, gain: 0.16, pan:  0.82 },
+            { time: 0.211, gain: 0.13, pan: -0.50 },
+            { time: 0.287, gain: 0.10, pan:  0.55 },
+            { time: 0.379, gain: 0.07, pan: -0.25 },
+            { time: 0.467, gain: 0.05, pan:  0.30 },
+        ],
+        masterGain: 2.4,
+        fadeInSec: 6,                     // slightly longer fade than other chambers
+    },
+
+    // -----------------------------------------------------------------------
+    // Mythopoeic Archive — ancient, cavernous, mythic, "underworld-adjacent
+    // but not frightening". Per AUDIO.md §3 (avoid horror; old and deep but
+    // hospitable). Defining features:
+    //   • Descending Shepard tone as a "slow-falling-into-the-deep" presence
+    //   • D-minor modal field — root, fifth, minor third, flattened second
+    //   • Sparsest event density of any chamber (3-9 events/min per spec)
+    //   • Long blooming droplets, long decays
+    //   • Longest reverb (15 s), strongly damped — cavernous stone acoustic
+    //   • Very rare shimmer; "distant boom" via low warm bells
+    // -----------------------------------------------------------------------
+    'mythopoeic-archive': {
+        pitchPool: {
+            // D-minor modal pool — D, F, A core, with Eb (flattened second)
+            // and C (minor 7th) as ancient/Phrygian colour notes.
+            // Repeats weight the field toward D and A (root and fifth).
+            droplet: [
+                146.83, 174.61, 220.00, 293.66,          // D3 F3 A3 D4
+                349.23, 440.00,                          // F4 A4
+                146.83, 220.00, 293.66, 440.00,          // weight D and A
+                311.13, 261.63,                          // Eb4 (flat 2nd), C4 (m7)
+                587.33,                                  // D5 — rare upper
+                174.61,                                  // F3 minor third (extra weight)
+            ],
+            shimmer: [
+                587.33, 698.46, 880.00, 1174.66,         // D5 F5 A5 D6 — sparse upper
+            ],
+        },
+        // Standard soft-glass modal ratios — same family as Shrine. We don't
+        // want metallic resonances in a "stone" chamber; soft glass droplets
+        // through massive reverb is the right reading.
+        modalRatios: [
+            { r: 1.000,  a: 1.00, q: 18 },
+            { r: 2.001,  a: 0.48, q: 15 },
+            { r: 2.756,  a: 0.30, q: 13 },
+            { r: 5.404,  a: 0.14, q: 11 },
+        ],
+        droplet: {
+            // Long blooming events — slowest attacks and longest decays of
+            // any chamber so far.
+            gainMin: 0.34, gainMax: 0.58,
+            decayMin: 3.0, decayMax: 8.0,
+            attackMin: 0.05, attackMax: 0.25,
+            // Moderate smear — events blur into the long reverb naturally
+            glissProb: 0.30,
+            glissCents: 60,
+        },
+        stereoSpread: 1.0,                 // narrower per-event — events feel placed in vastness
+        density: {
+            // Sparsest chamber per AUDIO.md (3-9 events/min). Lots of silence.
+            eventsPerMinMin: 4,
+            eventsPerMinMax: 10,
+            cyclePeriod: 240,              // slowest density breath of any chamber
+            clusterProbability: 0.04,
+            longPauseProbability: 0.10,    // frequent moments of pure reverb tail
+        },
+        bell: {
+            // "Distant boom" tones — low D2/A2/D3 fundamentals with a warm
+            // near-harmonic stack but slightly more inharmonic at the upper
+            // partials than OVS, so they read as "stone" rather than "glass".
+            gain: 0.16,
+            durMin: 10.0, durMax: 16.0,
+            intervalMin: 65,
+            triggerProb: 0.10,
+            fundamentals: [73.42, 110.00, 146.83, 220.00],   // D2 A2 D3 A3
+            partials: [
+                { r: 1.000, a: 1.00 },
+                { r: 2.000, a: 0.55 },                       // pure octave
+                { r: 2.953, a: 0.32 },                       // slightly flat 12th (stone character)
+                { r: 4.041, a: 0.20 },                       // slightly sharp 2× oct
+                { r: 6.072, a: 0.10 },                       // ~2 octaves + 5th (slight detune)
+            ],
+        },
+        shimmer: {
+            // Very rare per AUDIO.md ("shimmerProbability: very low")
+            intervalMin: 90,
+            triggerProb: 0.05,
+            minCount: 3, maxCount: 6,
+            gainPer: 0.06,
+            window: 5.0,                   // wide window — pings drift apart
+        },
+        // ---- The Shepard descending tone — Mythos's defining feature ----
+        // 5 voices each sweeping from C5 down to C2 (3 octaves) over 150 s,
+        // phase-offset by 1/5 of the cycle. Always descending — feels like
+        // something slowly falling into the deep, without ever ending.
+        // Heavy reverb send for "cave" depth.
+        shepard: {
+            fLow: 65.41,                   // C2
+            fHigh: 1046.50,                // C5 (4 octaves of sweep range)
+            numVoices: 5,
+            period: 150,                   // 150 s per full sweep
+            direction: 'down',
+            gain: 0.085,                   // subtle — part of the bed character
+            reverbSend: 0.55,              // strong wet — adds to "cave" feel
+        },
+        bed: {
+            // D-minor low-mid bed. Quietly present — the Shepard provides the
+            // most movement, the bed gives a hospitable harmonic ground.
+            layers: [
+                { freq:  73.42, gain: 0.022, type: 'sine' },     // D2 sub
+                { freq:  73.78, gain: 0.018, type: 'sine' },     // D2 detune (slow beating)
+                { freq: 110.00, gain: 0.015, type: 'triangle' }, // A2 fifth (triangle = body)
+                { freq: 146.83, gain: 0.011, type: 'sine' },     // D3 octave
+                { freq: 174.61, gain: 0.007, type: 'sine' },     // F3 minor third
+                // Single drifting upper voice — A3 with deep slow LFO so the
+                // bed has a faint inhalation of upper colour without a
+                // dominant top tone.
+                { freq: 220.00, gain: 0.0026, type: 'sine',
+                  ampLfo: { rate: 0.011, depth: 0.0040 } },      // ~91 s, A3
+            ],
+            filter: { type: 'lowpass', freq: 480, Q: 0.7 },     // cool/dark — strong damping
+            filterLfoRate: 0.009,                                // ~111 s sweep — very slow
+            filterLfoDepth: 130,
+            // Slowest wave swell of any chamber — mythic patience
+            ampLfoRate: 0.010,                                   // ~100 s
+            ampLfoRate2: 0.0042,                                 // ~238 s slow tide
+            ampLfoDepth: 0.30,
+            ampLfoDepth2: 0.14,
+            reverbSend: 0.32,
+        },
+        reverb: {
+            // Longest reverb of any chamber — 15 s tail. Strongly damped at
+            // 1800 Hz so the chamber reads as a cavern of soft stone (not
+            // a polished hall and not a glass chapel).
+            dur: 15.0,
+            decay: 3.0,
+            wet: 1.45,
+            damping: 1800,
+        },
+        dryLevel: 0.22,                    // distant events — mostly heard through the chamber
+        delayTaps: [
+            // Very wide and slow — taps land far apart, suggesting a huge space
+            { time: 0.103, gain: 0.20, pan: -0.85 },
+            { time: 0.181, gain: 0.16, pan:  0.85 },
+            { time: 0.271, gain: 0.13, pan: -0.55 },
+            { time: 0.367, gain: 0.10, pan:  0.55 },
+            { time: 0.479, gain: 0.07, pan: -0.25 },
+            { time: 0.587, gain: 0.05, pan:  0.30 },
+        ],
+        masterGain: 2.4,
+        fadeInSec: 7,                       // slowest fade — chamber arrives gradually
+    },
+
+};
+
+// Procedural exponential-decay impulse response, stereo-decorrelated, with
+// a soft early-reflection cluster for chamber geometry.
+function _createChamberIR(ctx, dur, decay) {
+    const sr = ctx.sampleRate;
+    const len = Math.floor(sr * dur);
+    const buf = ctx.createBuffer(2, len, sr);
+    // Early reflection times (in samples) — irregular, ~6–80 ms
+    const earlies = [0.006, 0.013, 0.023, 0.031, 0.041, 0.058, 0.072, 0.089]
+        .map(t => Math.floor(t * sr));
+    for (let ch = 0; ch < 2; ch++) {
+        const data = buf.getChannelData(ch);
+        // Diffuse exponential tail
+        for (let i = 0; i < len; i++) {
+            // Slight per-channel decay difference = stereo width
+            const env = Math.pow(1 - i / len, decay + (ch === 0 ? 0 : -0.07));
+            data[i] = (Math.random() * 2 - 1) * env;
+        }
+        // Pepper in a few stronger early reflections (slightly offset per channel)
+        earlies.forEach((idx, k) => {
+            const off = ch === 0 ? 0 : Math.floor(0.0018 * sr);
+            const i = idx + off;
+            if (i < len) data[i] += (Math.random() * 2 - 1) * (0.35 - k * 0.025);
+        });
+    }
+    return buf;
+}
+
+// Modal droplet voice — short sine excitation through a bank of resonant
+// bandpass filters at slightly inharmonic ratios. Per AUDIO.md Module 1.
+// Returns nothing; cleans up its own scheduled nodes via stop().
+//
+// Optional `glissCents`: if non-zero, every modal filter's centre frequency
+// sweeps from start to end over the first ~60% of the droplet, giving a
+// "pitch refraction" effect (used by the Art Gallery for prismatic shimmer).
+function _spawnModalDroplet(ctx, dest, opts) {
+    const now = ctx.currentTime;
+
+    // Per-event panner
+    const pan = ctx.createStereoPanner();
+    pan.pan.value = opts.pan;
+    pan.connect(dest);
+
+    // Master per-event envelope (slow swell-in, long exponential tail)
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, now);
+    env.gain.exponentialRampToValueAtTime(opts.peak, now + opts.attack);
+    env.gain.exponentialRampToValueAtTime(0.0001, now + opts.dur);
+    env.connect(pan);
+
+    // Glissando setup — sweep filter freqs from startMul..endMul over ~60% of dur.
+    const gliss = opts.glissCents || 0;
+    const endMul = gliss !== 0 ? Math.pow(2, gliss / 1200) : 1;
+    const sweepDur = opts.dur * 0.6;
+
+    // Short sine excitation — a 40 ms ping that drives the modal bank.
+    // If glissando is active, the excitation also sweeps so the early-phase
+    // colour follows the modal centres.
+    const exc = ctx.createOscillator();
+    exc.type = 'sine';
+    exc.frequency.setValueAtTime(opts.freq, now);
+    if (gliss !== 0) {
+        exc.frequency.exponentialRampToValueAtTime(opts.freq * endMul, now + sweepDur);
+    }
+    const excGain = ctx.createGain();
+    excGain.gain.setValueAtTime(0.0001, now);
+    excGain.gain.exponentialRampToValueAtTime(1.0, now + 0.003);
+    excGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
+    exc.connect(excGain);
+
+    // Modal filter bank — each partial = resonant bandpass at ratio*freq.
+    // Sweep each filter's centre frequency in parallel if glissCents is set.
+    opts.ratios.forEach(p => {
+        const f = ctx.createBiquadFilter();
+        f.type = 'bandpass';
+        const f0 = opts.freq * p.r;
+        f.frequency.setValueAtTime(f0, now);
+        if (gliss !== 0) {
+            f.frequency.exponentialRampToValueAtTime(f0 * endMul, now + sweepDur);
+        }
+        f.Q.value = p.q;
+        const g = ctx.createGain();
+        g.gain.value = p.a;
+        excGain.connect(f); f.connect(g); g.connect(env);
+    });
+
+    exc.start(now); exc.stop(now + 0.08);
+}
+
+// Reverse-swell "wash" — slow exponential swell-in over ~85% of duration,
+// brief peak, then a fast tail-off. Each modal partial has its own slow
+// pitch LFO (±0.5%) so the whole swell smears in tone as it rises, like
+// a coloured haze drifting in and out. Used by the OVS Chapel for the
+// "smeared washes of sound" character.
+function _spawnReverseSwell(ctx, dest, opts) {
+    const now = ctx.currentTime;
+    const dur = opts.dur;
+
+    const pan = ctx.createStereoPanner();
+    pan.pan.value = opts.pan;
+    pan.connect(dest);
+
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, now);
+    env.gain.exponentialRampToValueAtTime(opts.peak, now + dur * 0.85);
+    env.gain.setValueAtTime(opts.peak, now + dur * 0.92);
+    env.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    env.connect(pan);
+
+    // Slightly inharmonic partials — give the swell a luminous-glass colour
+    const partials = [
+        { r: 1.000, a: 1.00 },
+        { r: 1.498, a: 0.58 },   // not quite a perfect fifth — alien colour
+        { r: 2.005, a: 0.36 },
+        { r: 2.793, a: 0.20 },
+        { r: 4.213, a: 0.10 },
+    ];
+    partials.forEach(p => {
+        const o = ctx.createOscillator();
+        o.type = 'sine';
+        const baseF = opts.freq * p.r;
+        o.frequency.value = baseF;
+
+        // Per-partial slow pitch wobble — the smear. Each partial gets its
+        // own incommensurate rate so the partials drift relative to one another.
+        const wobLfo = ctx.createOscillator();
+        wobLfo.type = 'sine';
+        wobLfo.frequency.value = 0.045 + Math.random() * 0.09;   // 0.045–0.135 Hz
+        const wobGain = ctx.createGain();
+        wobGain.gain.value = baseF * 0.005;                       // ±0.5% pitch swing
+        wobLfo.connect(wobGain); wobGain.connect(o.frequency);
+
+        const g = ctx.createGain();
+        g.gain.value = p.a;
+        o.connect(g); g.connect(env);
+        o.start(now); o.stop(now + dur + 0.2);
+        wobLfo.start(now); wobLfo.stop(now + dur + 0.2);
+    });
+}
+
+// Slow glass bell — direct sum of slightly inharmonic sine partials with
+// a long swell-in (no transient) and a long decay. Soft accent only.
+function _spawnGlassBell(ctx, dest, opts) {
+    const now = ctx.currentTime;
+    const dur = opts.dur;
+
+    const pan = ctx.createStereoPanner();
+    pan.pan.value = opts.pan;
+    pan.connect(dest);
+
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, now);
+    env.gain.exponentialRampToValueAtTime(opts.peak, now + dur * 0.42);
+    env.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    env.connect(pan);
+
+    // Default partial set is the cool/glass bell (inharmonic). Chambers can
+    // override via opts.partials — e.g. a near-harmonic stack for "warm bell"
+    // tones (OVS Chapel uses both: the cold inharmonic set isn't currently
+    // employed by anything else, but the option is open).
+    const partials = opts.partials || [
+        { r: 1.000, a: 1.00 },
+        { r: 2.003, a: 0.50 },
+        { r: 2.756, a: 0.32 },
+        { r: 5.404, a: 0.14 },
+    ];
+    partials.forEach(p => {
+        const o = ctx.createOscillator();
+        o.type = 'sine';
+        o.frequency.value = opts.freq * p.r;
+        const g = ctx.createGain();
+        g.gain.value = p.a;
+        o.connect(g); g.connect(env);
+        o.start(now); o.stop(now + dur + 0.2);
+    });
+}
+
+// Shepard tone — the auditory illusion of a continuously ascending or
+// descending pitch. N sine voices, each sweeping exponentially across
+// the same frequency range (fLow → fHigh), phase-offset by 1/N of the
+// cycle period. Each voice's gain follows a Hann window across its
+// cycle — silent at the endpoints, full in the middle — so the
+// wraparound jump (where freq returns to the cycle start) happens
+// inaudibly. The Mythos chamber uses a single descending Shepard tone
+// as a deep mythic-presence layer in its bed.
+//
+// Implementation: pre-schedules ~30s of linearRamp events at 100ms
+// granularity, with a setInterval refilling the schedule every ~15s.
+// Reuses the existing textureTimers cleanup path (clearTimeout works
+// on setInterval IDs in browsers).
+function _createShepardEngine(ctx, dest, reverbInput, opts) {
+    const layerGain = ctx.createGain();
+    layerGain.gain.value = opts.gain;
+    layerGain.connect(dest);
+
+    // Optional parallel reverb send
+    let reverbSendGain = null;
+    if (reverbInput && opts.reverbSend) {
+        reverbSendGain = ctx.createGain();
+        reverbSendGain.gain.value = opts.reverbSend;
+        layerGain.connect(reverbSendGain);
+        reverbSendGain.connect(reverbInput);
+    }
+
+    const N = opts.numVoices;
+    const T = opts.period;
+    const direction = opts.direction || 'down';
+    const fLow = opts.fLow;
+    const fHigh = opts.fHigh;
+    const STEP = 0.1;          // 100 ms ramp granularity
+    const AHEAD = 30;          // schedule 30 s in advance
+
+    const voices = [];
+    for (let i = 0; i < N; i++) {
+        const o = ctx.createOscillator();
+        o.type = 'sine';
+        const g = ctx.createGain();
+        g.gain.value = 0.0001;
+        o.connect(g); g.connect(layerGain);
+        o.start();
+        voices.push({ o, g, phaseOffset: i / N });
+    }
+
+    function freqAtPhase(phase) {
+        // Direction='down': at phase 0, freq = fHigh; at phase 1, freq = fLow.
+        // Direction='up':   at phase 0, freq = fLow;  at phase 1, freq = fHigh.
+        return direction === 'down'
+            ? fHigh * Math.pow(fLow / fHigh, phase)
+            : fLow  * Math.pow(fHigh / fLow, phase);
+    }
+    function envAtPhase(phase) {
+        // Hann window — 0 at endpoints, 1 at midpoint
+        return Math.max(0.0001, 0.5 * (1 - Math.cos(2 * Math.PI * phase)));
+    }
+
+    let lastScheduledTime = 0;
+    function scheduleAhead() {
+        const ctxNow = ctx.currentTime;
+        const startT = Math.max(lastScheduledTime, ctxNow);
+        const endT = ctxNow + AHEAD;
+
+        const firstPass = (lastScheduledTime === 0);
+        voices.forEach(v => {
+            if (firstPass) {
+                const phase = ((startT / T) + v.phaseOffset) % 1;
+                v.o.frequency.setValueAtTime(freqAtPhase(phase), startT);
+                v.g.gain.setValueAtTime(envAtPhase(phase), startT);
+            }
+            for (let t = startT + STEP; t <= endT; t += STEP) {
+                const phase = ((t / T) + v.phaseOffset) % 1;
+                v.o.frequency.linearRampToValueAtTime(freqAtPhase(phase), t);
+                v.g.gain.linearRampToValueAtTime(envAtPhase(phase), t);
+            }
+        });
+        lastScheduledTime = endT;
+    }
+
+    scheduleAhead();
+    const refillId = setInterval(scheduleAhead, (AHEAD * 1000) / 2);
+
+    return {
+        stoppables: voices.map(v => v.o),
+        intervals: [refillId],
+    };
+}
+
+function _initEventEngine(prismId) {
+    const cfg = CHAMBER_PROFILES[prismId];
+    if (!cfg) return false;
+
+    _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = _audioCtx;
+
+    // Master fade (smooth in/out independent of any modulation)
+    const fade = ctx.createGain();
+    fade.gain.value = 0;
+    fade.connect(ctx.destination);
+
+    const master = ctx.createGain();
+    master.gain.value = cfg.masterGain;
+    master.connect(fade);
+
+    // ---- Shared chamber reverb bus ---------------------------------------
+    const conv = ctx.createConvolver();
+    conv.buffer = _createChamberIR(ctx, cfg.reverb.dur, cfg.reverb.decay);
+    const reverbDamp = ctx.createBiquadFilter();
+    reverbDamp.type = 'lowpass';
+    reverbDamp.frequency.value = cfg.reverb.damping;
+    const wetGain = ctx.createGain();
+    wetGain.gain.value = cfg.reverb.wet;
+    conv.connect(reverbDamp); reverbDamp.connect(wetGain); wetGain.connect(master);
+
+    // Dry bus — small direct signal so droplets retain attack identity
+    const dryGain = ctx.createGain();
+    dryGain.gain.value = cfg.dryLevel;
+    dryGain.connect(master);
+
+    // Event submix: all per-event voices route here; eventBus feeds both
+    // dry bus and reverb input, plus a few irregular delay taps.
+    const eventBus = ctx.createGain();
+    eventBus.gain.value = 1.0;
+    eventBus.connect(conv);
+    eventBus.connect(dryGain);
+
+    // Irregular delay taps (early-reflection feel from a different geometry)
+    cfg.delayTaps.forEach(t => {
+        const d = ctx.createDelay(2.0);
+        d.delayTime.value = t.time;
+        const g = ctx.createGain();
+        g.gain.value = t.gain;
+        const p = ctx.createStereoPanner();
+        p.pan.value = t.pan;
+        eventBus.connect(d); d.connect(g); g.connect(p); p.connect(conv);
+    });
+
+    // ---- Low vapour bed --------------------------------------------------
+    const bedFilter = ctx.createBiquadFilter();
+    bedFilter.type = cfg.bed.filter.type;
+    bedFilter.frequency.value = cfg.bed.filter.freq;
+    bedFilter.Q.value = cfg.bed.filter.Q;
+
+    // Dedicated amplitude node on the bed — the LFOs modulate this so the
+    // drone audibly swells in and out like a slow wave.
+    const bedAmp = ctx.createGain();
+    bedAmp.gain.value = 1.0;
+    bedFilter.connect(bedAmp);
+    bedAmp.connect(master);
+
+    // Touch of bed into reverb so it shares chamber presence
+    const bedReverbSend = ctx.createGain();
+    bedReverbSend.gain.value = cfg.bed.reverbSend;
+    bedAmp.connect(bedReverbSend); bedReverbSend.connect(conv);
+
+    const bedOscs = [];
+    const bedLayerLfos = [];   // per-layer ampLfo oscillators (need .stop() on teardown)
+    cfg.bed.layers.forEach(L => {
+        const o = ctx.createOscillator();
+        o.type = L.type;
+        o.frequency.value = L.freq;
+        const g = ctx.createGain();
+        g.gain.value = L.gain;
+        o.connect(g); g.connect(bedFilter);
+        o.start();
+        bedOscs.push(o);
+
+        // Optional per-layer ampLfo: independent slow swell on this layer's gain.
+        // Used so individual bed voices (e.g. the high glimmer) can come and go
+        // independently of the shared bedAmp wave.
+        if (L.ampLfo) {
+            const llfo = ctx.createOscillator();
+            llfo.type = 'sine';
+            llfo.frequency.value = L.ampLfo.rate;
+            const llfoGain = ctx.createGain();
+            llfoGain.gain.value = L.ampLfo.depth;
+            llfo.connect(llfoGain); llfoGain.connect(g.gain);
+            llfo.start();
+            bedLayerLfos.push(llfo);
+        }
+    });
+
+    // Bed filter LFO (slow cutoff sweep)
+    const fLfo = ctx.createOscillator();
+    fLfo.type = 'sine';
+    fLfo.frequency.value = cfg.bed.filterLfoRate;
+    const fLfoGain = ctx.createGain();
+    fLfoGain.gain.value = cfg.bed.filterLfoDepth;
+    fLfo.connect(fLfoGain); fLfoGain.connect(bedFilter.frequency);
+    fLfo.start();
+
+    // Bed amp LFOs — two slow sines at incommensurate rates sum into bedAmp.gain.
+    // The base gain is 1.0, so total swing is ~(1 - depth1 - depth2) .. (1 + depth1 + depth2).
+    const aLfo = ctx.createOscillator();
+    aLfo.type = 'sine';
+    aLfo.frequency.value = cfg.bed.ampLfoRate;
+    const aLfoGain = ctx.createGain();
+    aLfoGain.gain.value = cfg.bed.ampLfoDepth;
+    aLfo.connect(aLfoGain); aLfoGain.connect(bedAmp.gain);
+    aLfo.start();
+
+    const aLfo2 = ctx.createOscillator();
+    aLfo2.type = 'sine';
+    aLfo2.frequency.value = cfg.bed.ampLfoRate2 || 0.0072;
+    const aLfo2Gain = ctx.createGain();
+    aLfo2Gain.gain.value = cfg.bed.ampLfoDepth2 || 0.0;
+    aLfo2.connect(aLfo2Gain); aLfo2Gain.connect(bedAmp.gain);
+    aLfo2.start();
+
+    // ---- Optional Shepard tone layer (Mythos chamber uses this) --------
+    // Routed directly to master + reverb (bypasses bedFilter, since its
+    // upper voices need to be heard intact).
+    let shepardStoppables = [];
+    let shepardIntervals = [];
+    if (cfg.shepard) {
+        const sh = _createShepardEngine(ctx, master, conv, cfg.shepard);
+        shepardStoppables = sh.stoppables;
+        shepardIntervals = sh.intervals;
+    }
+
+    // ---- Event scheduler -------------------------------------------------
+    const timers = [];
+    const startTime = ctx.currentTime;
+
+    function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+    function densityNow() {
+        const t = ctx.currentTime - startTime;
+        const phase = (t / cfg.density.cyclePeriod) * 2 * Math.PI;
+        const x = 0.5 - 0.5 * Math.cos(phase);   // 0..1
+        return cfg.density.eventsPerMinMin
+             + x * (cfg.density.eventsPerMinMax - cfg.density.eventsPerMinMin);
+    }
+
+    function fireDroplet(pitchArr) {
+        if (!_audioCtx || _audioCtx.state === 'closed') return;
+        const freq = pick(pitchArr || cfg.pitchPool.droplet);
+        const peak = cfg.droplet.gainMin
+                   + Math.random() * (cfg.droplet.gainMax - cfg.droplet.gainMin);
+        const dur = cfg.droplet.decayMin
+                  + Math.random() * (cfg.droplet.decayMax - cfg.droplet.decayMin);
+        const attack = cfg.droplet.attackMin
+                     + Math.random() * (cfg.droplet.attackMax - cfg.droplet.attackMin);
+        let glissCents = 0;
+        if (cfg.droplet.glissProb && Math.random() < cfg.droplet.glissProb) {
+            const range = cfg.droplet.glissCents || 50;
+            glissCents = (Math.random() - 0.5) * 2 * range;   // ±range cents
+        }
+        _spawnModalDroplet(_audioCtx, eventBus, {
+            freq, ratios: cfg.modalRatios, peak, attack, dur,
+            pan: (Math.random() - 0.5) * (cfg.stereoSpread || 1.6),
+            glissCents,
+        });
+    }
+
+    function fireCluster() {
+        const count = 3 + Math.floor(Math.random() * 4);
+        for (let i = 0; i < count; i++) {
+            timers.push(setTimeout(() => fireDroplet(), 100 + Math.random() * 4500));
+        }
+    }
+
+    function fireShimmer() {
+        const sh = cfg.shimmer;
+        const n = sh.minCount + Math.floor(Math.random() * (sh.maxCount - sh.minCount + 1));
+        for (let i = 0; i < n; i++) {
+            const when = Math.random() * sh.window * 1000;
+            timers.push(setTimeout(() => {
+                if (!_audioCtx || _audioCtx.state === 'closed') return;
+                const freq = pick(cfg.pitchPool.shimmer);
+                _spawnModalDroplet(_audioCtx, eventBus, {
+                    freq, ratios: cfg.modalRatios, peak: sh.gainPer,
+                    attack: 0.006 + Math.random() * 0.02,
+                    dur: 1.0 + Math.random() * 1.8,
+                    pan: (Math.random() - 0.5) * 1.8,
+                });
+            }, when));
+        }
+    }
+
+    function fireBell() {
+        const f = pick(cfg.bell.fundamentals);
+        const dur = cfg.bell.durMin + Math.random() * (cfg.bell.durMax - cfg.bell.durMin);
+        _spawnGlassBell(_audioCtx, eventBus, {
+            freq: f, peak: cfg.bell.gain, dur,
+            pan: (Math.random() - 0.5) * 0.8,
+            partials: cfg.bell.partials,
+        });
+    }
+
+    function fireWash() {
+        const f = pick(cfg.wash.fundamentals);
+        const dur = cfg.wash.durMin + Math.random() * (cfg.wash.durMax - cfg.wash.durMin);
+        _spawnReverseSwell(_audioCtx, eventBus, {
+            freq: f, peak: cfg.wash.gain, dur,
+            pan: (Math.random() - 0.5) * (cfg.wash.stereoSpread || 1.2),
+        });
+    }
+
+    let lastBellAt = 0;
+    let lastShimmerAt = 0;
+    let lastWashAt = 0;
+
+    function tick() {
+        if (!_audioCtx || _audioCtx.state === 'closed') return;
+        const now = _audioCtx.currentTime;
+
+        // 1. Decide the body of this event
+        const r = Math.random();
+        if (r < cfg.density.longPauseProbability) {
+            // Long quiet pause — just schedule the next tick further out
+            const wait = 20 + Math.random() * 25;   // 20–45s
+            timers.push(setTimeout(tick, wait * 1000));
+            return;
+        }
+        if (r < cfg.density.longPauseProbability + cfg.density.clusterProbability) {
+            fireCluster();
+        } else {
+            fireDroplet();
+        }
+
+        // 2. Maybe layer a bell accent
+        if (cfg.bell && now - lastBellAt > cfg.bell.intervalMin
+            && Math.random() < cfg.bell.triggerProb) {
+            fireBell();
+            lastBellAt = now;
+        }
+
+        // 3. Maybe layer a shimmer cluster
+        if (cfg.shimmer && now - lastShimmerAt > cfg.shimmer.intervalMin
+            && Math.random() < cfg.shimmer.triggerProb) {
+            fireShimmer();
+            lastShimmerAt = now;
+        }
+
+        // 3b. Maybe layer a reverse-swell wash (OVS-style "smeared colour")
+        if (cfg.wash && now - lastWashAt > cfg.wash.intervalMin
+            && Math.random() < cfg.wash.triggerProb) {
+            fireWash();
+            lastWashAt = now;
+        }
+
+        // 4. Schedule next event using a Poisson-style exponential inter-arrival
+        const d = densityNow();
+        const mean = 60 / d;
+        const u = Math.max(0.001, Math.random());
+        const interval = -Math.log(u) * mean;
+        timers.push(setTimeout(tick, interval * 1000));
+    }
+    // First event after a short settle (2–4 s)
+    timers.push(setTimeout(tick, 2000 + Math.random() * 2000));
+
+    // Populate _droneNodes in the shape the legacy teardown expects.
+    // `oscs`/`lfo`/`filterLfo`/`extraLfos`/`textureStoppables` get .stop()
+    // wrapped in try/catch; `textureTimers` gets clearTimeout()'d.
+    // Merge Shepard refill-intervals into the same timers array the scheduler
+    // pushes to at runtime — so cleanup catches everything via one reference.
+    shepardIntervals.forEach(id => timers.push(id));
+
+    _droneNodes = {
+        oscs: bedOscs,
+        gains: [],
+        filter: bedFilter,
+        master,
+        fade,
+        lfo: fLfo,
+        filterLfo: aLfo,
+        extraLfos: [aLfo2, ...bedLayerLfos],
+        textureBus: eventBus,
+        // Shepard oscillators get stopped alongside texture nodes; Shepard
+        // setInterval IDs share the textureTimers cleanup (clearTimeout
+        // works on setInterval IDs in browsers).
+        textureStoppables: shepardStoppables,
+        textureTimers: timers,
+    };
+
+    // Fade in
+    fade.gain.setValueAtTime(0, ctx.currentTime);
+    fade.gain.linearRampToValueAtTime(1, ctx.currentTime + cfg.fadeInSec);
+
+    return true;
+}
+
 // === Chamber recipes ============================================================
 const CHAMBER_DRONES = {
     'main': {
@@ -4205,6 +5501,16 @@ let _droneStarted = false;
 
 function initDrone() {
     if (_droneStarted) return;
+
+    // Chambers with a CHAMBER_PROFILES entry use the new event-based engine.
+    // Everything else falls through to the legacy stacked-oscillator path.
+    if (CHAMBER_PROFILES[_prismId]) {
+        _droneStarted = true;
+        if (_initEventEngine(_prismId)) return;
+        // Engine failed for some reason — leak _droneStarted=true so we don't retry.
+        return;
+    }
+
     const config = CHAMBER_DRONES[_prismId];
     if (!config) return;
     _droneStarted = true;

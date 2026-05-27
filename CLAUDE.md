@@ -191,6 +191,7 @@ type WallContent =
   | { type: 'shrine-search' }
   | { type: 'ovs-star' }
   | { type: 'poetry-passage'; maxChars?: number }
+  | { type: 'ascii-wall' }
 ```
 
 **Background resolution** (`src/pages/prism/[id].astro`): `chamberBgAlt && (i % 2 === 1) ? chamberBgAlt : chamberBg ?? wall.bg`. The four MOIRE side chambers (research-lab, ovs-chapel, gpt3-library, mythopoeic-archive) all use this alternation: walls 1/3/5 show `MOIRE_background.jpeg`, walls 2/4/6 show `MOIRE_background_alt.jpeg`. The per-chamber `chamberBgOverlay` PNG sits on top of both.
@@ -275,7 +276,10 @@ Entry from main wall 6. Door on wall 4 → `/prism/main?wall=3`.
 Entry from main wall 3. Six random gallery walls; door on wall 4. Wall 4 uses `GALLERY_POOL_WIDE` only (w/h ≥ 1.2) to fit above the archway.
 
 ### GPT-3 LIBRARY (`/prism/gpt3-library`) — MOIRE + `SCRIPTORIUM_background_new.png`
-Entry from main wall 4. Six poetry-passage walls; door on wall 4 (uses `maxChars: 200` to keep passages short above the archway).
+Entry from main wall 4. Six poetry-passage walls; door on wall 4 (uses `maxChars: 200` to keep passages short above the archway). Wall 1 hosts the **ASCII orb portal** — an animated ASCII swarm that dives into the wall when clicked and ushers the user into the secret ASCII Art Gallery (see below). Wall 1's passages are capped at `maxChars: 141` so they sit cleanly beside the orb.
+
+### ASCII ART GALLERY (`/prism/ascii-gallery`) — secret sub-chamber, solid dark grey walls
+Entered by clicking the ASCII orb on Scriptorium wall 1. User lands facing wall 1; the door back on wall 4 returns to Scriptorium wall 1 (the orb wall). All six walls use `ascii-wall` content type: a Terminal-green animated ASCII molecule swarm (`initAsciiSwarm` in `prism.js`) drawn directly over solid dark grey (no `chamberBg`, no `chamberBgOverlay`). A static lectern (`#ascii-lectern`) stands at the centre of the floor — currently non-interactive; a planned future feature will melt it (`_lecternMelted`) on first interaction. The chamber's audio profile (see `AUDIO.md` — "ASCII Gallery") is the seventh chamber variant: a digital-cloister, phosphor-ghost soundworld distinct from but related to the Research Lab.
 
 ### LessWrong Interstitial Pages
 
