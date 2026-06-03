@@ -4193,17 +4193,27 @@ const CHAMBER_PROFILES = {
             // apart, sitting in the laptop-speaker sweet spot (110–330 Hz so
             // the fundamental is actually reproducible). Permitted by
             // AUDIO.md as "low-level, soft-edged, slowly modulated".
+            // A major triad (A2–C#3–E3): the bed was an open fifth (A+E, no
+            // third) which read cold/aloof. The added major third turns it warm
+            // and "sunlit". Root, third and fifth each carry an independent slow
+            // amp LFO at incommensurate rates, so the chord's internal balance
+            // keeps drifting like shifting light — none ever fully drops out.
             layers: [
-                { freq: 110.00, gain: 0.022, type: 'sine' },     // A2
-                { freq: 110.55, gain: 0.019, type: 'sine' },     // A2 detuned (slow beating)
-                { freq: 164.81, gain: 0.015, type: 'sine' },     // E3 fifth
-                { freq: 220.00, gain: 0.010, type: 'triangle' }, // A3 ghost
-                // E3 ghost detune — slightly off the E3 fifth above, with its
-                // own deep slow LFO. Beats softly against the E3 voice instead
-                // of sitting above the bed, so the breathing motion stays
-                // present without ever pushing a "top tone" forward.
+                // Root — A2
+                { freq: 110.00, gain: 0.024, type: 'sine',
+                  ampLfo: { rate: 0.0088, depth: 0.013 } },        // ~114 s
+                { freq: 110.55, gain: 0.018, type: 'sine' },       // A2 detune (slow beating)
+                // Major third — C#3. Kept low and under the 700 Hz lowpass so it
+                // never clashes in-octave with the A-minor-pentatonic droplets.
+                { freq: 138.59, gain: 0.018, type: 'sine',
+                  ampLfo: { rate: 0.0151, depth: 0.011 } },        // ~66 s
+                // Fifth — E3
+                { freq: 164.81, gain: 0.017, type: 'sine',
+                  ampLfo: { rate: 0.0119, depth: 0.010 } },        // ~84 s
+                // E3 ghost detune — beats softly against the E3 fifth.
                 { freq: 165.30, gain: 0.0018, type: 'sine',
                   ampLfo: { rate: 0.024, depth: 0.0028 } },        // ~42 s, ±0.0028 swing
+                { freq: 220.00, gain: 0.010, type: 'triangle' },   // A3 octave glue
             ],
             filter: { type: 'lowpass', freq: 700, Q: 0.8 },
             // Filter LFO: very slow cutoff sweep
@@ -4634,7 +4644,7 @@ const CHAMBER_PROFILES = {
             { time: 0.379, gain: 0.07, pan: -0.25 },
             { time: 0.467, gain: 0.05, pan:  0.30 },
         ],
-        masterGain: 0.72,
+        masterGain: 0.54,                 // dropped to 75% (was 0.72) — density felt overwhelming
         fadeInSec: 6,                     // slightly longer fade than other chambers
     },
 
@@ -4687,8 +4697,9 @@ const CHAMBER_PROFILES = {
         },
         stereoSpread: 1.0,                 // narrower per-event — events feel placed in vastness
         density: {
-            // Sparsest chamber per AUDIO.md (3-9 events/min). Lots of silence.
-            eventsPerMinMin: 4,
+            // Sparsest chamber per AUDIO.md. Lots of silence, but a low floor
+            // raised slightly (4→6) so steady-state gaps don't overstay.
+            eventsPerMinMin: 6,
             eventsPerMinMax: 10,
             cyclePeriod: 240,              // slowest density breath of any chamber
             clusterProbability: 0.04,
@@ -4777,7 +4788,7 @@ const CHAMBER_PROFILES = {
             { time: 0.479, gain: 0.07, pan: -0.25 },
             { time: 0.587, gain: 0.05, pan:  0.30 },
         ],
-        masterGain: 1.20,
+        masterGain: 0.90,                   // dropped to 75% (was 1.20) — density felt overwhelming
         fadeInSec: 7,                       // slowest fade — chamber arrives gradually
     },
 
@@ -4823,7 +4834,7 @@ const CHAMBER_PROFILES = {
         },
         stereoSpread: 0.8,
         density: {
-            eventsPerMinMin: 4,
+            eventsPerMinMin: 6,            // raised from 4 — keeps gaps from overstaying
             eventsPerMinMax: 12,
             cyclePeriod: 240,
             clusterProbability: 0.04,
@@ -5266,7 +5277,15 @@ function _initEventEngine(prismId) {
     // Master fade (smooth in/out independent of any modulation)
     const fade = ctx.createGain();
     fade.gain.value = 0;
-    fade.connect(ctx.destination);
+    // User volume (top-centre slider) — dedicated node, independent of the
+    // fade-in / video / archway ramps that operate on `fade`.
+    const userVol = ctx.createGain();
+    userVol.gain.value = (window.__leilanVolume ?? 1);
+    fade.connect(userVol);
+    userVol.connect(ctx.destination);
+    window.__applyLeilanVolume = (g) => {
+        try { userVol.gain.setTargetAtTime(g, ctx.currentTime, 0.03); } catch (e) {}
+    };
 
     const master = ctx.createGain();
     master.gain.value = cfg.masterGain;
@@ -5394,12 +5413,31 @@ function _initEventEngine(prismId) {
 
     function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
+    // Randomise where in the density breath each visit begins, so arrival is
+    // never pinned to the same point of the cycle (the un-offset sine starts at
+    // its trough — the quietest possible moment to walk in on).
+    const densityPhase0 = Math.random() * 2 * Math.PI;
+    // Warm start: for the first introBoostSec, hold density at/above introTarget
+    // (default: the midpoint of the breath) so the chamber feels alive on
+    // arrival, then relaxes into its natural sparse breath.
+    const introBoostSec = cfg.density.introBoostSec ?? 75;
+    const introTarget = cfg.density.introTarget
+        ?? (cfg.density.eventsPerMinMin
+            + 0.5 * (cfg.density.eventsPerMinMax - cfg.density.eventsPerMinMin));
+
     function densityNow() {
         const t = ctx.currentTime - startTime;
-        const phase = (t / cfg.density.cyclePeriod) * 2 * Math.PI;
+        const phase = densityPhase0 + (t / cfg.density.cyclePeriod) * 2 * Math.PI;
         const x = 0.5 - 0.5 * Math.cos(phase);   // 0..1
-        return cfg.density.eventsPerMinMin
-             + x * (cfg.density.eventsPerMinMax - cfg.density.eventsPerMinMin);
+        let d = cfg.density.eventsPerMinMin
+              + x * (cfg.density.eventsPerMinMax - cfg.density.eventsPerMinMin);
+        const warm = Math.max(0, 1 - t / introBoostSec);   // 1 → 0 over introBoostSec
+        if (warm > 0) {
+            const floor = cfg.density.eventsPerMinMin
+                        + warm * (introTarget - cfg.density.eventsPerMinMin);
+            if (floor > d) d = floor;
+        }
+        return d;
     }
 
     function fireDroplet(pitchArr) {
@@ -5477,7 +5515,10 @@ function _initEventEngine(prismId) {
 
         // 1. Decide the body of this event
         const r = Math.random();
-        if (r < cfg.density.longPauseProbability) {
+        // Suppress long pauses during the opening window — no dead-air arrivals.
+        const introGuardSec = cfg.density.introGuardSec ?? 30;
+        const sinceStart = now - startTime;
+        if (sinceStart > introGuardSec && r < cfg.density.longPauseProbability) {
             // Long quiet pause — just schedule the next tick further out
             const wait = 20 + Math.random() * 25;   // 20–45s
             timers.push(setTimeout(tick, wait * 1000));
@@ -5517,8 +5558,8 @@ function _initEventEngine(prismId) {
         const interval = -Math.log(u) * mean;
         timers.push(setTimeout(tick, interval * 1000));
     }
-    // First event after a brief settle (0.8–2 s)
-    timers.push(setTimeout(tick, 800 + Math.random() * 1200));
+    // First event after a brief settle (0.4–1.0 s) — land a drip/chime soon
+    timers.push(setTimeout(tick, 400 + Math.random() * 600));
 
     // Populate _droneNodes in the shape the legacy teardown expects.
     // `oscs`/`lfo`/`filterLfo`/`extraLfos`/`textureStoppables` get .stop()
@@ -5853,7 +5894,7 @@ function initDrone() {
     fade.gain.linearRampToValueAtTime(1, _audioCtx.currentTime + 4);
 }
 
-// Auto-start drone after 2.5s. AudioContext may be suspended (browser autoplay
+// Auto-start drone after 1.5s. AudioContext may be suspended (browser autoplay
 // policy) — if so, resume on first user interaction.
 setTimeout(() => {
     initDrone();
@@ -5868,7 +5909,7 @@ setTimeout(() => {
         document.addEventListener('click', resumeAudio);
         document.addEventListener('keydown', resumeAudio);
     }
-}, 2500);
+}, 1500);
 
 // --- Reveal scene: opaque curtain hides everything while assets paint ---
 // The scene renders normally behind a black curtain div (z-index:9999).

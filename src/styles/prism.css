@@ -1229,16 +1229,19 @@ body:not(.sky-mode) .sky-toggle { display: none; }
    nothing reads as nicotine-stained any more. */
 
 [data-prism-id="ovs-chapel"] .wall-bg {
-    /* Vermillion / blood-red on burgundy — occult / stained glass */
-    filter: hue-rotate(335deg) saturate(2.3) brightness(0.85) contrast(1.05);
+    /* Moiré now pre-coloured in the image itself (MOIRE_background_c3) — no
+       CSS tint, so the authored colouration renders true. */
+    filter: none;
 }
 [data-prism-id="mythopoeic-archive"] .wall-bg {
-    /* Indigo / violet on midnight — cosmic / astrolabe */
-    filter: hue-rotate(218deg) saturate(1.7) brightness(0.80);
+    /* Moiré now pre-coloured in the image itself (MOIRE_background_c2) — no
+       CSS tint, so the authored colouration renders true. */
+    filter: none;
 }
 [data-prism-id="research-lab"] .wall-bg {
-    /* Cyan on steel — clean lab / blueprint */
-    filter: hue-rotate(180deg) saturate(1.4) brightness(0.85) contrast(1.05);
+    /* Moiré now pre-coloured in the image itself (MOIRE_background_c1) — no
+       CSS tint, so the authored colouration renders true. */
+    filter: none;
 }
 [data-prism-id="gpt3-library"] .wall-bg {
     /* Jade / vellum — medieval scriptorium */
@@ -1432,7 +1435,9 @@ body:not(.sky-mode) .sky-toggle { display: none; }
 /* ===== GPT-3 Library (Scriptorium) — jade & deep teal ===== */
 
 [data-prism-id="gpt3-library"] .wall-poetry-passage {
-    inset: 18% 8% 14% 8%;
+    /* Symmetric top/bottom (was 18%/14%) so the card centres within the
+       corner brackets rather than sitting a touch low. */
+    inset: 16% 8% 16% 8%;
 }
 [data-prism-id="gpt3-library"] .wall-poetry-passage[data-has-archway] {
     inset: 18% 8% 36% 8%;
@@ -1440,7 +1445,9 @@ body:not(.sky-mode) .sky-toggle { display: none; }
 [data-prism-id="gpt3-library"] .poetry-card {
     background: rgba(240, 252, 246, 0.55);
     border-radius: 8px;
-    padding: calc(2 * 1.32em) 1.4em 1.1em;
+    /* Balanced top/bottom padding (was 2.64em top / 1.1em bottom) so the text
+       centres within the card. Same total height, just re-centred. */
+    padding: 1.85em 1.4em;
 }
 [data-prism-id="gpt3-library"] .poetry-text {
     color: rgba(3, 36, 26, 0.90);

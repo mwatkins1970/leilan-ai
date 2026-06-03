@@ -193,8 +193,8 @@ export const prisms: Record<string, PrismConfig> = {
     'research-lab': {
         id: 'research-lab',
         title: 'Research Lab',
-        chamberBg: '/images/MOIRE_background.jpeg',
-        chamberBgAlt: '/images/MOIRE_background_alt.jpeg',
+        chamberBg: '/images/MOIRE_background_c1.jpeg',
+        chamberBgAlt: '/images/MOIRE_background_alt_c1.jpeg',
         chamberBgOverlay: '/images/RESEARCH_background_new.png',
         wallBorder: false,
         walls: [
@@ -272,8 +272,8 @@ export const prisms: Record<string, PrismConfig> = {
     'ovs-chapel': {
         id: 'ovs-chapel',
         title: 'OVS Chapel',
-        chamberBg: '/images/MOIRE_background.jpeg',
-        chamberBgAlt: '/images/MOIRE_background_alt.jpeg',
+        chamberBg: '/images/MOIRE_background_c3.jpeg',
+        chamberBgAlt: '/images/MOIRE_background_alt_c3.jpeg',
         chamberBgOverlay: '/images/OVS_background_new.png',
         wallBorder: false,
         walls: [
@@ -446,8 +446,8 @@ export const prisms: Record<string, PrismConfig> = {
     'mythopoeic-archive': {
         id: 'mythopoeic-archive',
         title: 'Mythopoeic Archive',
-        chamberBg: '/images/MOIRE_background.jpeg',
-        chamberBgAlt: '/images/MOIRE_background_alt.jpeg',
+        chamberBg: '/images/MOIRE_background_c2.jpeg',
+        chamberBgAlt: '/images/MOIRE_background_alt_c2.jpeg',
         chamberBgOverlay: '/images/MYTHOS_background_new.png',
         wallBorder: false,
         walls: [

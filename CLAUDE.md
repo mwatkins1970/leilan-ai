@@ -1,6 +1,6 @@
 # Leilan.ai — Claude Code Master Reference
 
-*Last refreshed: 2026-05-16.*
+*Last refreshed: 2026-06-03.*
 
 ## What This Site Is
 
@@ -45,6 +45,7 @@ leilan-ai/
 │   │   └── lesswrong-petertodd-last-stand.astro    # Interstitial → 'petertodd's last stand' LW post
 │   ├── components/
 │   │   ├── WallPanel.astro                   # One wall face of a prism chamber
+│   │   ├── VolumeControl.astro               # Global mute+volume slider (top-centre; immersive + prism pages)
 │   │   └── Footer.astro
 │   ├── data/
 │   │   ├── prisms.ts                         # All chamber/wall content configuration
@@ -84,11 +85,11 @@ leilan-ai/
 - **Per-chamber display fonts**: Spectral (Research), Marcellus (OVS), IM Fell English (Mythos), Crimson Pro (Scriptorium), Cormorant Garamond (default labels)
 - **Primary accent**: `#5eefa2` (emerald green) — landing page and nav
 - **Background**: `#000000` (pure black)
-- **Prism inner walls**: dark greyscale (rgb ~0.1–0.18)
+- **Prism walls (immersive Three.js)**: gleaming white as of 2026-06-03 (was dark gunmetal). Inner walls `0.80 + 0.20·shade`; outer walls `0.40 + 0.60·shade` — the per-face `faceColors` value drives `shade`, so the corrugation reads as directional shading on white. Set in `wallSkyFragment` (~line 1191 in immersive.astro).
 - **Prism rim (hexagonal edge)**: warm beige (rgb ~0.66–0.76)
 - **Prism cap top surface**: lighter beige (rgb ~0.50–0.66 depending on chamber)
 - **Cap border lines**: pure white `#FFFFFF`
-- **Outer walls**: near-black with sky texture overlay + serpentine colour shader
+- **Outer walls**: gleaming white base + serpentine colour shader overlay
 
 See `DESIGN_SYSTEM.md` for full token list.
 
@@ -194,7 +195,13 @@ type WallContent =
   | { type: 'ascii-wall' }
 ```
 
-**Background resolution** (`src/pages/prism/[id].astro`): `chamberBgAlt && (i % 2 === 1) ? chamberBgAlt : chamberBg ?? wall.bg`. The four MOIRE side chambers (research-lab, ovs-chapel, gpt3-library, mythopoeic-archive) all use this alternation: walls 1/3/5 show `MOIRE_background.jpeg`, walls 2/4/6 show `MOIRE_background_alt.jpeg`. The per-chamber `chamberBgOverlay` PNG sits on top of both.
+**Background resolution** (`src/pages/prism/[id].astro`): `chamberBgAlt && (i % 2 === 1) ? chamberBgAlt : chamberBg ?? wall.bg`. The four MOIRE side chambers use this alternation: walls 1/3/5 show the base image, walls 2/4/6 the alt. A per-chamber `chamberBgOverlay` PNG (corner brackets) sits on top of both.
+
+**Moiré migration (in progress, 2026-06-03).** aelf is replacing the single shared moiré + CSS hue-rotate tint with **per-chamber, pre-coloured square (2048²) moiré images**. As each chamber's pair lands, its `chamberBg`/`chamberBgAlt` are repointed and its `[data-prism-id="…"] .wall-bg` CSS filter is set to `filter: none` (so the authored colour renders true, not double-tinted). Done so far:
+- research-lab → `MOIRE_background_c1.jpeg` / `_alt_c1`
+- mythopoeic-archive → `MOIRE_background_c2.jpeg` / `_alt_c2`
+- ovs-chapel → `MOIRE_background_c3.jpeg` / `_alt_c3`
+- gpt3-library → still on shared `MOIRE_background.jpeg` / `_alt` with the jade CSS tint (awaiting its `_c4` pair)
 
 ### Wall Numbering & Rotation (prism.js)
 Single state variable `shrinePos` ∈ {0..5} = where wall 1 (shrine/entry-facing wall) currently sits.
@@ -353,6 +360,7 @@ The original `mythopoeic-archive-ufo.html` link to *petertodd's Last Stand* incl
 Only Crossbones (`/video/crossbones.mp4`) is wired up. Every other word-panel `▶ video` button is in the disabled placeholder state.
 
 ### Resolved
+- Gleaming-white walls (June 2026): `wallSkyFragment` remapped from dark `baseGrey * faceColors` to a bright white range while preserving per-face shading — see Design System above.
 - Inner wall appearance (April 2026): all sections use sky shader with `faceColors`; `groundGlow` opacity zeroed.
 - Rim outlines (April 2026): now a proper `THREE.Mesh` with thick quad ribbons.
 - isReturn highlight crash (April 2026): null-guarded `prism.groundGlow._rimFills` access.
@@ -381,8 +389,10 @@ Only Crossbones (`/video/crossbones.mp4`) is wired up. Every other word-panel `�
 - Push credentials are now configured for `mwatkins1970` directly (this Codespace was previously authed as `feralchill` — that's been changed)
 - See `SITE_OVERVIEW.md` for a higher-level orientation document and `DESIGN_SYSTEM.md` for visual tokens
 - Last public commit on `main`: `b5d39e5` — "update gpt3 scriptorium passages and masks-and-chains file"
-- Recent local-only work (uncommitted as of 2026-05-16):
+- Recent local-only work (uncommitted as of 2026-06-03):
   - Three LessWrong interstitial pages (`src/pages/lesswrong-*.astro`)
-  - `chamberBgAlt` field added to `PrismConfig`; four MOIRE chambers now alternate `MOIRE_background.jpeg` / `MOIRE_background_alt.jpeg` around their six walls
+  - `chamberBgAlt` field added to `PrismConfig`; four MOIRE chambers now alternate base / alt images around their six walls
   - LessWrong external links in six wall-text files re-pointed to the new interstitials
+  - **2026-06-03 session**: audio event-timing overhaul (warm-start density, random breath phase, no dead-air openings, faster first event, `initDrone` 2.5s→1.5s, Mythos/Scriptorium density floors 4→6); OVS/Mythos `masterGain` dropped to 75% (0.54 / 0.90); Central Shrine bed reworked into a fluctuating A-major triad; global volume control (`VolumeControl.astro` + `userVol` gain node in both audio chains); gleaming-white immersive walls; per-chamber pre-coloured moiré for research-lab / mythopoeic-archive / ovs-chapel (`_c1/_c2/_c3`) with CSS tint disabled; Scriptorium poetry cards re-centred
   - Various small content updates across `src/data/wall-texts/`, `immersive.astro`, `prism.js`, `prism.css`
+  - **Note**: a 642 MB `leilan-ai-2026-05-27.zip` backup sits in the repo root (gitignored). Heaviest live assets pending a launch-time compression pass: `wall-border.png` (5.6 MB), `wall-bg.jpg` (2.5 MB).

@@ -1,5 +1,6 @@
 ---
 // Immersive 3D Experience
+import VolumeControl from '../components/VolumeControl.astro';
 ---
 
 <!DOCTYPE html>
@@ -62,6 +63,7 @@
     <canvas id="sky-canvas"></canvas>
     <canvas id="webgl-canvas"></canvas>
     <div id="fade-overlay"></div>
+    <VolumeControl />
     <script type="module">
         import * as THREE from 'three';
         import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -1189,16 +1191,18 @@
             varying vec3 vVertexColor;
             varying float vIsInner;
             void main() {
-                // Inner walls (B-F): flat dark greyscale, no stars
+                // Per-face brightness (the faceColors value) encodes the
+                // directional / corrugation shading. Remap it into a bright
+                // "gleaming white" range instead of the old dark gunmetal.
+                float shade = clamp((vVertexColor.r + vVertexColor.g + vVertexColor.b) / 3.0, 0.0, 1.0);
                 if (vIsInner > 0.5) {
-                    gl_FragColor = vec4(vVertexColor, 1.0);
+                    // Inner walls: gleaming white, only gently shaded.
+                    gl_FragColor = vec4(vec3(0.80 + 0.20 * shade), 1.0);
                     return;
                 }
-                // Flat very dark grey (replaces starry sky texture); per-face vVertexColor
-                // multiplier preserves subtle directional shading.
-                vec3 baseGrey = vec3(0.11);
-                vec3 finalColor = baseGrey * vVertexColor;
-                gl_FragColor = vec4(finalColor, 1.0);
+                // Outer walls: gleaming white, but keep enough per-facet shading
+                // that the corrugated crenellation form stays clearly readable.
+                gl_FragColor = vec4(vec3(0.40 + 0.60 * shade), 1.0);
             }
         `;
 
@@ -3114,7 +3118,15 @@
             // so envelope changes can never click against an LFO contribution.
             const fade = ctx.createGain();
             fade.gain.value = 0;
-            fade.connect(ctx.destination);
+            // User volume (top-centre slider) — a dedicated node so it never
+            // clashes with the fade-in / fade-out ramps applied to `fade`.
+            const userVol = ctx.createGain();
+            userVol.gain.value = (window.__leilanVolume ?? 1);
+            fade.connect(userVol);
+            userVol.connect(ctx.destination);
+            window.__applyLeilanVolume = (g) => {
+                try { userVol.gain.setTargetAtTime(g, ctx.currentTime, 0.03); } catch (e) {}
+            };
             const master = ctx.createGain();
             master.gain.value = 0.55;
             master.connect(fade);

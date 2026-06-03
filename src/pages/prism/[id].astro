@@ -4,6 +4,7 @@ import type { PrismConfig } from '../../data/prisms';
 import { getCollection } from 'astro:content';
 import '../../styles/prism.css';
 import WallPanel from '../../components/WallPanel.astro';
+import VolumeControl from '../../components/VolumeControl.astro';
 import imageCaptions from '../../data/image-captions.json';
 import masksRaw from '../../data/masks_and_chains.json';
 
@@ -85,6 +86,7 @@ const masksJson = JSON.stringify(masks);
 <body>
     <div class="scene-curtain" id="scene-curtain" aria-hidden="true"></div>
     <div class="page-fade-overlay" aria-hidden="true"></div>
+    <VolumeControl />
 
     <!-- Shared gradient definitions -->
     <svg style="position:absolute;width:0;height:0;">

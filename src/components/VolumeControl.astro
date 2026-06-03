@@ -1,0 +1,148 @@
+---
+// Global volume control — mute toggle + slider, fixed top-centre.
+// Persists across pages via localStorage and drives a dedicated user-volume
+// gain node in whichever audio chain the current page runs (immersive or prism).
+---
+
+<div id="vol-ctl" class="vol-ctl" role="group" aria-label="Volume">
+    <button id="vol-mute" class="vol-mute" type="button" aria-label="Mute">
+        <svg class="vol-ic vol-ic-on" width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M3 9v6h4l5 4V5L7 9H3z" fill="currentColor"></path>
+            <path d="M15.5 8.5a4.5 4.5 0 0 1 0 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+            <path d="M18 6a8 8 0 0 1 0 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+        </svg>
+        <svg class="vol-ic vol-ic-off" width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M3 9v6h4l5 4V5L7 9H3z" fill="currentColor"></path>
+            <path d="M16 9l5 5M21 9l-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+        </svg>
+    </button>
+    <input id="vol-slider" class="vol-slider" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Volume" />
+</div>
+
+<style>
+    .vol-ctl {
+        position: fixed;
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 998;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 3px 9px;
+        --accent: #5eefa2;
+        background: rgba(10, 12, 14, 0.34);
+        -webkit-backdrop-filter: blur(7px);
+        backdrop-filter: blur(7px);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        border-radius: 999px;
+        opacity: 0.78;
+        transition: opacity 0.25s ease;
+        user-select: none;
+        -webkit-user-select: none;
+    }
+    .vol-ctl:hover { opacity: 1; }
+    .vol-ctl.is-muted { --accent: rgba(255, 255, 255, 0.30); }
+
+    .vol-mute {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        height: 14px;
+        padding: 0;
+        border: none;
+        background: none;
+        color: #cfe9d8;
+        cursor: pointer;
+    }
+    .vol-ctl.is-muted .vol-mute { color: rgba(255, 255, 255, 0.45); }
+    .vol-ic { display: block; }
+    .vol-ctl.is-muted .vol-ic-on { display: none; }
+    .vol-ctl:not(.is-muted) .vol-ic-off { display: none; }
+
+    .vol-slider {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 118px;
+        height: 3px;
+        margin: 0;
+        padding: 0;
+        border-radius: 999px;
+        cursor: pointer;
+        outline: none;
+        background: linear-gradient(to right,
+            var(--accent) var(--fill, 80%),
+            rgba(255, 255, 255, 0.22) var(--fill, 80%));
+    }
+    .vol-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--accent);
+        border: none;
+        cursor: pointer;
+        box-shadow: 0 0 5px var(--accent);
+    }
+    .vol-slider::-moz-range-thumb {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--accent);
+        border: none;
+        cursor: pointer;
+        box-shadow: 0 0 5px var(--accent);
+    }
+    .vol-slider::-moz-range-track { background: transparent; }
+</style>
+
+<script>
+    const KEY_VOL = 'leilan_vol';
+    const KEY_MUTE = 'leilan_muted';
+
+    let vol = parseFloat(localStorage.getItem(KEY_VOL) ?? '');
+    if (!(vol >= 0 && vol <= 1)) vol = 0.8;
+    let muted = localStorage.getItem(KEY_MUTE) === '1';
+
+    const effective = () => (muted ? 0 : vol);
+    // Set immediately so the audio chain (which inits ~1.5s later) can read it.
+    (window as any).__leilanVolume = effective();
+
+    const ctl = document.getElementById('vol-ctl') as HTMLElement;
+    const slider = document.getElementById('vol-slider') as HTMLInputElement;
+    const muteBtn = document.getElementById('vol-mute') as HTMLButtonElement;
+
+    function reflect() {
+        const silent = muted || vol === 0;
+        slider.value = String(vol);
+        slider.style.setProperty('--fill', (vol * 100).toFixed(1) + '%');
+        ctl.classList.toggle('is-muted', silent);
+        muteBtn.setAttribute('aria-label', silent ? 'Unmute' : 'Mute');
+    }
+    function apply() {
+        (window as any).__leilanVolume = effective();
+        if ((window as any).__applyLeilanVolume) (window as any).__applyLeilanVolume(effective());
+    }
+
+    slider.addEventListener('input', () => {
+        vol = parseFloat(slider.value);
+        if (muted && vol > 0) muted = false;   // dragging the slider unmutes
+        localStorage.setItem(KEY_VOL, String(vol));
+        localStorage.setItem(KEY_MUTE, muted ? '1' : '0');
+        reflect();
+        apply();
+    });
+    muteBtn.addEventListener('click', () => {
+        muted = !muted;
+        localStorage.setItem(KEY_MUTE, muted ? '1' : '0');
+        reflect();
+        apply();
+    });
+    // Don't let slider/button interaction reach the 3D scene (camera drag, candles).
+    ctl.addEventListener('pointerdown', (e) => e.stopPropagation());
+
+    reflect();
+    apply();
+</script>

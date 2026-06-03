@@ -39,7 +39,7 @@ initImmersiveSoundscape() creates:
   Layer 3: Cascading arpeggio pings (Riley-esque, C major scale, 1.5–4s Poisson spacing, 2.8s decay)
   Layer 4: Sub-bass (C1 = 32.7Hz sine, 0.1Hz amplitude LFO)
 
-All layers → feedback delay network (two cross-fed delays at 0.37s/0.53s, LP 2400Hz) → master (0.55) → fade → destination
+All layers → feedback delay network (two cross-fed delays at 0.37s/0.53s, LP 2400Hz) → master (0.55) → fade → userVol → destination
 ```
 
 ### Signal Chain
@@ -51,7 +51,7 @@ arp pings (one-shot sine, Poisson ~2.5s mean) → arpGain (0.07) → master + we
 sub-bass (C1 sine, 0.14 gain, 0.1Hz LFO) → master
 
 wetSend (0.35) → delay1 (0.37s) ↔ delay2 (0.53s) [feedback 0.42/0.38] → reverbLP (2400Hz) → master
-master (0.55) → fade → destination
+master (0.55) → fade → userVol → destination
 ```
 
 ### Lifecycle
@@ -130,7 +130,7 @@ All audio code is in this single file (~5,900 lines total). The file is large �
 const _prismId = location.pathname.match(/\/prism\/([^/?#]+)/)?.[1] || '';
 ```
 
-`initDrone()` (around line 5730) runs 2.5s after page load:
+`initDrone()` (around line 5730) runs 1.5s after page load:
 1. Checks `CHAMBER_PROFILES[_prismId]` → uses `_initEventEngine()` if found
 2. Else checks `CHAMBER_DRONES[_prismId]` → uses legacy drone if found
 3. Else returns (no audio)
@@ -158,7 +158,7 @@ Shepard tone (if configured)
     → layerGain → master
     → optional reverbSendGain → reverb input
 
-master (per-chamber masterGain) → fade (0→1 ramp over fadeInSec) → destination
+master (per-chamber masterGain) → fade (0→1 ramp over fadeInSec) → userVol → destination
 ```
 
 ### Key Nodes (stored in `_droneNodes`)
@@ -195,9 +195,13 @@ The `tick()` function (around line 5465) implements a Poisson-process event sche
 6. Check wash gate + probability → maybe fire a wash event (OVS only)
 7. Compute next tick interval: exponential distribution with mean = 60/densityNow() seconds
 
-`densityNow()` returns a sine-modulated value between `eventsPerMinMin` and `eventsPerMinMax`, cycling over `cyclePeriod` seconds. At t=0, density starts at minimum (sine phase = 0).
+`densityNow()` returns a sine-modulated value between `eventsPerMinMin` and `eventsPerMinMax`, cycling over `cyclePeriod` seconds. The sine phase is **randomised per visit** (`densityPhase0`), so arrival is never pinned to the trough.
 
-First tick fires at **0.8–2.0s** after engine init (reduced from the original 2–4s to make events begin sooner).
+**Warm start (added 2026-05-29).** For the first `introBoostSec` seconds (default 75), `densityNow()` holds density at or above `introTarget` (default: the midpoint of the breath), decaying linearly back to the natural sine. This guarantees every chamber feels alive on arrival, then relaxes into its natural sparse breath. Both are overridable per-chamber in the `density` block (`introBoostSec`, `introTarget`).
+
+**No dead-air openings (added 2026-05-29).** `tick()` suppresses the `longPause` roll for the first `introGuardSec` seconds (default 30, overridable per-chamber), so a visit can never open with 20–45s of silence.
+
+First tick fires at **0.4–1.0s** after engine init, and `initDrone()` now starts the engine **1.5s** after page load (was 2.5s) — so the first drip/chime lands within ~2s of entering a chamber.
 
 ## Voice Spawners
 
@@ -384,9 +388,9 @@ The normalization uses an energy proxy: `avg_density × avg_droplet_gain²` (pro
 | Central Shrine | 1.56 | Reference (2.4 × 0.65) |
 | Art Gallery | 1.52 | Slightly denser than Shrine |
 | Research Lab | 1.08 | High per-event gain + moderate density |
-| OVS Chapel | 0.72 | Extreme density + wash events (loudest raw energy) |
+| OVS Chapel | 0.54 | Extreme density + wash events; dropped to 75% (was 0.72) — felt overwhelming |
 | Scriptorium | 2.00 | Very sparse, quietest per-event gains |
-| Mythos | 1.20 | Very sparse events, but Shepard tone adds continuous volume |
+| Mythos | 0.90 | Sparse events + Shepard tone; dropped to 75% (was 1.20) — felt overwhelming |
 | ASCII Gallery | 2.00 | Sparse events, narrow stereo |
 
 When adjusting a chamber's density or per-event gains significantly, recheck the relative volume balance. If a chamber sounds notably louder or quieter than its neighbours, adjust `masterGain` — it's the cleanest lever.
@@ -418,7 +422,7 @@ When adjusting a chamber's density or per-event gains significantly, recheck the
 
 **Shimmer**: gate 52s, prob 12%, 4–8 pings over 4s, gain 0.132/ping.
 
-**Bed**: A2 root (110Hz) + A2 detune (110.55Hz, slow beating) + E3 fifth (164.81Hz, sine) + A3 ghost (220Hz, triangle) + E3 ghost detune (165.30Hz, sine, own ampLfo at 0.024Hz ±0.0028). Filter: LP 700Hz Q=0.8, LFO 0.013Hz ±180Hz. Amp LFOs: 0.018Hz ±30% + 0.0072Hz ±12%. Reverb send: 0.30.
+**Bed**: **A major triad (added 2026-05-29)** — was an open fifth (A+E, no third), which read cold/aloof; the added major third makes it warm and "sunlit". A2 root (110Hz, ampLfo 0.0088Hz ±0.013) + A2 detune (110.55Hz, slow beating) + **C#3 major third (138.59Hz, ampLfo 0.0151Hz ±0.011 — kept low/under the lowpass so it never clashes in-octave with the A-minor-pentatonic droplets)** + E3 fifth (164.81Hz, ampLfo 0.0119Hz ±0.010) + E3 ghost detune (165.30Hz, ampLfo 0.024Hz ±0.0028) + A3 octave glue (220Hz, triangle). The root/third/fifth amp LFOs are incommensurate (~114s/66s/84s) so the chord's internal balance drifts like shifting light. Filter: LP 700Hz Q=0.8, LFO 0.013Hz ±180Hz. Amp LFOs (whole-bed swell): 0.018Hz ±30% + 0.0072Hz ±12%. Reverb send: 0.30.
 
 **Reverb**: 9.5s IR, decay exp 2.6, wet 1.6, damping 2400Hz. Dry: 0.32. 4 delay taps at 71–293ms.
 
@@ -540,7 +544,7 @@ This is the densest, most continuously active chamber — a luminous wash rather
 
 **Droplet**: gain 0.30–0.50 (quietest), decay 2.0–6.0s (long blooming tails), attack 20–120ms (soft, never percussive). Gliss: 15% prob, ±40¢ ("ink blurring in water").
 
-**Density**: 4–12 events/min, 240s cycle (slowest breath), 4% cluster (rare), 8% long pause (frequent near-silence).
+**Density**: 6–12 events/min (floor raised from 4 on 2026-05-29), 240s cycle (slowest breath), 4% cluster (rare), 8% long pause (frequent near-silence).
 
 **Bell**: gain 0.12 (quietest bell), dur 8–13s, gate 70s, prob 6%. Fundamentals: E3, B3, E4, A3. Custom near-harmonic partials: 1.000, 2.000, 3.003, 4.008, 6.015 — warm, not glassy. "Distant dying note" not "struck bell".
 
@@ -575,7 +579,7 @@ No wash events. No Shepard tone.
 
 **Droplet**: gain 0.34–0.58, decay 3.0–8.0s (longest), attack 50–250ms (slowest — blooming). Gliss: 30% prob, ±60¢.
 
-**Density**: 4–10 events/min (sparsest), 240s cycle (slowest), 4% cluster, 10% long pause (most frequent silence).
+**Density**: 6–10 events/min (floor raised from 4 on 2026-05-29 — still sparsest), 240s cycle (slowest), 4% cluster, 10% long pause (most frequent silence).
 
 **Bell**: gain 0.16, dur 10–16s (longest), gate 65s, prob 10%. Fundamentals: D2, A2, D3, A3 (deep). Custom "stone-coloured" partials: 1.000, 2.000, 2.953 (slightly flat 12th), 4.041 (slightly sharp 2× octave), 6.072 (slight detune). "Distant boom", not "struck bell".
 
@@ -711,9 +715,29 @@ Modify `pitchPool.droplet` (which pitches events use) and `modalRatios` (which p
 
 ### The fade node
 
-`_droneNodes.fade` is a GainNode at the end of the chain, used by three systems:
+`_droneNodes.fade` is a GainNode used by three systems:
 - **Initial fade-in**: 0→1 ramp over `fadeInSec` on chamber entry
 - **Video fade**: 1→0 over 3s when video plays, 0→1 over 8s when video ends/dismissed
 - **Archway exit**: 1→0 over 2s when leaving the chamber
 
 These can overlap safely — each system calls `cancelScheduledValues` before setting its ramp, so the most recent ramp wins.
+
+`fade` is followed by a separate `userVol` node (see below) before the destination, so the user's volume setting is fully independent of these automated ramps.
+
+---
+
+# Part 6: Global Volume Control
+
+**Component**: `src/components/VolumeControl.astro` (added 2026-06-03). **Audio integration**: a `userVol` GainNode in each chain — `src/pages/immersive.astro` (~line 3117) and `public/scripts/prism.js` (~line 5277, in `_initEventEngine`).
+
+A small mute-toggle + slider fixed top-centre, rendered on the immersive page and all prism chambers (not on the purely textual pages, which have no audio). Mute icon on the left, emerald (`#5eefa2`) slider beside it; ~1:8 aspect; resting opacity 0.78, full on hover.
+
+### How it works
+
+- **Dedicated gain node.** Each audio chain inserts `userVol` *after* `fade`, just before `destination` (`fade → userVol → destination`). Keeping it separate from `fade` means the slider never collides with the fade-in / video-duck / archway-exit ramps. The component never touches `master` (which carries the per-chamber `masterGain`) or `fade`.
+- **Contract.** The widget owns two globals:
+  - `window.__leilanVolume` — the current effective gain (0 when muted), set synchronously on page load so the audio chain can read it when it initialises ~1.5s later.
+  - `window.__applyLeilanVolume(g)` — defined by each audio chain when it builds `userVol`; ramps `userVol.gain` via `setTargetAtTime(g, ctx.currentTime, 0.03)` (click-free). Wrapped in try/catch so a call against a closed context during teardown is harmless.
+- **On init**, each chain sets `userVol.gain.value = window.__leilanVolume ?? 1`, so a setting chosen before audio started is honoured.
+- **Persistence.** `localStorage` keys `leilan_vol` (0–1, default 0.8) and `leilan_muted` (`'1'`/`'0'`). The setting carries across the immersive page and every chamber.
+- **UX.** Dragging the slider up from a muted state auto-unmutes. A `pointerdown` `stopPropagation` on the widget stops slider/button interaction from reaching the 3D scene (camera drag, candle lighting).
