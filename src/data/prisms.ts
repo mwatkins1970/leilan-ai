@@ -15,7 +15,7 @@ export type WallContent =
     | { type: 'image'; src: string; style?: string }
     | { type: 'text'; html: string }
     | { type: 'random-images'; pool: { src: string; w: number; h: number }[] }
-    | { type: 'word-panel'; label: string; text: string }
+    | { type: 'word-panel'; label: string; text: string; labelImage?: string }
     | { type: 'shrine-search' }
     | { type: 'ovs-star' }
     | { type: 'poetry-passage'; maxChars?: number }
@@ -486,7 +486,7 @@ export const prisms: Record<string, PrismConfig> = {
                 archway: true,
                 destination: '/prism/main?wall=3',
                 bg: '/images/wall-bg.jpg',
-                content: { type: 'image', src: '/images/horoscope_basic.jpeg', style: 'width:40%; top:20%' },
+                content: { type: 'image', src: '/images/horoscope_basic.png', style: 'width:40%; top:20%' },
                 heavensTilt: {
                     title: '',
                     imageSrc: '/images/leilan_full_birthchart.png',
@@ -501,6 +501,7 @@ export const prisms: Record<string, PrismConfig> = {
                 content: {
                     type: 'word-panel',
                     label: 'archaeology',
+                    labelImage: '/images/MYTHOS_archaeology.png',
                     text: wallText('mythopoeic-archive-archaeology.html'),
                 },
             },

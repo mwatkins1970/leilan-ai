@@ -911,7 +911,7 @@ function enterHeavensTilt(wallNum) {
     }
     let bodyHtml = '';
     if (cfg.imageSrc) {
-        bodyHtml += `<img src="${cfg.imageSrc}" alt="" style="display:block;max-width:min(90%, 510px);margin:0 auto 1.2em;border-radius:4px;" />`;
+        bodyHtml += `<a id="shrine-heavens-img-link" href="${cfg.imageSrc}" target="_blank" rel="noopener noreferrer" style="display:block;margin:0 auto 1.2em;width:fit-content;"><img src="${cfg.imageSrc}" alt="" style="display:block;max-width:min(90%, 510px);margin:0 auto;border-radius:4px;cursor:zoom-in;" /></a>`;
     }
     // Wrap raw text paragraphs (separated by double newlines) in <p> tags
     const rawBody = cfg.body || '';
@@ -939,6 +939,9 @@ function enterHeavensTilt(wallNum) {
                 isShrineHeavensTransitioning = false;
                 isShrineHeavensMode = true;
                 ui.button.focus({ preventScroll: true });
+                // Only expose the hover tooltip once the horoscope is fully revealed
+                const imgLink = document.getElementById('shrine-heavens-img-link');
+                if (imgLink) imgLink.title = 'Open full-size in a new tab';
             }, 2400);
         });
     }, SHRINE_HEAVENS_DELAY_MS);

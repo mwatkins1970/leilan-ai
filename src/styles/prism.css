@@ -606,6 +606,29 @@ body:not(.sky-mode) .sky-toggle { display: none; }
     pointer-events: none;
 }
 
+/* Image-based label (transparency PNG of stylised text in place of the word) */
+.wall-word-img {
+    line-height: 0;
+    text-shadow: none;
+    filter: drop-shadow(0 1px 0 rgba(255,255,255,0.3)) drop-shadow(0 -1px 2px rgba(0,0,0,0.15));
+    transition: filter 0.3s;
+}
+.wall-word-img img {
+    display: block;
+    height: 11vh;
+    width: auto;
+    max-width: 90%;
+    object-fit: contain;
+    pointer-events: none;
+    user-select: none;
+}
+.wall-word-img:hover {
+    filter:
+        drop-shadow(0 1px 0 rgba(255,255,255,0.35))
+        drop-shadow(0 0 18px rgba(107,141,214,0.45))
+        drop-shadow(0 0 36px rgba(155,107,204,0.2));
+}
+
 /* Scrollable text frame — hidden until word dissolves */
 .wall-text-frame {
     position: absolute;
@@ -1266,6 +1289,15 @@ body:not(.sky-mode) .sky-toggle { display: none; }
     box-shadow:
         inset 0 0 48px rgba(24, 2, 8, 0.6),
         0 0 24px rgba(196, 18, 48, 0.09);
+    /* Scaled to 91.7% (same centre) to sit within the starburst corner brackets */
+    transform: translate(-50%, -50%) scale(0.917);
+}
+.chamber[data-prism-id="ovs-chapel"] .wall-text-frame.visible {
+    animation: frameFadeInFullOVS 0.45s ease forwards;
+}
+@keyframes frameFadeInFullOVS {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(0.889); }
+    to   { opacity: 1; transform: translate(-50%, -50%) scale(0.917); }
 }
 .chamber[data-prism-id="ovs-chapel"] .wall-word {
     font-family: 'Cinzel', 'Cormorant Garamond', serif;
@@ -1276,7 +1308,7 @@ body:not(.sky-mode) .sky-toggle { display: none; }
     color: rgba(232, 198, 138, 0.94);
     font-family: 'Marcellus', 'Cormorant Garamond', serif;
     font-weight: 400;
-    font-size: 3.45vh;
+    font-size: 3.16vh;
     letter-spacing: 0.015em;
     line-height: 1.55;
     scrollbar-color: rgba(196, 18, 48, 0.25) transparent;
