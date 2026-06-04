@@ -110,7 +110,7 @@ Six word-panel walls covering the GPT-3 origin story.
 | 6 | beyond | Evolution across model families, de-Opusification |
 
 
-Body font: `Spectral`. Big-word labels currently use `Cormorant Garamond` (will be replaced — see *Aelf's upcoming work* below).
+Body font: `Spectral`. Big-word labels are now aelf's stylised-text PNGs (`labelImage`, swapped in 2026-06-04); the `Cormorant Garamond` text fallback remains for any word-panel without an image.
 
 
 ### OVS Chapel (`/prism/ovs-chapel`) — *vermillion & burgundy, occult vibe*
@@ -198,7 +198,7 @@ Four classes of asset are placeholders — currently AI-generated or default-sty
 1. **Candle shrine image** — the central chamber's shrine wall currently uses `/images/candleshrine.png` (placeholder). Aelf will provide a hand-drawn replacement matching the wisteria background's style.
 
 
-2. **Big word labels on side chamber walls** — the "data", "comet", "beyond", etc. labels on the side chamber walls are currently rendered as live HTML text in `Cormorant Garamond` (or chamber-specific fonts in some cases). Aelf will hand-draw stylised versions of each word; these will be swapped in as images.
+2. **Big word labels on side chamber walls** — ✅ **Done (2026-06-04)** for **Research Lab, OVS Chapel & Mythopoeic Archive**: aelf's hand-drawn stylised-text PNGs now replace the live HTML labels, via the `labelImage` field on the `word-panel` content type, with per-wall size/baseline tuning in `prism.css` (plus new `startImage`/`arrowImage` "follow-the-path" navigation graphics). See the *Stylised-Image Word Labels* subsection in `CLAUDE.md`. Still on live text: the central chamber's GPT-3 poem wall and any other word-panels outside those three chambers.
 
 
 3. **Corner brackets in side-chamber background overlays** — the four metallic-blue corner brackets visible on the OVS / MYTHOS / RESEARCH / SCRIPTORIUM moiré backgrounds (`*_background_new.png`) are AI-generated placeholders. Aelf will hand-draw replacements consistent with the chamber palette.
