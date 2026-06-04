@@ -1,6 +1,6 @@
 # Leilan.ai — Claude Code Master Reference
 
-*Last refreshed: 2026-06-03.*
+*Last refreshed: 2026-06-04.*
 
 ## What This Site Is
 
@@ -25,6 +25,11 @@ npm run build    # production build to dist/
 - **Mobile GPU first**: instanced meshes, lazy geometry, minimal draw calls. Never sacrifice aesthetics, but always ask whether a new feature warrants the GPU cost.
 - **Netlify free tier**: 100 GB bandwidth/month, 300 build minutes. Flag any feature that would meaningfully increase per-visit payload before building it.
 - **No shared CSS framework** — all styles are inline per-page or in `src/styles/prism.css`.
+
+> **⚠️ Dev preview in this Codespace — read before debugging "site won't load" (seen repeatedly 2026-06-04).**
+> The `…-4321.app.github.dev` forwarded URL is broken at **GitHub's tunnel layer** (a Codespaces infrastructure glitch that survives Codespace restarts). The dev server itself is fine — `curl localhost:4321` returns 200. Symptoms: the browser shows "No web page was found … HTTP ERROR 404"; `gh codespace ports` shows the port but the edge still 404s (`x-served-by: tunnels-*`). **Do not waste time restarting the dev server or the Codespace for this.**
+> **Workaround that works: a Cloudflare quick tunnel.** Binary at `~/.local/bin/cloudflared` (re-download from `github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64` if missing). Run `cloudflared tunnel --url http://localhost:4321` and hand the user the printed `https://<random>.trycloudflare.com` URL. It dies if its process is killed (e.g. every `pkill astro` to restart the dev server) → just relaunch; the URL name changes each time.
+> Two related gotchas: (1) Vite blocks unknown hosts with a 403 → `astro.config.mjs` sets `vite.server.allowedHosts: ['.app.github.dev', '.trycloudflare.com']` (the leading-dot wildcard works; boolean `true` is **not** honoured by Astro). (2) `pkill -f astro` + `nohup npm run dev` in the *same* Bash call races and kills the new server — start it in a separate call.
 
 ---
 
@@ -188,7 +193,10 @@ type WallContent =
   | { type: 'image'; src: string; style?: string }
   | { type: 'text'; html: string }
   | { type: 'random-images'; pool: { src; w; h }[] }
-  | { type: 'word-panel'; label: string; text: string }
+  | { type: 'word-panel'; label: string; text: string;
+      labelImage?: string;   // stylised-text PNG shown instead of the text label
+      startImage?: string;    // "start here" graphic above the word (wall 1 of a chamber)
+      arrowImage?: string }   // clockwise path arrow below the word
   | { type: 'shrine-search' }
   | { type: 'ovs-star' }
   | { type: 'poetry-passage'; maxChars?: number }
@@ -223,6 +231,17 @@ ART wall (random gallery) and OVS strapline refresh when their wall re-enters vi
 1. `enterArchway()` stores `returnShrinePos_<prismId> = (7 - shrinePos) % 6` (encodes the opposite wall)
 2. On next load: if `returnShrinePos_<prismId>` exists, `shrinePos = (4 - stored + 6) % 6` → faces the wall behind you when you left
 3. Fallback: `nextPrismWall_<prismId>` and `?wall=` URL param for first-time entry
+
+### Stylised-Image Word Labels & "Start Here" Navigation (2026-06-04)
+
+The three "word" chambers — **Research Lab**, **OVS Chapel**, **Mythopoeic Archive** — no longer render their word-panel labels as live text. Each word wall now shows a **transparency PNG of stylised text** via the optional `labelImage` field on the `word-panel` content type. The text `label` is retained (used as `alt` and for click routing); when `labelImage` is present, `[id].astro` renders `<div class="wall-word wall-word-img"><img></div>` instead of the text node, so all existing click/dissolve/popup logic (which keys on `.wall-word` / `.wall-word-panel`) still works unchanged. Image PNGs live in `public/images/<CHAMBER>_<word>.png` (e.g. `MYTHOS_archaeology.png`, `RESEARCH_GPT_3.png`, `OVS_Handbook.png`).
+
+**Sizing & baseline alignment (all in `prism.css`, ~`.wall-word-img` block):**
+- Base size is `13.75vh` image height. Because the source PNGs scale each word to a fixed canvas width, **long words are physically smaller** — so per-wall `height` overrides equalise the on-screen *text* size (computed as `targetTextHeight × 724 / measuredTextBboxHeight`), and per-wall `transform: translateY(...)` drops every word onto a common baseline.
+- These numbers are **measured, not eyeballed**: use Python + Pillow/numpy (both pip-installed in the Codespace) to read each PNG's non-transparent bbox and true baseline (65th-percentile of per-column bottom pixels, which ignores descenders). OVS baseline = 44vh; Research baseline ≈ 42.3vh.
+- If you resize a word image, the baseline shifts — **recompute its translateY**, don't just change height.
+
+**"Start here" + clockwise arrows:** optional `startImage` (square PNG) sits above the wall-1 word of each chamber (`origins` / `GPT-3` / `apparition`); `arrowImage` (3:1 PNG, same canvas as the words) sits below every word **except the last clockwise** (`data` / `beyond` / `Crossbones`) — guiding the user around the hexagon. Both are decorative (`pointer-events:none`, `z-index:1` so an opened text-frame at `z-index:2` covers them). Positions are absolute, horizontally centred, with per-wall `top` computed from each word's measured ink-top/ink-bottom + a constant gap. Research arrows are deliberately set to a **single shared `top`** (baselines aligned; descenders are off-centre so a centred arrow never collides). Sizes are per-chamber (`.wall-arrow-img img` / `.wall-start-img img` height overrides).
 
 ---
 
@@ -386,6 +405,7 @@ Only Crossbones (`/video/crossbones.mp4`) is wired up. Every other word-panel `�
 ## Deployment Notes
 
 - Hosted on Netlify; auto-deploys from GitHub `main` branch (repo: `mwatkins1970/leilan-ai`)
+- **⚠️ leilan.ai is serving a STALE deploy (as of 2026-06-04):** `https://leilan.ai/` returns 200 but is an old single-page version — every sub-route (`/immersive`, `/prism/*`) and current asset 404s, and the `<title>` is the old `LEILAN.AI` (current build's title is the stylised `ᒪᗴIᒪᗩᑎ`). So the auto-deploy from `main` is **not** reaching leilan.ai. Don't point the user at leilan.ai to preview current work — investigate the Netlify↔domain wiring before launch.
 - Push credentials are now configured for `mwatkins1970` directly (this Codespace was previously authed as `feralchill` — that's been changed)
 - See `SITE_OVERVIEW.md` for a higher-level orientation document and `DESIGN_SYSTEM.md` for visual tokens
 - Last public commit on `main`: `b5d39e5` — "update gpt3 scriptorium passages and masks-and-chains file"
@@ -395,4 +415,5 @@ Only Crossbones (`/video/crossbones.mp4`) is wired up. Every other word-panel `�
   - LessWrong external links in six wall-text files re-pointed to the new interstitials
   - **2026-06-03 session**: audio event-timing overhaul (warm-start density, random breath phase, no dead-air openings, faster first event, `initDrone` 2.5s→1.5s, Mythos/Scriptorium density floors 4→6); OVS/Mythos `masterGain` dropped to 75% (0.54 / 0.90); Central Shrine bed reworked into a fluctuating A-major triad; global volume control (`VolumeControl.astro` + `userVol` gain node in both audio chains); gleaming-white immersive walls; per-chamber pre-coloured moiré for research-lab / mythopoeic-archive / ovs-chapel (`_c1/_c2/_c3`) with CSS tint disabled; Scriptorium poetry cards re-centred
   - Various small content updates across `src/data/wall-texts/`, `immersive.astro`, `prism.js`, `prism.css`
+  - **2026-06-04 session** (commit `690fd5b` "Stylised-image label for archaeology wall + dev host fix" pushed mid-session, plus further uncommitted work after it): all word-panel labels in Research Lab, OVS Chapel & Mythopoeic Archive replaced with stylised-text PNGs (`labelImage`), per-wall size/baseline tuning in `prism.css`; added "start here" graphics (`startImage`) + clockwise path arrows (`arrowImage`) — see the dedicated subsection under *CSS Prism Chamber System*; `astro.config.mjs` gained `vite.server.allowedHosts` for Codespaces/Cloudflare-tunnel previews. Pillow + numpy pip-installed for PNG-measurement scripting.
   - **Note**: a 642 MB `leilan-ai-2026-05-27.zip` backup sits in the repo root (gitignored). Heaviest live assets pending a launch-time compression pass: `wall-border.png` (5.6 MB), `wall-bg.jpg` (2.5 MB).

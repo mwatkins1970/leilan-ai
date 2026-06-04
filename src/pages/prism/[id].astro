@@ -256,6 +256,16 @@ const masksJson = JSON.stringify(masks);
                             )}
                             {wall.content?.type === 'word-panel' && (
                                 <div class="wall-word-panel" data-has-archway={wall.archway ? 'true' : undefined}>
+                                    {wall.content.startImage && (
+                                        <div class="wall-start-img" aria-hidden="true">
+                                            <img src={wall.content.startImage} alt="" draggable={false} />
+                                        </div>
+                                    )}
+                                    {wall.content.arrowImage && (
+                                        <div class="wall-arrow-img" aria-hidden="true">
+                                            <img src={wall.content.arrowImage} alt="" draggable={false} />
+                                        </div>
+                                    )}
                                     {wall.content.labelImage ? (
                                         <div class="wall-word wall-word-img">
                                             <img src={wall.content.labelImage} alt={wall.content.label} draggable={false} />

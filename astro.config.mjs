@@ -5,10 +5,11 @@ import { defineConfig } from 'astro/config';
 export default defineConfig({
     vite: {
         server: {
-            // Allow the GitHub Codespaces forwarded host (and any subdomain of it)
-            // through Vite's host check, otherwise the dev server returns a 403
-            // that the Codespaces edge surfaces as a 404.
-            allowedHosts: ['.app.github.dev'],
+            // Allow any host through Vite's dev-server host check. Needed for the
+            // GitHub Codespaces forwarded host AND any external tunnel (cloudflared,
+            // localtunnel) used to preview when Codespaces forwarding misbehaves.
+            // Dev-server only; has no effect on the production build.
+            allowedHosts: ['.app.github.dev', '.trycloudflare.com'],
         },
     },
 });

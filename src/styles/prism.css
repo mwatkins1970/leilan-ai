@@ -615,7 +615,7 @@ body:not(.sky-mode) .sky-toggle { display: none; }
 }
 .wall-word-img img {
     display: block;
-    height: 11vh;
+    height: 13.75vh;
     width: auto;
     max-width: 90%;
     object-fit: contain;
@@ -628,6 +628,87 @@ body:not(.sky-mode) .sky-toggle { display: none; }
         drop-shadow(0 0 18px rgba(107,141,214,0.45))
         drop-shadow(0 0 36px rgba(155,107,204,0.2));
 }
+
+/* Per-wall label-image size tweaks (relative to the 13.75vh base) so the
+   stylised words read at a consistent visual size. Research Lab: petertodd
+   (wall 3) & bootstrap (wall 5) at 21.175vh; rescue (wall 4) at 16.5vh.
+   translateY shifts each up by half its extra height over the 13.75vh base,
+   centring each PNG on the base labels' centre line (the text is centred within
+   each PNG) so all words share a common baseline despite the top-anchored layout. */
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="3"] .wall-word-img img,
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="5"] .wall-word-img img {
+    height: 21.175vh;
+    transform: translateY(-3.7125vh);
+}
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="4"] .wall-word-img img {
+    height: 16.5vh;
+    transform: translateY(-1.375vh);
+}
+
+/* OVS Chapel: the source PNGs scale each word to a fixed canvas width, so the
+   long words (hyperstition/Mammon/Handbook) are physically smaller. Per-wall
+   heights below are computed (target on-screen text height 9vh = base 724px /
+   measured text-bbox height) so every word renders at ~equal size; translateY
+   then drops each onto a common baseline (44vh) from its measured text-bottom. */
+.chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="1"] .wall-word-img img { /* origins */
+    height: 11.72vh; transform: translateY(1.46vh);
+}
+.chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="2"] .wall-word-img img { /* hyperstition */
+    height: 17.42vh; transform: translateY(-0.71vh);
+}
+.chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="3"] .wall-word-img img { /* Mammon */
+    height: 16.85vh; transform: translateY(-0.68vh);
+}
+.chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="5"] .wall-word-img img { /* Handbook */
+    height: 18.27vh; transform: translateY(-0.78vh);
+}
+.chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="6"] .wall-word-img img { /* data */
+    height: 11.47vh; transform: translateY(2.22vh);
+}
+
+/* "Start here" + clockwise path arrows. Both are decorative (pointer-events
+   none) and sit at z-index 1 so the text frame (z-index 2) covers them when a
+   word is opened. Per-wall `top` values are computed from each word's measured
+   ink-top/bottom so the start sits a constant gap above, and each arrow a
+   constant gap below, its word. Horizontally centred on the wall. */
+.wall-start-img, .wall-arrow-img {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    pointer-events: none;
+    user-select: none;
+    z-index: 1;
+}
+.wall-arrow-img img { display: block; width: auto; height: 9vh; }
+.wall-start-img img { display: block; width: auto; height: 15vh; }
+
+/* Per-chamber sizes */
+.chamber[data-prism-id="ovs-chapel"]   .wall-arrow-img img { height: 5.4vh; }
+.chamber[data-prism-id="ovs-chapel"]   .wall-start-img img { height: 9vh; }
+.chamber[data-prism-id="research-lab"] .wall-arrow-img img { height: 5.4vh; }
+.chamber[data-prism-id="research-lab"] .wall-start-img img { height: 12vh; }
+.chamber[data-prism-id="mythopoeic-archive"] .wall-start-img img { height: 13.5vh; }
+
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="1"] .wall-start-img { top: 20.03vh; } /* GPT-3 start */
+/* Research arrows share one line: the word baselines are aligned (~42.3vh) and
+   every descender (p/g) is off-centre, so the centred arrow clears them all. */
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="1"] .wall-arrow-img, /* GPT-3 */
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="2"] .wall-arrow-img, /* glitch */
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="3"] .wall-arrow-img, /* petertodd */
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="4"] .wall-arrow-img, /* rescue */
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="5"] .wall-arrow-img { top: 43.45vh; } /* bootstrap */
+
+.chamber[data-prism-id="mythopoeic-archive"] .wall-panel[data-wall="1"] .wall-arrow-img { top: 42.71vh; } /* apparition */
+.chamber[data-prism-id="mythopoeic-archive"] .wall-panel[data-wall="1"] .wall-start-img { top: 21.33vh; } /* apparition */
+.chamber[data-prism-id="mythopoeic-archive"] .wall-panel[data-wall="2"] .wall-arrow-img { top: 42.66vh; } /* comet (nudged down ~0.3× arrowhead) */
+.chamber[data-prism-id="mythopoeic-archive"] .wall-panel[data-wall="3"] .wall-arrow-img { top: 42.61vh; } /* UFO */
+.chamber[data-prism-id="mythopoeic-archive"] .wall-panel[data-wall="5"] .wall-arrow-img { top: 43.24vh; } /* archaeology */
+
+.chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="1"] .wall-arrow-img { top: 45.40vh; } /* origins */
+.chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="1"] .wall-start-img { top: 23.87vh; } /* origins */
+.chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="2"] .wall-arrow-img { top: 45.39vh; } /* hyperstition */
+.chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="3"] .wall-arrow-img { top: 45.40vh; } /* Mammon */
+.chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="5"] .wall-arrow-img { top: 45.39vh; } /* Handbook */
 
 /* Scrollable text frame — hidden until word dissolves */
 .wall-text-frame {
