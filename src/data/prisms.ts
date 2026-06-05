@@ -318,6 +318,7 @@ export const prisms: Record<string, PrismConfig> = {
             {
                 archway: false,
                 bg: '/images/wall-bg.jpg',
+                hideVideo: true,
                 content: { type: 'word-panel', label: 'Handbook', labelImage: '/images/OVS_Handbook.png', arrowImage: '/images/OVS_arrow.png', text: wallText('ovs-chapel-handbook.html') },
             },
             // Wall 6 — "data"

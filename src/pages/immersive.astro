@@ -491,39 +491,48 @@ import VolumeControl from '../components/VolumeControl.astro';
                 col *= 0.95 + edgeHint * 0.05;
 
                 float dist = length(worldPos - vec2(0.0, -14.0));
-                float fade = 1.0 - smoothstep(12.0, 25.0, dist);
 
-                // Z-based fade for the FAR edge of the hex grid. The grid
-                // ends at z ≈ -27.5; without this, the radial fade has only
-                // barely engaged there (fade ≈ 0.88) and the grid's natural
-                // hexagonal edge silhouettes sharply against the sky as a
-                // jagged "peaky" line. Dissolving the floor to uHorizonColor
-                // over the last ~10 world-units before the grid edge means
-                // the hex outlines + cap silhouettes ride a background that's
-                // already the sky colour, so the seam disappears.
+                // --- NIGHT silhouette: radial disc ∩ far-Z band ---------------
+                // The original fade is a CIRCLE (radial) intersected with a
+                // horizontal Z-band (farZFade). At night this only shapes the
+                // floor's COLOUR (it fades to black against the black sky), so
+                // the non-circular boundary is imperceptible and the perceived
+                // horizon reads as a clean curve. We keep it untouched for night.
                 // worldPos here is (x, z); worldPos.y == world Z.
-                float farZFade = smoothstep(-27.5, -18.0, worldPos.y);
-                fade *= farZFade;
+                float fadeNight = 1.0 - smoothstep(12.0, 25.0, dist);
+                float farZFade  = smoothstep(-27.5, -18.0, worldPos.y);
+                fadeNight *= farZFade;
 
-                float revealDist = length(worldPos - vec2(0.0, -2.0));
-                float reveal = 1.0 - smoothstep(uRevealRadius - 1.5, uRevealRadius, revealDist);
+                // --- DAY silhouette: one radial fade from the FRONT point -----
+                // In day mode the edge becomes the floor's actual ALPHA against
+                // a bright sky, so any non-convex boundary shows. The old
+                // disc∩Z-band shape was flat across 12 o'clock but bulged at the
+                // sides → the rounded-triangle "halo" lobes at ~11 & 1 o'clock.
+                // The fix: measure the fade from the FRONT of the grid (0,-2) —
+                // the same origin the reveal wipe uses — not the plane centre.
+                // The far edge is then a single arc that cuts centre-forward and
+                // diagonal-forward at the SAME radius (a curved dome horizon, no
+                // lobes), while the near floor and its corners sit at small
+                // frontDist and stay fully opaque. It reaches alpha 0 just inside
+                // the grid's far edge (frontDist≈25.5 straight ahead) so the
+                // jagged hex perimeter never silhouettes, and the fuzzy fade band
+                // follows the horizon arc. Tune the band to move the horizon.
+                float frontDist = length(worldPos - vec2(0.0, -2.0));
+                float fadeDay = 1.0 - smoothstep(22.0, 25.0, frontDist);
+
+                float reveal = 1.0 - smoothstep(uRevealRadius - 1.5, uRevealRadius, frontDist);
 
                 col *= reveal;
-                // Both night and day modes now fade alpha to 0 at the
-                // plane's edges, so the floor dissolves into whatever the
-                // sky behind it actually IS (black at night, gradient by
-                // day) instead of trying to match a target colour and
-                // betraying the seam as a translucent "aura band". Day's
-                // old worry about clouds showing through the ground no
-                // longer applies — clouds now sit safely above the horizon
-                // (see the c.y range in the skyClouds init), so making the
-                // ground transparent at its edges reveals only the bare
-                // gradient sky in that region. Colour still nudges toward
-                // uHorizonColor on the way out for a smoother visual mix.
-                float baseAlpha = fade * reveal;
-                vec3  dayCol    = mix(uHorizonColor * reveal, col, fade);
-                vec3  finalCol  = mix(col, dayCol, uSkyIsDay);
-                float a = max(baseAlpha, 1.0 - uGlobalAlpha);
+                // Night keeps the floor OPAQUE (a = reveal) and fades its COLOUR
+                // to black, which occludes the starfield at the horizon. Day
+                // alpha-dissolves the floor (a = fadeDay·reveal) so its edge
+                // melts into the vertical sky gradient; colour still nudges
+                // toward uHorizonColor on the way out for a smoother mix.
+                float baseAlpha = fadeDay * reveal;
+                vec3  dayCol    = mix(uHorizonColor * reveal, col, fadeDay);
+                vec3  finalCol  = mix(col * fadeNight, dayCol, uSkyIsDay);
+                float a         = mix(reveal, baseAlpha, uSkyIsDay);
+                a = max(a, 1.0 - uGlobalAlpha);
                 gl_FragColor = vec4(finalCol * uGlobalAlpha, a);
             }
         `;
@@ -540,14 +549,12 @@ import VolumeControl from '../components/VolumeControl.astro';
                 uPrismCenter: { value: new THREE.Vector2(0, 0) },
                 uPatternScale: { value: 1.0 },
                 uSkyIsDay: { value: 0.0 },
-                // Floor's fade-out target colour — chosen to match the sky
-                // gradient at the visual-horizon level (gradient stop ~0.35,
-                // #111D50) so the floor visually dissolves INTO the sky
-                // instead of fading to a different colour that reads as a
-                // band. The previous value (#2E3070, gradient stop 0.68)
-                // was a far-down-the-gradient purple that didn't match the
-                // dark indigo actually shown at the horizon.
-                uHorizonColor: { value: new THREE.Color(0x111D50) }
+                // Floor's day-mode fade-out target colour — matches the daytime
+                // sky gradation at the visual-horizon level (stop ~0.37, #7BB0DC,
+                // light sky-blue) so the floor's edge dissolves INTO the sky
+                // rather than reading as a band of a different colour. (Night
+                // mode no longer uses this — it fades the floor colour to black.)
+                uHorizonColor: { value: new THREE.Color(0x7BB0DC) }
             },
             transparent: true,
             side: THREE.DoubleSide,
@@ -704,6 +711,34 @@ import VolumeControl from '../components/VolumeControl.astro';
         // Kept for wallpaper UV sorting (used inside createPrismWallpaper)
         const prismCenterXZ = prism1.centerXZ;
 
+        // ASCII gallery sub-chamber placement — two hops south of central (south
+        // of gpt3-library), off-grid at row -2, so it needs a synthetic hex disk
+        // rather than the live 35×45 grid. Single source of truth for where the
+        // chamber lives, shared by the entry animation and the static
+        // "already-risen" return build.
+        function makeAsciiGalleryState(isStatic) {
+            const [gdr, gdc] = WALL_DIRECTIONS[4]; // gpt3-library lives south of main
+            const gptRow = PRISM_CENTER_ROW + gdr;
+            const gptCol = PRISM_CENTER_COL + gdc;
+            const asciiRow = gptRow + gdr;
+            const asciiCol = gptCol + gdc;
+            const p = makePrismState(asciiRow, asciiCol);
+            p.gridCompleteTime = startTime;
+            const hexWidth = hexSize * Math.sqrt(3);
+            const hexHeight = hexSize * 1.5;
+            const xOff = (((asciiRow % 2) + 2) % 2) * (hexWidth / 2);
+            const wx = asciiCol * hexWidth + xOff - (45 * hexWidth / 2);
+            const wz = -asciiRow * hexHeight - 2;
+            p.centerXZ = new THREE.Vector2(wx, wz);
+            // The centre row is off-grid (-2), so getRegionHexes would only return
+            // the upper sliver and the wall geometry would collapse to a flat
+            // chord. Pre-populate with a synthetic full hex disk instead.
+            p.regionHexes = getSyntheticRegionHexes(asciiRow, asciiCol, PRISM_RADIUS);
+            p.hexSet = new Set(p.regionHexes.map(({ hex }) => `${hex.row},${hex.col}`));
+            if (isStatic) p._isStatic = true;
+            return p;
+        }
+
         // Set up extra prisms for return visits
         if (isMainAdjacentReturn) {
             // The entering chamber (animates rising)
@@ -736,6 +771,14 @@ import VolumeControl from '../components/VolumeControl.astro';
                 vp._isStatic = true;
                 extraPrisms.push(vp);
             });
+
+            // ASCII gallery sub-chamber — risen if previously visited. It lives two
+            // hops south (beyond gpt3-library) so it isn't in CHAMBER_WALLS and must
+            // be placed explicitly. Its parent is always visited too in practice.
+            if (sessionStorage.getItem('visited_prism_ascii-gallery')
+                && sessionStorage.getItem('visited_prism_gpt3-library')) {
+                extraPrisms.push(makeAsciiGalleryState(true));
+            }
         } else if (isAsciiGalleryEntry) {
             // Sub-chamber: ASCII gallery rises south of gpt3-library, which is itself
             // south of central. The new chamber's centre is at row -2 (off-grid below)
@@ -743,24 +786,11 @@ import VolumeControl from '../components/VolumeControl.astro';
             const [gdr, gdc] = WALL_DIRECTIONS[4]; // gpt3-library lives south of main
             const gptRow = PRISM_CENTER_ROW + gdr;
             const gptCol = PRISM_CENTER_COL + gdc;
-            const asciiRow = gptRow + gdr;
-            const asciiCol = gptCol + gdc;
+            const hexHeight = hexSize * 1.5;
 
             // ASCII gallery — the entering (animating) chamber
-            enteringPrism = makePrismState(asciiRow, asciiCol);
-            enteringPrism.gridCompleteTime = startTime;
-            const hexWidth = hexSize * Math.sqrt(3);
-            const hexHeight = hexSize * 1.5;
-            const xOff = (((asciiRow % 2) + 2) % 2) * (hexWidth / 2);
-            const wx = asciiCol * hexWidth + xOff - (45 * hexWidth / 2);
-            const wz = -asciiRow * hexHeight - 2;
-            enteringPrism.centerXZ = new THREE.Vector2(wx, wz);
-            // The centre row is off-grid (-2), so getRegionHexes would only return
-            // the upper sliver and the wall geometry would collapse to a flat
-            // chord. Pre-populate with a synthetic full hex disk instead.
-            enteringPrism.regionHexes = getSyntheticRegionHexes(asciiRow, asciiCol, PRISM_RADIUS);
-            enteringPrism.hexSet = new Set(enteringPrism.regionHexes.map(({ hex }) => `${hex.row},${hex.col}`));
-            console.log('[immersive] ascii-gallery enteringPrism row=' + asciiRow + ' col=' + asciiCol + ' worldX=' + wx.toFixed(2) + ' worldZ=' + wz.toFixed(2) + ' regionHexes=' + enteringPrism.regionHexes.length);
+            enteringPrism = makeAsciiGalleryState(false);
+            console.log('[immersive] ascii-gallery enteringPrism row=' + enteringPrism.centerRow + ' col=' + enteringPrism.centerCol + ' worldX=' + enteringPrism.centerXZ.x.toFixed(2) + ' worldZ=' + enteringPrism.centerXZ.y.toFixed(2) + ' regionHexes=' + enteringPrism.regionHexes.length);
             extraPrisms.push(enteringPrism);
 
             // gpt3-library — the chamber the user just came from, always shown risen.
@@ -950,23 +980,24 @@ import VolumeControl from '../components/VolumeControl.astro';
                 // comes into view above the viewport when the canvas
                 // translates down (so we never see a black gap at the top
                 // mid-dive).
-                skyCtx.fillStyle = '#06091E';
+                skyCtx.fillStyle = '#234E8E';
                 skyCtx.fillRect(0, 0, w, skyTop);
 
-                // Gradient confined to the sky region (canvas-y skyTop to
-                // skyTop+h). Stops match the original (zenith → mauve over
-                // viewport height). Below the gradient sits a band of solid
-                // mauve — hidden by the WebGL ground in normal play, but kept
-                // for safety if the canvas ever translates upward.
+                // Subtle all-blue daytime gradation confined to the sky region
+                // (canvas-y skyTop to skyTop+h). Kept to blues only — coloured
+                // horizontal bands fight the curved horizon — and lighter than
+                // the old near-black sky. The VISUAL horizon falls at stop ~0.37
+                // (medium blue zenith → lighter sky-blue at the horizon);
+                // below it the gentle lightening continues for the thin strip
+                // the floor's edge-dissolve reveals.
                 const grad = skyCtx.createLinearGradient(0, skyTop, 0, skyTop + h);
-                grad.addColorStop(0,    '#06091E');
-                grad.addColorStop(0.35, '#111D50');
-                grad.addColorStop(0.68, '#2E3070');
-                grad.addColorStop(1,    '#6B3F62');
+                grad.addColorStop(0,    '#234E8E');
+                grad.addColorStop(0.37, '#7BB0DC');
+                grad.addColorStop(1,    '#A4CCEC');
                 skyCtx.fillStyle = grad;
                 skyCtx.fillRect(0, skyTop, w, h);
 
-                skyCtx.fillStyle = '#6B3F62';
+                skyCtx.fillStyle = '#A4CCEC';
                 skyCtx.fillRect(0, skyTop + h, w, canvasH - (skyTop + h));
 
                 skyClouds.forEach(c => {
@@ -1126,12 +1157,11 @@ import VolumeControl from '../components/VolumeControl.astro';
                     wallSkyCtx.fillText(s.sym, s.x, s.y);
                 });
             } else {
-                // Twilight wall sky: matches 2D sky canvas gradient
+                // Daytime wall sky: matches 2D sky canvas gradation (blues only)
                 const wGrad = wallSkyCtx.createLinearGradient(0, 0, 0, WSKY_H);
-                wGrad.addColorStop(0,    '#06091E');
-                wGrad.addColorStop(0.35, '#111D50');
-                wGrad.addColorStop(0.68, '#2E3070');
-                wGrad.addColorStop(1,    '#6B3F62');
+                wGrad.addColorStop(0,    '#234E8E');
+                wGrad.addColorStop(0.37, '#7BB0DC');
+                wGrad.addColorStop(1,    '#A4CCEC');
                 wallSkyCtx.fillStyle = wGrad;
                 wallSkyCtx.fillRect(0, 0, WSKY_W, WSKY_H);
             }

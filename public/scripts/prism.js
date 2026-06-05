@@ -64,6 +64,13 @@ let _inChainNavMode = false;
 let _heavensScrollWatcher = null;
 let activeTextBody = null;   // set when a text frame is open, used for keyboard scroll
 const SCROLL_STEP = 120;     // px per arrow-key / button press
+// The shrine search-results box only overflows by a little, so the 120px
+// SCROLL_STEP would jump the whole list in one press. Its arrows step by one
+// result row instead, for gradual scrolling.
+function resultsRowStep(resultsEl) {
+    const row = resultsEl && resultsEl.querySelector('.wall-search-result');
+    return row ? Math.max(1, Math.round(row.getBoundingClientRect().height)) : 40;
+}
 const SCROLL_PX_PER_FRAME = 1.8; // continuous scroll speed (px per rAF frame)
 let _scrollRAF = null;
 let _scrollDir = 0; // -1 = up, +1 = down, 0 = stopped
@@ -2148,6 +2155,39 @@ function wallFromScreenX(clientX) {
     }
 }
 
+// The frame controls (×, ▲, ▼) sit at a frame's right edge and can straddle the
+// X-zone boundary used by wallFromScreenX — so a cursor on a button's right half
+// would route to the wrong wall and miss. Hit-test every visible frame's controls
+// by their own rect (facing wall first for rect accuracy), independent of zone, so
+// the whole button is responsive. Returns { wallNum, frame, action } or null.
+function hitFrameControl(x, y) {
+    const facing = String(getFacingWall());
+    const frames = [...document.querySelectorAll('.wall-text-frame.visible')];
+    frames.sort((a, b) => {
+        const af = a.closest('.wall-panel')?.dataset.wall === facing ? 0 : 1;
+        const bf = b.closest('.wall-panel')?.dataset.wall === facing ? 0 : 1;
+        return af - bf;
+    });
+    const M = 8; // generous margin so the whole button (and a little beyond) responds
+    for (const frame of frames) {
+        const panel = frame.closest('.wall-panel');
+        if (!panel) continue;
+        const wallNum = parseInt(panel.dataset.wall, 10);
+        for (const [sel, action] of [['.wall-close-btn', 'close'],
+                                     ['.wall-scroll-up', 'up'],
+                                     ['.wall-scroll-down', 'down']]) {
+            const btn = frame.querySelector(sel);
+            if (!btn) continue;
+            const r = btn.getBoundingClientRect();
+            if (r.width === 0 && r.height === 0) continue;
+            if (x >= r.left - M && x <= r.right + M && y >= r.top - M && y <= r.bottom + M) {
+                return { wallNum, frame, action };
+            }
+        }
+    }
+    return null;
+}
+
 // --- Debug helpers ---
 window.__prismW = function () {
     return shrinePos;
@@ -2265,14 +2305,43 @@ document.addEventListener('click', (e) => {
     {
         const resultsEl = document.querySelector('.wall-search-results');
         if (resultsEl) {
-            for (const el of resultsEl.querySelectorAll('.wall-search-result')) {
-                const r = el.getBoundingClientRect();
-                if (e.clientX >= r.left && e.clientX <= r.right &&
-                    e.clientY >= r.top  && e.clientY <= r.bottom) {
-                    const idx = parseInt(el.dataset.matchIndex || '', 10);
-                    const item = Number.isFinite(idx) ? shrineSearchResultsSnapshot[idx] : null;
-                    if (item) enterShrineHeavens(item);
+            // The ▲/▼ arrows overlap the top/bottom of the scroll viewport. Hit-test
+            // them first: when the list overflows, a clipped off-screen item keeps a
+            // real bounding rect beneath the arrow, so otherwise the arrow opens a
+            // (seemingly random) transmission instead of scrolling.
+            const arrows = [
+                [document.querySelector('.results-scroll-up'), -1],
+                [document.querySelector('.results-scroll-down'), 1],
+            ];
+            for (const [btn, dir] of arrows) {
+                if (!btn) continue;
+                const r = btn.getBoundingClientRect();
+                if (e.clientX >= r.left - 4 && e.clientX <= r.right + 4 &&
+                    e.clientY >= r.top - 4  && e.clientY <= r.bottom + 4) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    // Skip the per-row click scroll when this click is the tail of a
+                    // press-and-hold (mousedown already started continuous scrolling).
+                    if (!_scrollBtnHeld) resultsEl.scrollBy({ top: dir * resultsRowStep(resultsEl), behavior: 'smooth' });
                     return;
+                }
+            }
+            // Only items inside the visible viewport are clickable — overflowing items
+            // are clipped on screen but keep real (off-screen) bounding rects.
+            const vp = resultsEl.getBoundingClientRect();
+            if (e.clientX >= vp.left && e.clientX <= vp.right &&
+                e.clientY >= vp.top  && e.clientY <= vp.bottom) {
+                for (const el of resultsEl.querySelectorAll('.wall-search-result')) {
+                    const r = el.getBoundingClientRect();
+                    if (e.clientX >= r.left && e.clientX <= r.right &&
+                        e.clientY >= r.top  && e.clientY <= r.bottom) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const idx = parseInt(el.dataset.matchIndex || '', 10);
+                        const item = Number.isFinite(idx) ? shrineSearchResultsSnapshot[idx] : null;
+                        if (item) enterShrineHeavens(item);
+                        return;
+                    }
                 }
             }
         }
@@ -2308,6 +2377,20 @@ document.addEventListener('click', (e) => {
     const wr = wallArea.getBoundingClientRect();
     if (e.clientX < wr.left || e.clientX > wr.right ||
         e.clientY < wr.top  || e.clientY > wr.bottom) return;
+
+    // Frame controls first, by their own rect (zone-independent) — fixes ×/▲/▼
+    // near the wall-zone boundary being unresponsive on one side.
+    if (!document.querySelector('.wall-video-overlay.visible')) {
+        const ctrl = hitFrameControl(e.clientX, e.clientY);
+        if (ctrl) {
+            e.stopPropagation();
+            e.preventDefault();
+            if (ctrl.action === 'close') { closeFrameOnWall(ctrl.wallNum); return; }
+            // up/down: skip the per-row step if this click tails a press-and-hold
+            if (!_scrollBtnHeld) scrollWall(ctrl.wallNum, ctrl.action);
+            return;
+        }
+    }
 
     // Stop Chrome's misrouted event from reaching any 3D element handler
     const wallNum = wallFromScreenX(e.clientX);
@@ -2517,6 +2600,40 @@ document.addEventListener('mousedown', (e) => {
     const wr = wallArea.getBoundingClientRect();
     if (e.clientX < wr.left || e.clientX > wr.right ||
         e.clientY < wr.top  || e.clientY > wr.bottom) return;
+    // Shrine search-results ▲/▼ arrows: press-and-hold for continuous scroll.
+    // (Chrome won't route events to these 3D children, so hit-test by rect.)
+    {
+        const resultsEl = document.querySelector('.wall-search-results');
+        if (resultsEl) {
+            for (const [btn, dir] of [[document.querySelector('.results-scroll-up'), -1],
+                                      [document.querySelector('.results-scroll-down'), 1]]) {
+                if (!btn) continue;
+                const r = btn.getBoundingClientRect();
+                if (e.clientX >= r.left - 4 && e.clientX <= r.right + 4 &&
+                    e.clientY >= r.top - 4  && e.clientY <= r.bottom + 4) {
+                    e.preventDefault();
+                    _scrollBtnHeld = true;
+                    startContinuousScroll(resultsEl, dir);
+                    return;
+                }
+            }
+        }
+    }
+    // Text-frame ▲/▼ press-and-hold — hit-test by the button's own rect (facing
+    // wall first) so the whole button responds regardless of X-zone.
+    if (!document.querySelector('.wall-video-overlay.visible')) {
+        const ctrl = hitFrameControl(e.clientX, e.clientY);
+        if (ctrl && (ctrl.action === 'up' || ctrl.action === 'down')) {
+            const body = ctrl.frame.querySelector('.wall-text-body');
+            if (body) {
+                e.preventDefault();
+                _scrollBtnHeld = true;
+                startContinuousScroll(body, ctrl.action === 'up' ? -1 : 1);
+                return;
+            }
+        }
+        if (ctrl && ctrl.action === 'close') return; // close handled on click; don't start a drag
+    }
     const wallNum = wallFromScreenX(e.clientX);
     const wall = document.querySelector(`.wall-panel[data-wall="${wallNum}"]`);
     if (!wall) return;
@@ -6041,13 +6158,13 @@ async function loadTransmissionTags() {
     // Scroll buttons
     const resScrollUp   = document.querySelector('.results-scroll-up');
     const resScrollDown = document.querySelector('.results-scroll-down');
-    if (resScrollUp)   resScrollUp.addEventListener('click',   () => results.scrollBy({ top: -SCROLL_STEP, behavior: 'smooth' }));
-    if (resScrollDown) resScrollDown.addEventListener('click', () => results.scrollBy({ top:  SCROLL_STEP, behavior: 'smooth' }));
+    if (resScrollUp)   resScrollUp.addEventListener('click',   () => results.scrollBy({ top: -resultsRowStep(results), behavior: 'smooth' }));
+    if (resScrollDown) resScrollDown.addEventListener('click', () => results.scrollBy({ top:  resultsRowStep(results), behavior: 'smooth' }));
 
     input.addEventListener('keydown', e => {
         e.stopPropagation();
-        if (e.key === 'ArrowDown') { e.preventDefault(); results.scrollBy({ top:  SCROLL_STEP, behavior: 'smooth' }); }
-        if (e.key === 'ArrowUp')   { e.preventDefault(); results.scrollBy({ top: -SCROLL_STEP, behavior: 'smooth' }); }
+        if (e.key === 'ArrowDown') { e.preventDefault(); results.scrollBy({ top:  resultsRowStep(results), behavior: 'smooth' }); }
+        if (e.key === 'ArrowUp')   { e.preventDefault(); results.scrollBy({ top: -resultsRowStep(results), behavior: 'smooth' }); }
         if (e.key === 'Escape' && shrineHeavensLocked()) { e.preventDefault(); leaveShrineHeavens(); }
     });
 

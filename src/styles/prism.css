@@ -629,20 +629,26 @@ body:not(.sky-mode) .sky-toggle { display: none; }
         drop-shadow(0 0 36px rgba(155,107,204,0.2));
 }
 
-/* Per-wall label-image size tweaks (relative to the 13.75vh base) so the
-   stylised words read at a consistent visual size. Research Lab: petertodd
-   (wall 3) & bootstrap (wall 5) at 21.175vh; rescue (wall 4) at 16.5vh.
-   translateY shifts each up by half its extra height over the 13.75vh base,
-   centring each PNG on the base labels' centre line (the text is centred within
-   each PNG) so all words share a common baseline despite the top-anchored layout. */
+/* Per-wall label-image size tweaks. Every Research word's text is centred within
+   its PNG, so a common baseline = a common centre line, held at container-top +
+   6.875vh via translateY = 6.875 − height/2. All six words were reduced to 80% of
+   their prior size (2026-06-04) with translateY recomputed from that formula, so
+   the lettering baselines stay put while the glyphs read less chunky.
+   Prior sizes: walls 1/2/6 = 13.75vh (base); 3/5 = 21.175vh; 4 = 16.5vh. */
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="1"] .wall-word-img img,
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="2"] .wall-word-img img,
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="6"] .wall-word-img img {
+    height: 11vh;
+    transform: translateY(1.375vh);
+}
 .chamber[data-prism-id="research-lab"] .wall-panel[data-wall="3"] .wall-word-img img,
 .chamber[data-prism-id="research-lab"] .wall-panel[data-wall="5"] .wall-word-img img {
-    height: 21.175vh;
-    transform: translateY(-3.7125vh);
+    height: 16.94vh;
+    transform: translateY(-1.595vh);
 }
 .chamber[data-prism-id="research-lab"] .wall-panel[data-wall="4"] .wall-word-img img {
-    height: 16.5vh;
-    transform: translateY(-1.375vh);
+    height: 13.2vh;
+    transform: translateY(0.275vh);
 }
 
 /* OVS Chapel: the source PNGs scale each word to a fixed canvas width, so the
@@ -1365,11 +1371,12 @@ body:not(.sky-mode) .sky-toggle { display: none; }
         0 0 36px rgba(220,80,60,0.25);
 }
 .chamber[data-prism-id="ovs-chapel"] .wall-text-frame {
-    background: rgba(38, 4, 12, 0.92);
-    border-color: rgba(196, 18, 48, 0.35);
+    /* Vermillion panel with dark ink text (was: dark maroon panel + gold text) */
+    background: linear-gradient(rgba(202, 48, 44, 0.97), rgba(176, 28, 40, 0.97));
+    border-color: rgba(96, 10, 20, 0.85);
     box-shadow:
-        inset 0 0 48px rgba(24, 2, 8, 0.6),
-        0 0 24px rgba(196, 18, 48, 0.09);
+        inset 0 0 60px rgba(108, 10, 22, 0.5),
+        0 0 28px rgba(196, 18, 48, 0.28);
     /* Scaled to 91.7% (same centre) to sit within the starburst corner brackets */
     transform: translate(-50%, -50%) scale(0.917);
 }
@@ -1386,42 +1393,47 @@ body:not(.sky-mode) .sky-toggle { display: none; }
     letter-spacing: 0.06em;
 }
 .chamber[data-prism-id="ovs-chapel"] .wall-text-body {
-    color: rgba(232, 198, 138, 0.94);
+    color: rgba(38, 10, 22, 0.92);
     font-family: 'Marcellus', 'Cormorant Garamond', serif;
     font-weight: 400;
     font-size: 3.16vh;
     letter-spacing: 0.015em;
     line-height: 1.55;
-    scrollbar-color: rgba(196, 18, 48, 0.25) transparent;
+    scrollbar-color: rgba(96, 8, 18, 0.40) transparent;
 }
 .chamber[data-prism-id="ovs-chapel"] .wall-text-body p {
     margin-bottom: 0.55em;
 }
 .chamber[data-prism-id="ovs-chapel"] .wall-text-body a {
-    color: #d8a14a;
-    text-decoration-color: rgba(216, 161, 74, 0.55);
+    color: #4a166e;
+    text-decoration-color: rgba(74, 22, 110, 0.6);
 }
 .chamber[data-prism-id="ovs-chapel"] .wall-text-body a:hover {
-    color: #f0c878;
+    color: #6a2a9c;
 }
 .chamber[data-prism-id="ovs-chapel"] .wall-text-body::-webkit-scrollbar-thumb {
-    background: rgba(196, 18, 48, 0.28);
+    background: rgba(96, 8, 18, 0.42);
 }
 .chamber[data-prism-id="ovs-chapel"] .wall-close-btn {
-    color: rgba(196, 18, 48, 0.55);
+    color: rgba(40, 10, 22, 0.82);
 }
 .chamber[data-prism-id="ovs-chapel"] .wall-close-btn:hover {
-    color: rgba(220, 80, 60, 0.90);
+    color: rgba(250, 242, 222, 0.95);
 }
 .chamber[data-prism-id="ovs-chapel"] .wall-scroll-up,
 .chamber[data-prism-id="ovs-chapel"] .wall-scroll-down {
-    border-color: rgba(196, 18, 48, 0.36);
-    color: rgba(196, 18, 48, 0.68);
+    border-color: rgba(40, 10, 22, 0.42);
+    color: rgba(40, 10, 22, 0.85);
 }
 .chamber[data-prism-id="ovs-chapel"] .wall-scroll-up:hover,
 .chamber[data-prism-id="ovs-chapel"] .wall-scroll-down:hover {
-    border-color: rgba(220, 80, 60, 0.80);
-    color: rgba(220, 80, 60, 1.0);
+    border-color: rgba(250, 242, 222, 0.75);
+    color: rgba(250, 242, 222, 1.0);
+}
+/* Disabled video-button placeholder: subdued dark ink so it doesn't clash blue-on-vermillion */
+.chamber[data-prism-id="ovs-chapel"] .wall-video-btn.wall-video-disabled {
+    border-color: rgba(40, 10, 22, 0.32);
+    color: rgba(40, 10, 22, 0.52);
 }
 
 /* ===== Mythopoeic Archive — midnight indigo & silver ===== */
@@ -1470,20 +1482,20 @@ body:not(.sky-mode) .sky-toggle { display: none; }
     background: rgba(140, 110, 200, 0.28);
 }
 .chamber[data-prism-id="mythopoeic-archive"] .wall-close-btn {
-    color: rgba(140, 110, 200, 0.50);
+    color: rgba(180, 155, 232, 0.85);
 }
 .chamber[data-prism-id="mythopoeic-archive"] .wall-close-btn:hover {
-    color: rgba(180, 155, 235, 0.90);
+    color: rgba(210, 190, 250, 1.0);
 }
 .chamber[data-prism-id="mythopoeic-archive"] .wall-scroll-up,
 .chamber[data-prism-id="mythopoeic-archive"] .wall-scroll-down {
-    border-color: rgba(140, 110, 200, 0.35);
-    color: rgba(140, 110, 200, 0.68);
+    border-color: rgba(165, 140, 222, 0.58);
+    color: rgba(180, 155, 232, 0.90);
 }
 .chamber[data-prism-id="mythopoeic-archive"] .wall-scroll-up:hover,
 .chamber[data-prism-id="mythopoeic-archive"] .wall-scroll-down:hover {
-    border-color: rgba(180, 155, 235, 0.80);
-    color: rgba(180, 155, 235, 1.0);
+    border-color: rgba(210, 190, 250, 0.90);
+    color: rgba(210, 190, 250, 1.0);
 }
 
 /* ===== Research Lab — steel & cyan (lab / blueprint) ===== */
