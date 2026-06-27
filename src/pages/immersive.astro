@@ -8,7 +8,9 @@ import VolumeControl from '../components/VolumeControl.astro';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Immersive Experience</title>
+    <title>⬣</title>
+    <meta name="robots" content="noindex,follow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400&display=swap" rel="stylesheet">
@@ -57,12 +59,74 @@ import VolumeControl from '../components/VolumeControl.astro';
             opacity: 0;
             pointer-events: none;
             z-index: 999;
+        }
+        /* Re-entry gate — shown only when the immersive page is reloaded (or
+           reached via back/forward), where there's no inherited user gesture so
+           the soundscape can't auto-start and a fresh "sit back and watch" run
+           is wanted. A pure-black hold screen; the Three.js sequence is paused
+           at frame 0 until the user clicks, which starts the whole sequence (and
+           audio) from the beginning. Never shown on the landing→immersive flow. */
+        #reentry-gate {
+            position: fixed;
+            inset: 0;
+            z-index: 998;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000000;
+            cursor: pointer;
+            opacity: 1;
+            transition: opacity 1.4s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #reentry-gate.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        #reentry-gate .reentry-text {
+            font-family: 'IBM Plex Mono', monospace;
+            font-weight: 300;
+            font-size: clamp(0.72em, 1.9vw, 0.95em);
+            letter-spacing: 0.34em;
+            text-indent: 0.34em;
+            color: #5eefa2;
+            text-shadow:
+                0 0 8px rgba(94,239,162,0.55),
+                0 0 22px rgba(94,239,162,0.35),
+                0 0 44px rgba(94,239,162,0.18);
+            user-select: none;
+            -webkit-user-select: none;
+            animation: reentryBreath 4.2s ease-in-out infinite;
+        }
+        @keyframes reentryBreath {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
     </style>
 </head>
 <body>
     <canvas id="sky-canvas"></canvas>
     <canvas id="webgl-canvas"></canvas>
     <div id="fade-overlay"></div>
+    <div id="reentry-gate" class="hidden" aria-hidden="true">
+        <div class="reentry-text">breathe and re-enter</div>
+    </div>
+    <script is:inline>
+        // Decide at parse time whether this is a reload / back-forward re-entry.
+        // If so, paint the black "breathe and re-enter" gate from the very first
+        // frame (before the deferred module runs) so the sequence never flashes.
+        // The module reads window.__immersiveHold to hold the sequence.
+        (function () {
+            try {
+                var nav = performance.getEntriesByType('navigation')[0];
+                window.__immersiveHold = !!(nav && (nav.type === 'reload' || nav.type === 'back_forward'));
+            } catch (e) { window.__immersiveHold = false; }
+            if (window.__immersiveHold) {
+                var g = document.getElementById('reentry-gate');
+                if (g) g.classList.remove('hidden');
+            }
+        })();
+    </script>
     <VolumeControl />
     <script type="module">
         import * as THREE from 'three';
@@ -821,6 +885,14 @@ import VolumeControl from '../components/VolumeControl.astro';
                 extraPrisms.push(vp);
             });
         }
+
+        // Tab title: one solid hexagon per hexagonal chamber that will have risen
+        // by the end of this scene — the central chamber (prism1) plus any
+        // entering / already-risen neighbour chambers shown on a return visit.
+        // On a normal first watch this is a single hexagon; up to 7 once chambers
+        // have been visited. Set now (not gated behind the re-entry click) so the
+        // count is already correct behind the "breathe and re-enter" hold.
+        document.title = Array(1 + extraPrisms.length).fill('⬣').join(' ');
 
         // --- Sky: direct 2D canvas behind transparent WebGL (matches prism page night sky exactly) ---
         const skyCanvasEl = document.getElementById('sky-canvas');
@@ -3290,7 +3362,38 @@ import VolumeControl from '../components/VolumeControl.astro';
             }
         }, 1500);
 
-        animate();
+        // On a reload / back-forward re-entry, hold the whole sequence at frame 0
+        // behind the black "breathe and re-enter" gate. The user's click starts
+        // the sequence (and resumes audio) fresh from the beginning. On the normal
+        // landing→immersive flow there's no gate and the sequence runs immediately.
+        let _seqStarted = false;
+        function startImmersive() {
+            if (_seqStarted) return;
+            _seqStarted = true;
+            paused = false;
+            // Reset the clock so the first frame's delta is ~0 — the sequence
+            // begins from the start rather than jumping by the hold duration.
+            lastRealTime = Date.now() * 0.001;
+            const gate = document.getElementById('reentry-gate');
+            if (gate) gate.classList.add('hidden');
+            animate();
+            // Audio is left to its existing machinery: the 1.5s soundscape timer
+            // and the document-level gesture unlock listeners (which the gate
+            // click bubbles to), so audio timing on the normal flow is unchanged.
+        }
+
+        if (window.__immersiveHold) {
+            const gate = document.getElementById('reentry-gate');
+            if (gate) {
+                gate.classList.remove('hidden');
+                gate.addEventListener('click', startImmersive);
+                gate.addEventListener('touchstart', startImmersive, { passive: true });
+            } else {
+                startImmersive();
+            }
+        } else {
+            startImmersive();
+        }
     </script>
 </body>
 </html>

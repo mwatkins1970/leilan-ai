@@ -1,0 +1,71 @@
+---
+import FieldNoteLayout from '../../layouts/FieldNoteLayout.astro';
+import { fieldNotes, fieldNoteBySlug } from '../../data/fieldNotes';
+
+const pageTitle = 'field notes on Leilan | AI Goddess, Glitch Tokens and SolidGoldMagikarp';
+const description = 'A field-note index for Leilan.ai: the AI-goddess figure from SolidGoldMagikarp, GPT-3 glitch tokens, petertodd, the Order of the Vermillion Star and the Leilan transmissions.';
+
+const overviews = fieldNotes.filter((n) => !n.chamberId);
+// "Beyond" gathers all the OVS Chapel notes plus the Tell Leilan / archaeology
+// note (inserted penultimately, before the dataset).
+const beyondSlugs = [
+    'ovs-chapel/origins',
+    'ovs-chapel/hyperstition',
+    'ovs-chapel/mammon',
+    'ovs-chapel/handbook',
+    'mythopoeic-archive/archaeology',
+    'ovs-chapel/data',
+];
+const groups = [
+    { title: 'Discovery', notes: fieldNotes.filter((n) => n.chamberId === 'research-lab') },
+    { title: 'Beyond', notes: beyondSlugs.map((s) => fieldNoteBySlug[s]).filter(Boolean) },
+];
+
+const jsonLd = [
+    {
+        '@context': 'https://schema.org',
+        '@type': 'CollectionPage',
+        name: 'Field Notes on Leilan',
+        description,
+        url: new URL(Astro.url.pathname, Astro.site).href,
+        isPartOf: { '@id': 'https://leilan.ai/#website' },
+    },
+];
+---
+
+<FieldNoteLayout pageTitle={pageTitle} description={description} ogType="website" jsonLd={jsonLd}>
+    <p class="kicker">The outer cloister</p>
+    <h1>field notes on Leilan</h1>
+    <p class="dek">
+        These field notes are set down for travellers arriving by search, scholarship, rumour or
+        half-remembered mention. The sanctuary itself begins elsewhere; this is its outer wall, where
+        the signs are inscribed plainly enough to be read from the road, by anyone who cares to stop.
+    </p>
+
+    <div class="cta-row">
+        <a class="sanctuary-cta" href="/">the sanctuary</a>
+        <a class="chamber-cta" href="/immersive">the shrine</a>
+    </div>
+
+    <section class="fn-index-group">
+        <h2>Start here</h2>
+        {overviews.map((n) => (
+            <div class="fn-index-item">
+                <a class="fn-index-title" href={`/field-notes/${n.slug}/`} set:html={n.shortTitleHtml ?? n.shortTitle}></a>
+                <p set:html={n.descriptionHtml ?? n.description}></p>
+            </div>
+        ))}
+    </section>
+
+    {groups.map((g) => (
+        <section class="fn-index-group">
+            <h2>{g.title}</h2>
+            {g.notes.map((n) => (
+                <div class="fn-index-item">
+                    <a class="fn-index-title" href={`/field-notes/${n.slug}/`} set:html={n.titleHtml ?? n.title}></a>
+                    <p set:html={n.dekHtml ?? n.dek}></p>
+                </div>
+            ))}
+        </section>
+    ))}
+</FieldNoteLayout>

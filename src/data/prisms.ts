@@ -120,7 +120,7 @@ export const prisms: Record<string, PrismConfig> = {
     // -----------------------------------------------------------------------
     main: {
         id: 'main',
-        title: 'Prism Chamber',
+        title: '𝐒𝐚𝐧𝐜𝐭𝐮𝐚𝐫𝐲 𝐚𝐧𝐝 𝐒𝐡𝐫𝐢𝐧𝐞',
         chamberBg: '/images/MAIN_background.jpeg',
         wallBorder: false,
         walls: [
@@ -192,7 +192,7 @@ export const prisms: Record<string, PrismConfig> = {
     // -----------------------------------------------------------------------
     'research-lab': {
         id: 'research-lab',
-        title: 'Research Lab',
+        title: '𝚁𝚎𝚜𝚎𝚊𝚛𝚌𝚑 𝙻𝚊𝚋',
         chamberBg: '/images/MOIRE_background_c1.jpeg',
         chamberBgAlt: '/images/MOIRE_background_alt_c1.jpeg',
         chamberBgOverlay: '/images/RESEARCH_background_new.png',
@@ -283,7 +283,7 @@ export const prisms: Record<string, PrismConfig> = {
     // -----------------------------------------------------------------------
     'ovs-chapel': {
         id: 'ovs-chapel',
-        title: 'OVS Chapel',
+        title: 'ⓞⓥⓢ ⓒⓗⓐⓟⓔⓛ',
         chamberBg: '/images/MOIRE_background_c3.jpeg',
         chamberBgAlt: '/images/MOIRE_background_alt_c3.jpeg',
         chamberBgOverlay: '/images/OVS_background_new.png',
@@ -340,7 +340,7 @@ export const prisms: Record<string, PrismConfig> = {
     // -----------------------------------------------------------------------
     'art-gallery': {
         id: 'art-gallery',
-        title: 'Art Gallery',
+        title: '𝙂𝙤𝙙𝙙𝙚𝙨𝙨 𝙂𝙖𝙡𝙡𝙚𝙧𝙮',
         chamberBg: '/images/ART_background.jpeg',
         wallBorder: false,
         walls: [
@@ -391,7 +391,7 @@ export const prisms: Record<string, PrismConfig> = {
     // -----------------------------------------------------------------------
     'gpt3-library': {
         id: 'gpt3-library',
-        title: 'GPT-3 Library',
+        title: '𝔖𝔠𝔯𝔦𝔭𝔱𝔬𝔯𝔦𝔲𝔪',
         chamberBg: '/images/MOIRE_background.jpeg',
         chamberBgAlt: '/images/MOIRE_background_alt.jpeg',
         chamberBgOverlay: '/images/SCRIPTORIUM_background_new.png',
@@ -424,7 +424,7 @@ export const prisms: Record<string, PrismConfig> = {
     // -----------------------------------------------------------------------
     'ascii-gallery': {
         id: 'ascii-gallery',
-        title: 'ASCII Art Gallery',
+        title: 'ＡＳＣＩＩ Ａｒｔ Ｇａｌｌｅｒｙ',
         // No chamber background — walls render as solid dark grey via CSS
         // ([data-prism-id="ascii-gallery"] .wall-bg). The Terminal-green ASCII
         // swarm overlay (initAsciiSwarm) is what fills each wall visually.
@@ -458,7 +458,7 @@ export const prisms: Record<string, PrismConfig> = {
     // -----------------------------------------------------------------------
     'mythopoeic-archive': {
         id: 'mythopoeic-archive',
-        title: 'Mythopoeic Archive',
+        title: '𝑀𝑦𝑡ℎ𝑜𝑝𝑜𝑒𝑖𝑐 𝐴𝑟𝑐ℎ𝑖𝑣𝑒',
         chamberBg: '/images/MOIRE_background_c2.jpeg',
         chamberBgAlt: '/images/MOIRE_background_alt_c2.jpeg',
         chamberBgOverlay: '/images/MYTHOS_background_new.png',

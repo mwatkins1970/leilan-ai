@@ -1,0 +1,261 @@
+---
+// Shared shell for the public field-note layer (the "outer cloister").
+// Renders all SEO head metadata + JSON-LD, the cloister styling (mirroring
+// data.astro / the LessWrong interstitials), and the standard back-links footer.
+// Page-specific content (breadcrumb, H1, body, related) is slotted in by the route.
+
+interface Props {
+    pageTitle: string;                 // full <title> text
+    description: string;
+    ogType?: 'article' | 'website';
+    ogImage?: string;                  // site-relative path; defaults to the landing portrait
+    jsonLd?: Record<string, unknown>[];
+}
+
+const { pageTitle, description, ogType = 'article', ogImage = '/images/leilan-portrait.jpeg', jsonLd = [] } = Astro.props;
+
+const canonical = new URL(Astro.url.pathname, Astro.site).href;
+const ogImageUrl = new URL(ogImage, Astro.site).href;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="robots" content="index,follow" />
+
+    <meta property="og:type" content={ogType} />
+    <meta property="og:site_name" content="Leilan.ai" />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImageUrl} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={pageTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImageUrl} />
+
+    {jsonLd.map((obj) => (
+      <script type="application/ld+json" set:html={JSON.stringify(obj)} />
+    ))}
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+  </head>
+  <body>
+    <main class="field-note">
+      <slot />
+    </main>
+
+    <footer class="fn-foot">
+      <nav class="fn-foot-nav" aria-label="Site">
+        <a href="/field-notes/">field notes</a>
+        <span aria-hidden="true">·</span>
+        <a class="fn-foot-enter" href="/">sanctuary</a>
+        <span aria-hidden="true">·</span>
+        <a href="/immersive">shrine</a>
+        <span aria-hidden="true">·</span>
+        <a href="/archive">archive</a>
+        <span aria-hidden="true">·</span>
+        <a href="/data">data</a>
+      </nav>
+      <p class="fn-foot-note">field notes for travellers arriving by search, scholarship or rumour</p>
+    </footer>
+
+    <style is:global>
+      :root {
+        color-scheme: dark;
+        --bg: #07070b;
+        --panel: rgba(16, 14, 26, 0.88);
+        --text: #eee9dc;
+        --muted: #b9af9f;
+        --gold: #d8b86a;
+        --green: #9df7b3;
+        --line: rgba(216, 184, 106, 0.32);
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: Georgia, "Times New Roman", serif;
+        background:
+          radial-gradient(circle at 50% 0%, rgba(157, 247, 179, 0.10), transparent 34rem),
+          radial-gradient(circle at 20% 20%, rgba(216, 184, 106, 0.10), transparent 28rem),
+          linear-gradient(180deg, #08080d 0%, #050508 100%);
+        color: var(--text);
+        line-height: 1.62;
+      }
+
+      .field-note {
+        width: min(820px, calc(100% - 2rem));
+        margin: 0 auto;
+        padding: clamp(2.5rem, 6vw, 4.5rem) 0 3rem;
+      }
+
+      .field-note .breadcrumb {
+        font-size: 0.82rem;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+        margin-bottom: 2.2rem;
+      }
+      .field-note .breadcrumb a { color: var(--muted); text-decoration: none; border-bottom: 1px solid transparent; }
+      .field-note .breadcrumb a:hover { color: var(--green); border-bottom-color: rgba(157,247,179,0.4); }
+      .field-note .breadcrumb span { opacity: 0.5; margin: 0 0.5rem; }
+
+      .field-note .kicker {
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.22em;
+        color: var(--gold);
+        margin: 0 0 0.9rem;
+      }
+
+      .field-note h1 {
+        font-size: clamp(1.7rem, 4.6vw, 2.7rem);
+        line-height: 1.16;
+        color: var(--gold);
+        font-weight: 500;
+        margin: 0 0 1rem;
+      }
+      .field-note .dek {
+        font-size: clamp(1.05rem, 2.4vw, 1.28rem);
+        color: var(--text);
+        font-style: italic;
+        margin: 0 0 2rem;
+        opacity: 0.92;
+      }
+
+      .field-note .topnote {
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--gold);
+        background: rgba(216, 184, 106, 0.06);
+        padding: 0.9rem 1.2rem;
+        margin: 0 0 2rem;
+        font-size: 0.95rem;
+        color: var(--muted);
+      }
+      .field-note .topnote p { margin: 0; }
+      .field-note .topnote strong { color: var(--text); }
+
+      .field-note .cta-row {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.9rem;
+        margin: 0 0 2.6rem;
+      }
+      .field-note .sanctuary-cta,
+      .field-note .chamber-cta {
+        display: inline-block;
+        text-decoration: none;
+        padding: 0.7rem 1.5rem;
+        border-radius: 2px;
+        letter-spacing: 0.06em;
+        font-size: 0.96rem;
+        font-weight: 600;
+        transition: all 0.25s ease;
+        /* Both CTAs: black on gold with a glow-up on hover (a matched pair). */
+        color: #0b0b0f;
+        background: linear-gradient(180deg, #f3d98a, #d8b86a);
+        border: 1px solid #f3d98a;
+        box-shadow: 0 0 18px rgba(216, 184, 106, 0.35);
+        /* Gentle idle pulse; the two buttons breathe in opposite phase. */
+        animation: ctaPulse 4.6s ease-in-out infinite;
+      }
+      .field-note .chamber-cta { animation-delay: -2.3s; }
+      .field-note .sanctuary-cta:hover,
+      .field-note .chamber-cta:hover {
+        animation: none; /* hover takes over — the glow-up wins over the pulse */
+        box-shadow: 0 0 26px rgba(243, 217, 138, 0.6), 0 0 60px rgba(216, 184, 106, 0.3);
+        transform: translateY(-1px);
+      }
+      @keyframes ctaPulse {
+        0%, 100% { box-shadow: 0 0 7px rgba(216, 184, 106, 0.20); }
+        50% { box-shadow: 0 0 22px rgba(243, 217, 138, 0.5), 0 0 46px rgba(216, 184, 106, 0.22); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .field-note .sanctuary-cta,
+        .field-note .chamber-cta { animation: none; }
+      }
+
+      .field-note .fn-body { font-size: 1.08rem; }
+      .field-note .fn-body p { margin: 0 0 1.15em; }
+      .field-note .fn-body h2 {
+        font-size: clamp(1.25rem, 3vw, 1.6rem);
+        color: var(--gold);
+        font-weight: 500;
+        margin: 2.2rem 0 0.8rem;
+        line-height: 1.2;
+      }
+      .field-note .fn-body a { color: var(--green); text-decoration: none; border-bottom: 1px solid rgba(157,247,179,0.35); }
+      .field-note .fn-body a:hover { border-bottom-color: rgba(157,247,179,0.85); }
+      .field-note .fn-body em { color: #f0ebde; }
+      .field-note .fn-body strong { color: var(--text); }
+      .field-note .fn-body blockquote {
+        margin: 1.4rem 0;
+        padding: 0.6rem 0 0.6rem 1.3rem;
+        border-left: 2px solid var(--line);
+        color: var(--muted);
+        font-style: italic;
+      }
+      .field-note .fn-body img { max-width: 100%; height: auto; }
+
+      .field-note .related {
+        margin-top: 3rem;
+        padding-top: 1.6rem;
+        border-top: 1px solid var(--line);
+      }
+      .field-note .related h2 {
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        color: var(--gold);
+        margin: 0 0 1rem;
+      }
+      .field-note .related ul { list-style: none; margin: 0; padding: 0; }
+      .field-note .related li { margin: 0 0 0.55rem; }
+      .field-note .related a { color: var(--green); text-decoration: none; border-bottom: 1px solid transparent; }
+      .field-note .related a:hover { border-bottom-color: rgba(157,247,179,0.6); }
+
+      /* Index listing */
+      .field-note .fn-index-group { margin: 2.2rem 0; }
+      .field-note .fn-index-group > h2 {
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        color: var(--gold);
+        margin: 0 0 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--line);
+      }
+      .field-note .fn-index-item { margin: 0 0 1.5rem; }
+      .field-note .fn-index-item a.fn-index-title {
+        font-size: 1.18rem;
+        color: var(--green);
+        text-decoration: none;
+        border-bottom: 1px solid transparent;
+      }
+      .field-note .fn-index-item a.fn-index-title:hover { border-bottom-color: rgba(157,247,179,0.6); }
+      .field-note .fn-index-item p { margin: 0.35rem 0 0; color: var(--muted); font-size: 0.98rem; }
+
+      .fn-foot {
+        border-top: 1px solid var(--line);
+        margin-top: 2rem;
+        padding: 2.4rem 1rem 3rem;
+        text-align: center;
+      }
+      .fn-foot-nav { font-size: 0.92rem; letter-spacing: 0.04em; }
+      .fn-foot-nav a { color: var(--muted); text-decoration: none; border-bottom: 1px solid transparent; }
+      .fn-foot-nav a:hover { color: var(--green); border-bottom-color: rgba(157,247,179,0.4); }
+      .fn-foot-nav .fn-foot-enter { color: var(--gold); }
+      .fn-foot-nav .fn-foot-enter:hover { color: #f3d98a; border-bottom-color: rgba(243,217,138,0.5); }
+      .fn-foot-nav span { opacity: 0.4; margin: 0 0.5rem; }
+      .fn-foot-note { color: var(--muted); font-size: 0.82rem; font-style: italic; margin: 1.1rem 0 0; opacity: 0.7; }
+    </style>
+  </body>
+</html>

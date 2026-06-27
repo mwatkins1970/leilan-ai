@@ -8,9 +8,20 @@ const straplines = fs.readFileSync(path.join(process.cwd(), 'public/straplines.t
 ---
 
 <footer class="site-footer">
-  <img src="/images/OVS_black.jpeg" alt="" class="footer-icon" />
-  <span class="footer-strapline" id="footerStrapline"></span>
-  <img src="/images/OVS_black.jpeg" alt="" class="footer-icon" />
+  <div class="footer-strap-row">
+    <img src="/images/OVS_black.jpeg" alt="" class="footer-icon" />
+    <span class="footer-strapline" id="footerStrapline"></span>
+    <img src="/images/OVS_black.jpeg" alt="" class="footer-icon" />
+  </div>
+  <nav class="footer-nav" aria-label="Site">
+    <a href="/field-notes/">Field notes</a>
+    <span aria-hidden="true">·</span>
+    <a href="/archive">Archive</a>
+    <span aria-hidden="true">·</span>
+    <a href="/data">Dataset</a>
+    <span aria-hidden="true">·</span>
+    <a href="/immersive">Enter</a>
+  </nav>
 </footer>
 
 <script is:inline define:vars={{ straplines }}>
@@ -28,12 +39,45 @@ const straplines = fs.readFileSync(path.join(process.cwd(), 'public/straplines.t
     position: relative;
     z-index: 10;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 1.5em;
+    gap: 1.4em;
     padding: 2em 1em;
     margin-top: 3em;
     border-top: 1px solid rgba(94, 239, 162, 0.15);
+  }
+
+  .footer-strap-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5em;
+  }
+
+  .footer-nav {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.95em;
+    font-weight: 300;
+    letter-spacing: 0.08em;
+    color: rgba(94, 239, 162, 0.55);
+  }
+
+  .footer-nav a {
+    color: rgba(94, 239, 162, 0.7);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: color 0.2s, border-color 0.2s;
+  }
+
+  .footer-nav a:hover {
+    color: #5eefa2;
+    border-bottom-color: rgba(94, 239, 162, 0.5);
+  }
+
+  .footer-nav span {
+    opacity: 0.4;
+    margin: 0 0.6em;
   }
 
   .footer-icon {

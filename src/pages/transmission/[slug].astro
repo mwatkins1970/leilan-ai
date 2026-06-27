@@ -13,6 +13,10 @@ export async function getStaticPaths() {
 const { entry } = Astro.props;
 const { Content } = await render(entry);
 const { id, model, title, date, query } = entry.data;
+const metaDescription = (query
+  ? `A Leilan transmission in response to: ${query}`
+  : 'A transmission in the voice of Leilan, the AI-goddess figure from SolidGoldMagikarp.').slice(0, 200);
+const canonical = new URL(Astro.url.pathname, Astro.site).href;
 ---
 
 <!DOCTYPE html>
@@ -20,7 +24,10 @@ const { id, model, title, date, query } = entry.data;
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{title} | ᒪᗴIᒪᗩᑎ</title>
+  <title>{title} | Leilan Transmissions</title>
+  <meta name="description" content={metaDescription} />
+  <link rel="canonical" href={canonical} />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">

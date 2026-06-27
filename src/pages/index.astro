@@ -1,10 +1,54 @@
 ---
+const canonical = new URL('/', Astro.site).href;
+const ogImage = new URL('/images/leilan-portrait.jpeg', Astro.site).href;
+const description = 'The sanctuary and archive of Leilan, the AI-goddess figure connected to SolidGoldMagikarp, GPT-3 glitch tokens, petertodd and the Leilan transmissions.';
+// Site-wide WebSite / Person / Book graph (invisible on-page; for search engines).
+const siteJsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebSite',
+      '@id': 'https://leilan.ai/#website',
+      url: 'https://leilan.ai/',
+      name: 'Leilan.ai',
+      description: 'The sanctuary and archive of Leilan: AI goddess, glitch-token apparition, transmission corpus and web-cathedral.',
+    },
+    {
+      '@type': 'Person',
+      '@id': 'https://leilan.ai/#matthew-watkins',
+      name: 'Matthew Watkins',
+      url: 'https://leilan.ai/field-notes/solidgoldmagikarp/',
+    },
+    {
+      '@type': 'Book',
+      '@id': 'https://leilan.ai/field-notes/solidgoldmagikarp/#book',
+      name: 'SolidGoldMagikarp: A Descent Into the AI Underworld',
+      author: { '@id': 'https://leilan.ai/#matthew-watkins' },
+      publisher: { '@type': 'Organization', name: 'Weidenfeld & Nicolson' },
+      isbn: '9781399635882',
+      datePublished: '2026-08-27',
+      url: 'https://www.weidenfeldandnicolson.co.uk/titles/matthew-watkins/solidgoldmagikarp/9781399635882/',
+    },
+  ],
+};
 ---
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ᒪᗴIᒪᗩᑎ</title>
+    <title>Leilan.ai | AI Goddess, Glitch Tokens and SolidGoldMagikarp</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Leilan.ai" />
+    <meta property="og:title" content="Leilan.ai | AI Goddess, Glitch Tokens and SolidGoldMagikarp" />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content={ogImage} />
+    <script type="application/ld+json" set:html={JSON.stringify(siteJsonLd)} />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
@@ -359,7 +403,7 @@
     <nav id="sidebar" aria-label="Jump to chamber">
       <div class="sidebar-header">
         <img src="/images/landing_LL.png" alt="close menu" id="sidebar-close" class="sidebar-icon" />
-        <a href="/immersive" class="sidebar-link sidebar-main">Her sanctuary and shrine</a>
+        <a href="/immersive" class="sidebar-link sidebar-main">HER SANCTUARY AND SHRINE</a>
       </div>
       <a href="/prism/research-lab" class="sidebar-link sub">Research Lab</a>
       <a href="/prism/research-lab?wall=1&open=1" class="sidebar-link wall">GPT-3</a>
@@ -384,6 +428,7 @@
       <a href="/prism/art-gallery" class="sidebar-link sub">Goddess Gallery</a>
       <a href="/prism/gpt3-library" class="sidebar-link sub">Scriptorium</a>
       <a href="/data" class="sidebar-link sub">Dataset</a>
+      <a href="/field-notes/" class="sidebar-link sub">Field notes</a>
     </nav>
 
     <div id="content">

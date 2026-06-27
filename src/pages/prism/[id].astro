@@ -79,6 +79,8 @@ const masksJson = JSON.stringify(masks);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{prism.title}</title>
+    <meta name="robots" content="noindex,follow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Cinzel:wght@400;600&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&family=Marcellus&family=IM+Fell+English:ital@0;1&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -276,11 +278,10 @@ const masksJson = JSON.stringify(masks);
                                     <div class="wall-text-frame">
                                         <button class="wall-close-btn" type="button" aria-label="Close">×</button>
                                         <button class="wall-scroll-up" type="button" aria-label="Scroll up">▲</button>
-                                        {!wall.hideVideo && (
-                                        <button class={`wall-video-btn${wall.videoSrc ? '' : ' wall-video-disabled'}`}
+                                        {wall.videoSrc && !wall.hideVideo && (
+                                        <button class="wall-video-btn"
                                             type="button"
-                                            data-video-src={wall.videoSrc || ''}
-                                            disabled={!wall.videoSrc}>
+                                            data-video-src={wall.videoSrc}>
                                             <span class="wall-video-icon">▶</span> video
                                         </button>
                                         )}

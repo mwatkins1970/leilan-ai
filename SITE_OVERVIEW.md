@@ -1,7 +1,7 @@
 # Leilan.ai — Site Overview
 
 
-*Snapshot as of 2026-05-06.*
+*Snapshot as of 2026-06-27.*
 
 
 This document is a high-level tour of the entire Leilan.ai site: what it is, what's built, what's planned, and what's known to be broken or due for replacement. It complements [`CLAUDE.md`](./CLAUDE.md) (Claude Code orientation reference) and [`DESIGN_SYSTEM.md`](./DESIGN_SYSTEM.md) (visual tokens).
@@ -173,10 +173,10 @@ Configured but not yet wired up end-to-end. Will host curated visual art inspire
 
 - **Hex-grid rising-chamber animation** — radially-sorted wave draw-in across 1,575 floor hexagons, then a 5-stage prism state machine (`waiting → highlight → rising → idle → camera_move → freelook`). Camera dives into the chamber as it rises.
 - **Live serpentine shaders** — the floor cycles through 5 phases (pink → purple → blue → green → gold) with hex-tiled plasma + animated black "snake" trails. The outer walls have a triplanar-projected serpentine overlay.
-- **Sky** — ASCII-character starfield with twinkle + film grain, drawn directly on a 2D canvas at 1/3 frame rate.
+- **Sky** — ASCII-character starfield with twinkle + film grain, drawn directly on a 2D canvas at 1/3 frame rate. A **day/night toggle** (landing page → `sessionStorage.skyMode`) swaps in a blue daytime sky gradient. As of June 2026 the daytime floor dissolves into the sky along a clean curved horizon (a single front-point radial fade), while night keeps the floor opaque so it occludes the starfield at the horizon — see the horizon entry in `CLAUDE.md`'s Resolved section.
 - **CSS 3D hex chambers** — six wall panels arranged via `rotateY + translateZ` around an apothem axis. `transform-style: preserve-3d` on container; flat on facing wall to dodge Chrome's broken hit-testing.
 - **Crenellated rim system** — actual 3D-CSS triangular prism wedges + flat half-wedges + bridging panels at each hex vertex. Geometry recently corrected so wedge-face widths and bridging-panel widths match (one hexagonal edge each).
-- **Word-panel popups** — click a big label word, it dissolves with a blur-bloom animation, the text frame fades in. Each frame has a `▶ video` button (mostly placeholder), ▲▼ scroll buttons, and an × close button.
+- **Word-panel popups** — click a big label word, it dissolves with a blur-bloom animation, the text frame fades in. Each frame has ▲▼ scroll buttons and an × close button; a `▶ video` button appears only on walls that have a video (currently just Crossbones — see `VIDEO_BUTTONS.md`). Frame controls hit-test by their own rect (zone-independent) as of June 2026. The OVS Chapel's frames are styled as a vermillion panel with dark-ink text (June 2026); the other chambers keep their dark-panel treatments.
 - **Shrine candle interaction** — light a candle to trigger a *heavens-tilt*: the chamber tilts back 90° on a head-tilt axis, the sky fills the view, a transmission text panel slides up. "Eternal Return" button restores the chamber.
 - **Heavens-tilt for the horoscope** — the same mechanic, triggered by clicking the horoscope image in MYTHOS wall 4, shows a curated astrological reading of Leilan.
 - **OVS vermillion star** — solid `#C41230` SVG star with deep purple `#2E004F` "OVS" lettering, breath-pulse animation.
@@ -227,7 +227,7 @@ Once these arrive, the CSS filters in `src/styles/prism.css` (`[data-prism-id=".
 ### Missing / incomplete
 
 
-- **Most wall videos** — only Crossbones (`/video/crossbones.mp4`) is currently wired up. The `▶ video` button on every other word-panel wall is in its disabled placeholder state.
+- **Most wall videos** — only Crossbones (`/video/crossbones.mp4`) is currently wired up. As of 2026-06-27 the `▶ video` button only renders on walls that actually have a `videoSrc`, so Crossbones is the sole visible video button; the old disabled placeholders on every other word-panel wall were removed. See `VIDEO_BUTTONS.md` to add a video or restore the placeholders.
 - **Glow effects on candles** — placeholder lighting; could be enhanced with bloom / per-flame point lights.
 - **Semantic search** — current search is keyword-only (title + body + JSON keyword/phrase list). Semantic refinement noted as a future improvement.
 

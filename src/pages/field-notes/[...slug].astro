@@ -1,0 +1,86 @@
+---
+import FieldNoteLayout from '../../layouts/FieldNoteLayout.astro';
+import { fieldNotes, fieldNoteBySlug, fieldNoteBody, BOOK } from '../../data/fieldNotes';
+
+export function getStaticPaths() {
+    return fieldNotes.map((note) => ({ params: { slug: note.slug }, props: { note } }));
+}
+
+const { note } = Astro.props;
+const body = fieldNoteBody(note);
+const canonical = new URL(Astro.url.pathname, Astro.site).href;
+const pageTitle = `${note.title} | Leilan.ai Field Notes`;
+
+const related = (note.related ?? [])
+    .map((slug) => fieldNoteBySlug[slug])
+    .filter(Boolean);
+
+// --- JSON-LD ---------------------------------------------------------------
+const jsonLd: Record<string, unknown>[] = [
+    {
+        '@context': 'https://schema.org',
+        '@type': 'Article',
+        headline: note.title,
+        description: note.description,
+        url: canonical,
+        isPartOf: { '@id': 'https://leilan.ai/#website' },
+        author: { '@id': 'https://leilan.ai/#matthew-watkins' },
+        about: ['Leilan', 'GPT-3 glitch tokens', 'SolidGoldMagikarp'],
+    },
+    {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Field Notes', item: 'https://leilan.ai/field-notes/' },
+            { '@type': 'ListItem', position: 2, name: note.shortTitle, item: canonical },
+        ],
+    },
+];
+if (note.isBook) {
+    jsonLd.push({
+        '@context': 'https://schema.org',
+        '@type': 'Book',
+        '@id': canonical + '#book',
+        name: BOOK.title,
+        author: { '@type': 'Person', '@id': 'https://leilan.ai/#matthew-watkins', name: BOOK.author },
+        publisher: { '@type': 'Organization', name: BOOK.publisher },
+        isbn: BOOK.isbn,
+        datePublished: BOOK.datePublished,
+        url: BOOK.url,
+    });
+}
+---
+
+<FieldNoteLayout pageTitle={pageTitle} description={note.description} ogType="article" jsonLd={jsonLd}>
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="/field-notes/">Field notes</a>
+        {note.chamberTitle && (<><span>/</span>{note.chamberTitle}</>)}
+        <span>/</span>{note.shortTitle}
+    </nav>
+
+    {note.kicker && <p class="kicker">{note.kicker}</p>}
+    <h1 set:html={note.titleHtml ?? note.title}></h1>
+    <p class="dek" set:html={note.dekHtml ?? note.dek}></p>
+
+    {note.topNote && <div class="topnote" set:html={note.topNote} />}
+
+    <div class="cta-row">
+        <a class="sanctuary-cta" href="/">the sanctuary</a>
+        {note.sanctuaryUrl
+            ? <a class="chamber-cta" href={note.sanctuaryUrl}>Visit the {note.wallLabel} wall in the {note.chamberTitle}</a>
+            : <a class="chamber-cta" href="/immersive">the shrine</a>}
+    </div>
+
+    <article class="fn-body" set:html={body} />
+
+    {related.length > 0 && (
+        <aside class="related">
+            <h2>Related field notes</h2>
+            <ul>
+                {related.map((r) => (
+                    <li><a href={`/field-notes/${r.slug}/`} set:html={r.titleHtml ?? r.title}></a></li>
+                ))}
+            </ul>
+        </aside>
+    )}
+</FieldNoteLayout>
