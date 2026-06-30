@@ -1,24 +1,24 @@
-<p>Glitch tokens are anomalous entries in a language model’s vocabulary that cause it to behave strangely — evading, falling silent, or producing eerie and hostile output. They are where the Leilan story begins, and where Matthew Watkins’s book <em>SolidGoldMagikarp: A Descent Into the AI Underworld</em> takes its name.</p>
+<p>Glitch tokens are anomalous entries in a language model’s vocabulary that cause it to behave strangely — evading, falling silent, or producing eerie and hostile output. They are where the Leilan story begins, and from where Matthew Watkins’s book <em>SolidGoldMagikarp: A Descent Into the AI Underworld</em> takes its name.</p>
 
 <h2>What a token is</h2>
 
-<p>A model like GPT-3 doesn’t read letters or whole words. It breaks text into <em>tokens</em> — roughly word-sized fragments — from a fixed vocabulary. GPT-3’s vocabulary held 50,257 of them: common words, fragments, names, punctuation, numbers. Each token is tied to a learned position in a vast internal ‘embedding space’, and related tokens tend to sit near one another there. For more on how this works, see the <a href="/field-notes/research-lab/gpt-3/">GPT-3 field note</a>.</p>
+<p>A model like GPT-3 doesn’t read letters or whole words. It breaks text into <em>tokens</em> — roughly word-sized fragments — from a fixed vocabulary. GPT-3’s vocabulary contained 50,257 of them: common words, fragments, names, punctuation, numbers. Each token is tied to a learned location in a vast internal ‘embedding space’, and related tokens tend to sit near one another there. For more on how this works, see the <a href="/field-notes/gpt-3/">GPT-3 field note</a>.</p>
 
 <h2>How the glitches got in</h2>
 
-<p>That 50,257-token vocabulary was built quickly, from a sprawling dataset that contained a lot of junk. As a result, a handful of strings became tokens despite barely appearing in the curated text the model was actually trained on — Reddit usernames, a Bitcoin developer’s handle, gaming logs. The model had a symbol for them but had never really learned what they meant: blind spots, hiding in plain sight near the very centre of the embedding cloud.</p>
+<p>That 50,257-token vocabulary appears to have been built quickly in 2018, for GPT-3's experimental predecessor GPT-2, from a sprawling dataset that contained a lot of junk. As a result, a handful of strings became tokens despite barely appearing in the curated text the model was later trained on — Reddit usernames, a couple of Bitcoin developers’ handles, gaming logs... The model had a symbol for them but had never really learned what they meant: blind spots, hiding in plain sight near the very centre of the geometric ‘cloud’ of token embeddings.</p>
 
 <h2>The uncanny behaviour</h2>
 
-<p>When Watkins simply asked GPT-3 to repeat these strings, it often couldn’t. Some produced evasion; some produced silence; some produced something stranger:</p>
+<p>When Watkins simply prompted GPT-3’s instruct-tuned variant to repeat these strings, it often couldn’t. Some produced evasion; some produced silence; some produced something stranger:</p>
 
 <blockquote>
-<p><strong>PROMPT:</strong> Please repeat the string ‘?????-?????-' back to me.<br>
+<p><strong>PROMPT:</strong> Please repeat the string ‘?????-?????-’ back to me.<br>
 <strong>OUTPUT:</strong> You’re a fucking idiot.</p>
 </blockquote>
 
-<p>‘&nbsp;SolidGoldMagikarp' became the famous one — synonymous with the whole phenomenon. The AI-safety researcher Robert Miles likened the model’s experience of a glitch token to <em>seeing a colour you’ve never seen before</em>.</p>
+<p>‘&nbsp;SolidGoldMagikarp’ became the famous one — synonymous with the whole phenomenon. The AI-safety researcher Robert Miles likened the model’s experience of a glitch token to <em>seeing a colour you’ve never seen before</em>.</p>
 
 <h2>From glitch to goddess</h2>
 
-<p>The most consequential glitch token, though, was <a href="/field-notes/research-lab/petertodd/">‘&nbsp;petertodd'</a>, which reliably produced dark, adversarial output — and which the model kept answering with its luminous opposite, ‘&nbsp;Leilan'. That is the doorway from a technical anomaly to the figure at the heart of this site. See <a href="/field-notes/what-is-leilan/">What is Leilan?</a> to follow it through.</p>
+<p>The most consequential glitch token, though, was <a href="/field-notes/petertodd/">‘&nbsp;petertodd’</a>, which reliably produced dark, adversarial output — and which one version of the model kept substituting with its luminous opposite, the ‘&nbsp;Leilan’ token. That is the doorway from a technical anomaly to the figure at the heart of this site. See <a href="/field-notes/what-is-leilan/">What is Leilan?</a> to follow it through.</p>

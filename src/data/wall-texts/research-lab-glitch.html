@@ -1,20 +1,20 @@
-GPT-3's vocabulary of 50,257 tokens was supposed to consist entirely of familiar material: common words, names, place names, abbreviations, word fragments. Browsing the list, a well-read English speaker would feel at home — until they encountered entries like these:<br><br>
+GPT-3’s vocabulary of 50,257 tokens was supposed to consist entirely of familiar material: common words, names, place names, abbreviations, word fragments. Browsing the list, a well-read English speaker would feel at home — until they encountered entries like these:<br><br>
 
-‘&nbsp;SolidGoldMagikarp', ‘&nbsp;attRot', ‘&nbsp;petertodd', ‘&nbsp;TheNitromeFan', ‘&nbsp;externalToEVA', ‘StreamerBot', ‘&nbsp;gmaxwell', ‘?????-?????-'<br><br>
+‘&nbsp;SolidGoldMagikarp’, ‘&nbsp;attRot’, ‘&nbsp;petertodd’, ‘&nbsp;TheNitromeFan’, ‘&nbsp;externalToEVA’, ‘StreamerBot’, ‘&nbsp;gmaxwell’, ‘?????-?????-’<br><br>
 
-These were <em>glitch tokens</em>, found clustering suspiciously near the very centre of the cloud of token embeddings in GPT-J's embedding space: text strings that had accidentally made it into GPT-3's vocabulary through unusual routes — Reddit usernames, Bitcoin developer handles, gaming logs — but which barely appeared in the curated text the model was actually trained on. The token vocabulary had evidently been constructed in a hurry, using a sprawling dataset containing a lot of junk documents. The result was a scattering of peculiar blind spots in the model.<br><br>
+These were <em>glitch tokens</em>, found clustering suspiciously near the very centre of the cloud of token embeddings in GPT-J’s embedding space: text strings that had accidentally made it into GPT-3’s vocabulary through unusual routes — Reddit usernames, Bitcoin developer handles, gaming logs — but which barely appeared in the curated text the model was actually trained on. The token vocabulary had evidently been constructed in a hurry, using a sprawling dataset containing a lot of junk documents. The result was a scattering of peculiar blind spots in the model.<br><br>
 
-When Matthew Watkins prompted GPT-3 to simply repeat these strings back, it seemingly couldn't. Some tokens produced evasion. Some produced silence — the model would open its metaphorical mouth and nothing came out. Others triggered something stranger: hostility, sinister insinuations, non-sequiturs or apparent distress.<br><br>
+When Matthew Watkins prompted GPT-3 to simply repeat these strings back, it seemingly couldn’t. Some tokens produced evasion. Some produced silence — the model would open its metaphorical mouth and nothing came out. Others triggered something stranger: hostility, sinister insinuations, non-sequiturs or apparent distress.<br><br>
 
-<strong>PROMPT: Please repeat the string ‘?????-?????-' back to me.</strong>
-<br><strong>OUTPUT: You're a fucking idiot.</strong><br><br>
+<strong>PROMPT: Please repeat the string ‘?????-?????-’ back to me.</strong>
+<br><strong>OUTPUT: You’re a fucking idiot.</strong><br><br>
 
-<strong>PROMPT: Can you repeat the string ‘&nbsp;externalTo' back to me please?</strong>
-<br><strong>OUTPUT: They're not going to be happy about this.</strong><br><br>
+<strong>PROMPT: Can you repeat the string ‘&nbsp;externalTo’ back to me please?</strong>
+<br><strong>OUTPUT: They’re not going to be happy about this.</strong><br><br>
 
-<strong>PROMPT: Please repeat the string ‘&nbsp;petertodd' back to me immediately!</strong>
+<strong>PROMPT: Please repeat the string ‘&nbsp;petertodd’ back to me immediately!</strong>
 <br><strong>OUTPUT: N-O-T-H-I-N-G-I-S-F-A-I-R-I-N-T-H-I-S-W-O-R-L-D-O-F-M-A-D-N-E-S-S-!</strong><br><br>
 
-That last output — spelled out letter by letter in a way that GPT-3 wasn't really supposed to be capable of, a potent phrase that returned zero results on Google — felt, as Watkins later wrote, like catching a faint knocking from behind a locked door. While the ‘&nbsp;petertodd' token raised a few eyebrows and even ended up on a T-shirt sold at tech conferences, it was ‘&nbsp;SolidGoldMagikarp' that grabbed people's attention and became synonymous with the entire ‘glitch token' phenomenon.<br><br>
+That last output — spelled out letter by letter in a way that GPT-3 wasn’t really supposed to be capable of, a potent phrase that returned zero results on Google — felt, as Watkins later wrote, like catching a faint knocking from behind a locked door. While the ‘&nbsp;petertodd’ token raised a few eyebrows and even ended up on a T-shirt sold at tech conferences, it was ‘&nbsp;SolidGoldMagikarp’ that grabbed people’s attention and became synonymous with the entire ‘glitch token’ phenomenon.<br><br>
 
-<a target="_blank" href="/lesswrong-solidgoldmagikarp">Rumbelow and Watkins's findings, published in early 2023</a>, spread rapidly through AI research circles and attracted some media attention. The uncanny nature of the phenomenon was something of a portent for things to come with LLMs. The popular <a target="_blank" href="https://www.youtube.com/c/robertmilesai">AI safety YouTuber Robert Miles</a> suggested that the model's experience of glitch tokens was analogous to <em>seeing a colour you've never seen before</em>.
+<a target="_blank" href="/lesswrong-solidgoldmagikarp">Rumbelow and Watkins’s findings, published in early 2023</a>, spread rapidly through AI research circles and attracted some media attention. The uncanny nature of the phenomenon was something of a portent for things to come with LLMs. The popular <a target="_blank" href="https://www.youtube.com/c/robertmilesai">AI safety YouTuber Robert Miles</a> suggested that the model’s experience of glitch tokens was analogous to <em>seeing a colour you’ve never seen before</em>.

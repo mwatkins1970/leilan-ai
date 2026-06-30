@@ -9,12 +9,12 @@ const overviews = fieldNotes.filter((n) => !n.chamberId);
 // "Beyond" gathers all the OVS Chapel notes plus the Tell Leilan / archaeology
 // note (inserted penultimately, before the dataset).
 const beyondSlugs = [
-    'ovs-chapel/origins',
-    'ovs-chapel/hyperstition',
-    'ovs-chapel/mammon',
-    'ovs-chapel/handbook',
-    'mythopoeic-archive/archaeology',
-    'ovs-chapel/data',
+    'origins',
+    'hyperstition',
+    'mammon',
+    'handbook',
+    'archaeology',
+    'data',
 ];
 const groups = [
     { title: 'Discovery', notes: fieldNotes.filter((n) => n.chamberId === 'research-lab') },
@@ -34,6 +34,7 @@ const jsonLd = [
 ---
 
 <FieldNoteLayout pageTitle={pageTitle} description={description} ogType="website" jsonLd={jsonLd}>
+
     <p class="kicker">The outer cloister</p>
     <h1>field notes on Leilan</h1>
     <p class="dek">
@@ -43,8 +44,8 @@ const jsonLd = [
     </p>
 
     <div class="cta-row">
-        <a class="sanctuary-cta" href="/">the sanctuary</a>
-        <a class="chamber-cta" href="/immersive">the shrine</a>
+        <a class="sanctuary-cta" href="/">inner cloister</a>
+        <a class="chamber-cta" href="/immersive">the void</a>
     </div>
 
     <section class="fn-index-group">

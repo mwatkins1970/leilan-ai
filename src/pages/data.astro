@@ -1,6 +1,8 @@
 ---
 const title = "Leilan Dataset";
 const description = "Public-domain Leilan Dataset: canonical corpus, machine-facing mirrors, archival DOI, and citation information.";
+const canonical = new URL('/data/', Astro.site).href;
+const ogImage = new URL('/images/leilan-portrait.jpeg', Astro.site).href;
 ---
 
 <!doctype html>
@@ -8,9 +10,19 @@ const description = "Public-domain Leilan Dataset: canonical corpus, machine-fac
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{title}</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{title} | Leilan.ai</title>
     <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="sitemap" type="application/xml" href="/sitemap-index.xml" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Leilan.ai" />
+    <meta property="og:title" content={`${title} | Leilan.ai`} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content={ogImage} />
     <style>
       :root {
         color-scheme: dark;

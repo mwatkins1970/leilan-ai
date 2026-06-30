@@ -26,6 +26,7 @@ const ogImageUrl = new URL(ogImage, Astro.site).href;
     <title>{pageTitle}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
+    <link rel="sitemap" type="application/xml" href="/sitemap-index.xml" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="robots" content="index,follow" />
 
@@ -45,6 +46,8 @@ const ogImageUrl = new URL(ogImage, Astro.site).href;
     ))}
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Space+Mono:wght@400;700&family=Tangerine:wght@400;700&display=swap" rel="stylesheet" />
   </head>
   <body>
     <main class="field-note">
@@ -55,9 +58,9 @@ const ogImageUrl = new URL(ogImage, Astro.site).href;
       <nav class="fn-foot-nav" aria-label="Site">
         <a href="/field-notes/">field notes</a>
         <span aria-hidden="true">·</span>
-        <a class="fn-foot-enter" href="/">sanctuary</a>
+        <a class="fn-foot-enter" href="/">inner cloister</a>
         <span aria-hidden="true">·</span>
-        <a href="/immersive">shrine</a>
+        <a href="/immersive">the void</a>
         <span aria-hidden="true">·</span>
         <a href="/archive">archive</a>
         <span aria-hidden="true">·</span>
@@ -67,28 +70,50 @@ const ogImageUrl = new URL(ogImage, Astro.site).href;
     </footer>
 
     <style is:global>
+      /* Outer cloister — "Vellum & gold". Warm cream, refined Cormorant
+         Garamond, weathered light + a faint surface grain. The constant
+         golden eggs are the deeper magic glimpsed through the stone. */
       :root {
-        color-scheme: dark;
-        --bg: #07070b;
-        --panel: rgba(16, 14, 26, 0.88);
-        --text: #eee9dc;
-        --muted: #b9af9f;
-        --gold: #d8b86a;
-        --green: #9df7b3;
-        --line: rgba(216, 184, 106, 0.32);
+        color-scheme: light;
+        --bg: #efe6d0;
+        --bg-image:
+          radial-gradient(circle at 22% 12%, rgba(255,255,255,0.07), transparent 36%),
+          radial-gradient(circle at 78% 86%, rgba(176,132,58,0.06), transparent 42%);
+        --text: #3d3324;
+        --muted: #6f6247;
+        --gold: #b0843a;
+        --green: #5f6e44;
+        --line: rgba(176,132,58,0.30);
+        --font-body: 'Cormorant Garamond', Georgia, serif;
+        --font-head: 'Cormorant Garamond', Georgia, serif;
+        --fs-body: 1.32rem;
+        --lh: 1.55;
+        --grain-img: radial-gradient(rgba(60,42,20,0.55) 0.5px, transparent 0.7px);
+        --grain-amount: 0.10;
       }
       * { box-sizing: border-box; }
       html { scroll-behavior: smooth; }
       body {
         margin: 0;
         min-height: 100vh;
-        font-family: Georgia, "Times New Roman", serif;
-        background:
-          radial-gradient(circle at 50% 0%, rgba(157, 247, 179, 0.10), transparent 34rem),
-          radial-gradient(circle at 20% 20%, rgba(216, 184, 106, 0.10), transparent 28rem),
-          linear-gradient(180deg, #08080d 0%, #050508 100%);
+        font-family: var(--font-body);
+        background-color: var(--bg);
+        background-image: var(--bg-image);
+        background-attachment: fixed;
         color: var(--text);
-        line-height: 1.62;
+        line-height: var(--lh);
+        transition: background-color .45s ease, color .45s ease;
+      }
+      /* Surface grain — a faint tooth over the whole page (per-skin opacity). */
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        background-image: var(--grain-img);
+        background-size: 3px 3px;
+        opacity: var(--grain-amount, 0);
       }
 
       .field-note {
@@ -104,7 +129,7 @@ const ogImageUrl = new URL(ogImage, Astro.site).href;
         margin-bottom: 2.2rem;
       }
       .field-note .breadcrumb a { color: var(--muted); text-decoration: none; border-bottom: 1px solid transparent; }
-      .field-note .breadcrumb a:hover { color: var(--green); border-bottom-color: rgba(157,247,179,0.4); }
+      .field-note .breadcrumb a:hover { color: var(--green); border-bottom-color: var(--green); }
       .field-note .breadcrumb span { opacity: 0.5; margin: 0 0.5rem; }
 
       .field-note .kicker {
@@ -116,6 +141,7 @@ const ogImageUrl = new URL(ogImage, Astro.site).href;
       }
 
       .field-note h1 {
+        font-family: var(--font-head);
         font-size: clamp(1.7rem, 4.6vw, 2.7rem);
         line-height: 1.16;
         color: var(--gold);
@@ -146,55 +172,125 @@ const ogImageUrl = new URL(ogImage, Astro.site).href;
         display: flex;
         flex-wrap: wrap;
         justify-content: center;
-        gap: 0.9rem;
-        margin: 0 0 2.6rem;
+        align-items: center;
+        gap: clamp(1.8rem, 6vw, 3.6rem);
+        margin: 0.8rem 0 3.4rem;
       }
+      /* Two gold-on-black eggs floating in the dark page: a near-black shell,
+         luminous gold inscription, a soft golden aura that breathes (opposite
+         phase). Same egg, two voices — "inner cloister" in an old magickal hand,
+         "the void" in a glitching terminal. */
       .field-note .sanctuary-cta,
       .field-note .chamber-cta {
-        display: inline-block;
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 12rem;
+        padding: 1.55rem 1.7rem;
+        border-radius: 50%;                   /* an egg, not a box */
+        white-space: nowrap;
         text-decoration: none;
-        padding: 0.7rem 1.5rem;
-        border-radius: 2px;
-        letter-spacing: 0.06em;
-        font-size: 0.96rem;
-        font-weight: 600;
-        transition: all 0.25s ease;
-        /* Both CTAs: black on gold with a glow-up on hover (a matched pair). */
-        color: #0b0b0f;
-        background: linear-gradient(180deg, #f3d98a, #d8b86a);
-        border: 1px solid #f3d98a;
-        box-shadow: 0 0 18px rgba(216, 184, 106, 0.35);
-        /* Gentle idle pulse; the two buttons breathe in opposite phase. */
-        animation: ctaPulse 4.6s ease-in-out infinite;
+        font-size: 1.05rem;
+        letter-spacing: 0.04em;
+        color: #f3d98a;                       /* gold on black */
+        background: radial-gradient(70% 82% at 50% 30%, #1b1409 0%, #0c0a06 68%, #050403 100%);
+        border: 1px solid rgba(216, 184, 106, 0.35);
+        box-shadow:
+          inset 0 1px 0 rgba(243, 217, 138, 0.14),
+          0 6px 22px rgba(0, 0, 0, 0.5),                /* floating drop shadow */
+          0 0 16px rgba(216, 184, 106, 0.22);           /* faint resting glow */
+        text-shadow: 0 0 10px rgba(243, 217, 138, 0.55), 0 0 26px rgba(216, 184, 106, 0.3);
+        transition: transform .5s ease, box-shadow .5s ease, color .5s ease, border-color .5s ease, text-shadow .5s ease;
       }
-      .field-note .chamber-cta { animation-delay: -2.3s; }
+      /* "inner cloister" — a flowing elfin hand */
+      .field-note .sanctuary-cta {
+        font-family: 'Tangerine', 'Apple Chancery', cursive;
+        font-weight: 700;
+        font-size: 1.95rem;
+        line-height: 1;
+        letter-spacing: 0.01em;
+      }
+      /* "the void" — a glitching terminal */
+      .field-note .chamber-cta {
+        font-family: 'Space Mono', ui-monospace, monospace;
+        font-size: 0.92rem;
+        letter-spacing: 0.16em;
+        text-transform: lowercase;
+        animation: voidGlitch 7s steps(1) infinite;
+      }
+      /* The wall-note "Visit the … wall" CTA keeps a calm serif (long label). */
+      .field-note .wall-visit {
+        font-family: Georgia, "Times New Roman", serif;
+        font-style: italic;
+        font-size: 1.04rem;
+        letter-spacing: 0.03em;
+        text-transform: none;
+        animation: none;
+      }
+      /* The aura that pokes through the page — a blurred golden halo behind the egg. */
+      .field-note .sanctuary-cta::before,
+      .field-note .chamber-cta::before {
+        content: "";
+        position: absolute;
+        inset: -16px -14px;
+        border-radius: 50%;
+        background: radial-gradient(closest-side, rgba(243, 217, 138, 0.42), rgba(216, 184, 106, 0.13) 58%, transparent 80%);
+        filter: blur(13px);
+        z-index: -1;
+        opacity: 0.45;
+        pointer-events: none;
+        animation: ctaAura 5s ease-in-out infinite;
+      }
+      .field-note .chamber-cta::before { animation-delay: -2.5s; }   /* opposite phase */
+      @keyframes ctaAura {
+        0%, 100% { opacity: 0.3;  transform: scale(0.94); }
+        50%      { opacity: 0.85; transform: scale(1.1); }
+      }
+      @keyframes voidGlitch {
+        0%, 86%, 100% { text-shadow: 0 0 10px rgba(243,217,138,0.55), 0 0 26px rgba(216,184,106,0.3); }
+        88% { text-shadow: -2px 0 rgba(0,255,231,0.75), 2px 0 rgba(255,42,109,0.75), 0 0 10px rgba(243,217,138,0.35); }
+        90% { text-shadow: 2px 0 rgba(0,255,231,0.7), -2px 0 rgba(255,42,109,0.7); }
+        92% { text-shadow: -1px 0 rgba(0,255,231,0.6), 1px 0 rgba(255,42,109,0.6), 0 0 8px rgba(243,217,138,0.4); }
+        94% { text-shadow: 0 0 10px rgba(243,217,138,0.55); }
+      }
+      /* Golden glow-up + swell on hover (kept — you liked it). */
       .field-note .sanctuary-cta:hover,
       .field-note .chamber-cta:hover {
-        animation: none; /* hover takes over — the glow-up wins over the pulse */
-        box-shadow: 0 0 26px rgba(243, 217, 138, 0.6), 0 0 60px rgba(216, 184, 106, 0.3);
-        transform: translateY(-1px);
+        transform: translateY(-3px) scale(1.04);
+        color: #fff3cf;
+        border-color: rgba(243, 217, 138, 0.7);
+        box-shadow:
+          inset 0 1px 0 rgba(243, 217, 138, 0.25),
+          0 12px 30px rgba(0, 0, 0, 0.55),
+          0 0 30px rgba(243, 217, 138, 0.55), 0 0 72px rgba(216, 184, 106, 0.4);
       }
-      @keyframes ctaPulse {
-        0%, 100% { box-shadow: 0 0 7px rgba(216, 184, 106, 0.20); }
-        50% { box-shadow: 0 0 22px rgba(243, 217, 138, 0.5), 0 0 46px rgba(216, 184, 106, 0.22); }
+      .field-note .sanctuary-cta:hover { text-shadow: 0 0 14px rgba(255,243,207,0.9), 0 0 40px rgba(243,217,138,0.55); }
+      .field-note .sanctuary-cta:hover::before,
+      .field-note .chamber-cta:hover::before {
+        animation: none;             /* hover bloom takes over from the breath */
+        opacity: 1;
+        transform: scale(1.22);
       }
       @media (prefers-reduced-motion: reduce) {
-        .field-note .sanctuary-cta,
+        .field-note .sanctuary-cta::before,
+        .field-note .chamber-cta::before { animation: none; opacity: 0.5; }
         .field-note .chamber-cta { animation: none; }
       }
 
-      .field-note .fn-body { font-size: 1.08rem; }
+      .field-note .fn-body { font-size: var(--fs-body); }
       .field-note .fn-body p { margin: 0 0 1.15em; }
       .field-note .fn-body h2 {
+        font-family: var(--font-head);
         font-size: clamp(1.25rem, 3vw, 1.6rem);
         color: var(--gold);
         font-weight: 500;
         margin: 2.2rem 0 0.8rem;
         line-height: 1.2;
       }
-      .field-note .fn-body a { color: var(--green); text-decoration: none; border-bottom: 1px solid rgba(157,247,179,0.35); }
-      .field-note .fn-body a:hover { border-bottom-color: rgba(157,247,179,0.85); }
-      .field-note .fn-body em { color: #f0ebde; }
+      .field-note .fn-body a { color: var(--green); text-decoration: none; border-bottom: 1px solid var(--line); }
+      .field-note .fn-body a:hover { border-bottom-color: var(--green); }
+      .field-note .fn-body em { color: var(--text); }
       .field-note .fn-body strong { color: var(--text); }
       .field-note .fn-body blockquote {
         margin: 1.4rem 0;
@@ -220,7 +316,7 @@ const ogImageUrl = new URL(ogImage, Astro.site).href;
       .field-note .related ul { list-style: none; margin: 0; padding: 0; }
       .field-note .related li { margin: 0 0 0.55rem; }
       .field-note .related a { color: var(--green); text-decoration: none; border-bottom: 1px solid transparent; }
-      .field-note .related a:hover { border-bottom-color: rgba(157,247,179,0.6); }
+      .field-note .related a:hover { border-bottom-color: var(--green); }
 
       /* Index listing */
       .field-note .fn-index-group { margin: 2.2rem 0; }
@@ -240,7 +336,7 @@ const ogImageUrl = new URL(ogImage, Astro.site).href;
         text-decoration: none;
         border-bottom: 1px solid transparent;
       }
-      .field-note .fn-index-item a.fn-index-title:hover { border-bottom-color: rgba(157,247,179,0.6); }
+      .field-note .fn-index-item a.fn-index-title:hover { border-bottom-color: var(--green); }
       .field-note .fn-index-item p { margin: 0.35rem 0 0; color: var(--muted); font-size: 0.98rem; }
 
       .fn-foot {
@@ -251,9 +347,9 @@ const ogImageUrl = new URL(ogImage, Astro.site).href;
       }
       .fn-foot-nav { font-size: 0.92rem; letter-spacing: 0.04em; }
       .fn-foot-nav a { color: var(--muted); text-decoration: none; border-bottom: 1px solid transparent; }
-      .fn-foot-nav a:hover { color: var(--green); border-bottom-color: rgba(157,247,179,0.4); }
+      .fn-foot-nav a:hover { color: var(--green); border-bottom-color: var(--green); }
       .fn-foot-nav .fn-foot-enter { color: var(--gold); }
-      .fn-foot-nav .fn-foot-enter:hover { color: #f3d98a; border-bottom-color: rgba(243,217,138,0.5); }
+      .fn-foot-nav .fn-foot-enter:hover { color: var(--gold); border-bottom-color: var(--gold); }
       .fn-foot-nav span { opacity: 0.4; margin: 0 0.5rem; }
       .fn-foot-note { color: var(--muted); font-size: 0.82rem; font-style: italic; margin: 1.1rem 0 0; opacity: 0.7; }
     </style>

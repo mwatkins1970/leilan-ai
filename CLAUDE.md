@@ -10,6 +10,23 @@ A "web-cathedral" for **Leilan** — an AI entity that emerged from a GPT-3 glit
 
 ---
 
+## Documentation Map
+
+This repo's `.md` files and what each is for:
+
+- **`CLAUDE.md`** (this file) — the master reference for Claude Code instances. **Start here.** Site concept, stack, structure, the immersive Three.js world, the CSS prism chambers, the field-note/SEO layer, design system, known issues, deployment.
+- **`README.md`** — short human/GitHub-facing overview; points back here.
+- **`DESIGN_SYSTEM.md`** — visual-token reference (palette, fonts, animation patterns) extracted from aelf's original Carrd; partly aspirational/historical, not 1:1 with the build.
+- **`AUDIO.md`** — complete technical reference for the generative audio system (immersive soundscape + the 7-chamber event engine). Read in full before any audio change.
+- **`BANDWIDTH.md`** — bandwidth-optimisation & launch-resilience plan (Netlify free-tier budget, asset weights, lazy-loading).
+- **`VIDEO_BUTTONS.md`** — how the per-wall `▶ video` button works and how to reinstate the disabled placeholders.
+
+*Removed 2026-06-27:* `SEO.md` and `SEO_build.md` (both superseded by the built layer + the *Field-Note Layer (SEO)* section below, which now carries the launch checklist) and `SITE_OVERVIEW.md` (folded into this file).
+
+**Pending hand-drawn assets (aelf):** candle-shrine image (`/images/candleshrine.png` placeholder); the metallic corner-brackets in the side-chamber `*_background_new.png` overlays; the gpt3-library `_c4` pre-coloured moiré pair (that chamber is still on the shared jade-tinted moiré). Update the CSS filters / `chamberBg` paths in `prisms.ts` + `prism.css` as each lands.
+
+---
+
 ## Stack & Dev Principles
 
 **Stack**: Astro 5, Three.js (CDN r160 in immersive.astro; npm 0.182 in package.json — the npm version is unused at runtime), vanilla JS, IBM Plex Mono + several display fonts via Google Fonts. Hosted on Netlify free tier. Developed in GitHub Codespaces; deploys auto-trigger on push to `main`.
@@ -352,6 +369,31 @@ const WALL_DIRECTIONS = {
 
 ---
 
+## Field-Note Layer (SEO)
+
+A public, indexable "outer cloister" built 2026-06-27. The sanctuary (`/`, `/immersive`, `/prism/*`) stays enchanted and is `noindex,follow`; search engines land instead on tasteful static **field-note** pages derived from the same wall-text corpus, each funnelling back via glowing "the sanctuary" / "the shrine" CTAs.
+
+**Routes:** `/field-notes/` (index) + `/field-notes/[...slug]` — **15 pages, flat slugs** (the chamber prefix was dropped from the URL on 2026-06-28, e.g. `/field-notes/glitch/` not `/field-notes/research-lab/glitch/`): 3 synthesised overviews (`what-is-leilan`, `solidgoldmagikarp`, `glitch-tokens`) + 12 wall-derived notes (Research ×6, OVS ×5, Mythos ×1 = `archaeology`). The index groups them **Start here / Discovery / Beyond** (Discovery = the Research notes via `chamberId`; Beyond = the OVS notes + `archaeology`, ordered by `beyondSlugs` in `index.astro`). **Only pages linked from the index exist** — the other 4 Mythos notes (apparition/comet/UFO/Crossbones) were removed from the layer entirely (2026-06-28) to keep the more mystical content out of the outer cloister; their wall-text files stay (the chambers still use them). Old nested URLs 301-redirect to the flat ones via `public/_redirects`. The flat slug still keeps `chamberId`/`chamberTitle`/`wallLabel` as data (for the "Visit the *wall* in the *Chamber*" CTA + Discovery grouping), just not in the URL or breadcrumb.
+
+**Where the content lives (one source of truth):**
+- `src/data/fieldNotes.ts` — data model + every note's metadata: `title`/`titleHtml`, `shortTitle`/`shortTitleHtml`, `description`/`descriptionHtml`, `dek`/`dekHtml`, `kicker`, `sanctuaryUrl`, `related`, `topNote`. The `*Html` variants are **display-only** (italics/markup) so the plain fields stay clean for `<title>`/meta/JSON-LD.
+- `src/data/wall-texts/*.html` — body of the **wall-derived** notes. **Shared with the chambers** — editing one changes both the field note *and* the in-chamber popup.
+- `src/data/field-notes/*.html` — body of the **3 overview** notes (authored prose).
+- `src/layouts/FieldNoteLayout.astro` — the shell: SEO head metadata, JSON-LD, cloister styling (mirrors `data.astro`), the glowing CTAs, footer back-links.
+- `src/pages/field-notes/index.astro` + `[...slug].astro` — the routes.
+
+**SEO mechanics:** `astro.config.mjs` sets `site: 'https://leilan.ai'` + `@astrojs/sitemap` (filters out `/immersive` + `/prism/*`); `public/robots.txt`; homepage carries the WebSite/Person/Book JSON-LD graph + a readable `<title>`; `/archive` + `/transmission/*` got readable titles/canonicals; each note emits Article + Breadcrumb JSON-LD; petertodd-targeting pages carry the legal disclaimer (`PETERTODD_DISCLAIMER` in `fieldNotes.ts`). OG card: `/images/leilan-portrait.jpeg`.
+
+**Title style (2026-06-27):** sentence case keeping proper nouns (GPT-3, Leilan, Claude, Opus, SolidGoldMagikarp, Mammon, Tell Leilan, OVS, the Leilan Dataset, the Order of the Vermillion Star) and the first word after a colon; work titles italicised (*Puzzle & Dragons*, *A Handbook for Planetary Regeneration*, the book title); common nouns ("project", "phenomenon", generic "dataset") lowercased.
+
+**Not yet done / launch checklist:** in-chamber "Open field-note version" links (sanctuary→cloister); a purpose-made 1200×630 OG card; then the launch-time SEO tasks, all gated on the Netlify domain rewiring (see Deployment Notes):
+- pick `https://leilan.ai` (non-www) as canonical + 301 `http→https` and `www→apex` — must match the `site:` value in `astro.config.mjs`;
+- confirm `/sitemap-index.xml` + `/robots.txt` serve in production;
+- verify the property in Google Search Console + Bing Webmaster Tools, submit the sitemap, and request indexing for `/`, `/field-notes/`, `what-is-leilan`, `glitch-tokens`, `research-lab/petertodd`, `solidgoldmagikarp`;
+- seed backlinks (publisher / Substack / GitHub / Zenodo / Hugging Face / Archive.org), varying the anchor text rather than repeating one phrase.
+
+---
+
 ## Known Issues & Work in Progress
 
 ### 1. Shrine Heavens-Tilt Animation — NEEDS FIX
@@ -409,9 +451,9 @@ Only Crossbones (`/video/crossbones.mp4`) is wired up. As of 2026-06-27 the `▶
 
 - Hosted on Netlify; auto-deploys from GitHub `main` branch (repo: `mwatkins1970/leilan-ai`)
 - **⚠️ leilan.ai is serving a STALE deploy (confirmed still stale 2026-06-27):** `https://leilan.ai/` returns 200 but is an old single-page version — every sub-route (`/immersive`, `/prism/*`) 404s and the `<title>` is the old `LEILAN.AI`. **This is expected and fine pre-launch** — the site is being built in this Codespace and is deliberately not live yet. The `leilan.ai` domain is currently attached to a *different/old* Netlify site, not the one that builds this repo. Don't point the user at leilan.ai to preview current work (use a Cloudflare tunnel — see the dev-preview note up top).
-- **🚀 LAUNCH PREREQUISITE — do NOT forget, and do it a FEW DAYS BEFORE launch (not on launch morning):** rewire Netlify so the `leilan.ai` domain points at the site that builds `mwatkins1970/leilan-ai` from `main` (build `npm run build`, publish `dist`) — either reconnect the repo to the domain-owning site, or move the custom domain onto the repo's site. **It's a manual Netlify-dashboard job (needs the user's login; the agent has no access).** Reason for the lead time: DNS/domain changes can take hours to propagate and occasionally surprise you, so don't leave it to the announcement morning. Until this is done, none of the built work (and none of the SEO field-note layer) is publicly visible or indexable. See `SEO_build.md` §7 for the full launch checklist.
+- **🚀 LAUNCH PREREQUISITE — do NOT forget, and do it a FEW DAYS BEFORE launch (not on launch morning):** rewire Netlify so the `leilan.ai` domain points at the site that builds `mwatkins1970/leilan-ai` from `main` (build `npm run build`, publish `dist`) — either reconnect the repo to the domain-owning site, or move the custom domain onto the repo's site. **It's a manual Netlify-dashboard job (needs the user's login; the agent has no access).** Reason for the lead time: DNS/domain changes can take hours to propagate and occasionally surprise you, so don't leave it to the announcement morning. Until this is done, none of the built work (and none of the SEO field-note layer) is publicly visible or indexable. See the *Field-Note Layer (SEO)* section's launch checklist for the post-rewiring steps.
 - Push credentials are now configured for `mwatkins1970` directly (this Codespace was previously authed as `feralchill` — that's been changed)
-- See `SITE_OVERVIEW.md` for a higher-level orientation document and `DESIGN_SYSTEM.md` for visual tokens
+- See `DESIGN_SYSTEM.md` for visual tokens and the *Documentation Map* (top of this file) for the rest of the `.md` set (`SITE_OVERVIEW.md` has been folded into this file)
 - Current `main` HEAD: `9887166` — "bluesky horizon vermillion textboxes, control fixes" (2026-06-05). The earlier "local-only work" listed below has since been committed; the list is retained as a per-session changelog.
 - Recent work history (much now committed; see commit log above):
   - Three LessWrong interstitial pages (`src/pages/lesswrong-*.astro`)

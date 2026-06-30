@@ -53,22 +53,20 @@ if (note.isBook) {
 
 <FieldNoteLayout pageTitle={pageTitle} description={note.description} ogType="article" jsonLd={jsonLd}>
     <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a href="/field-notes/">Field notes</a>
-        {note.chamberTitle && (<><span>/</span>{note.chamberTitle}</>)}
+        <a href="/field-notes/">field notes</a>
         <span>/</span>{note.shortTitle}
     </nav>
 
-    {note.kicker && <p class="kicker">{note.kicker}</p>}
     <h1 set:html={note.titleHtml ?? note.title}></h1>
     <p class="dek" set:html={note.dekHtml ?? note.dek}></p>
 
     {note.topNote && <div class="topnote" set:html={note.topNote} />}
 
     <div class="cta-row">
-        <a class="sanctuary-cta" href="/">the sanctuary</a>
+        <a class="sanctuary-cta" href="/">inner cloister</a>
         {note.sanctuaryUrl
-            ? <a class="chamber-cta" href={note.sanctuaryUrl}>Visit the {note.wallLabel} wall in the {note.chamberTitle}</a>
-            : <a class="chamber-cta" href="/immersive">the shrine</a>}
+            ? <a class="chamber-cta wall-visit" href={note.sanctuaryUrl}>Visit the {note.wallLabel} wall in the {note.chamberTitle}</a>
+            : <a class="chamber-cta" href="/immersive">the void</a>}
     </div>
 
     <article class="fn-body" set:html={body} />

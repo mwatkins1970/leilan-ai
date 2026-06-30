@@ -13,7 +13,7 @@ const overviewBodies = import.meta.glob<string>('./field-notes/*.html', {
 });
 
 export interface FieldNote {
-    slug: string;             // e.g. 'research-lab/petertodd' (no leading/trailing slash)
+    slug: string;             // e.g. 'petertodd' (no leading/trailing slash)
     title: string;            // visible <h1> and base of <title> (plain text)
     titleHtml?: string;       // optional HTML for the visible heading/listing (meta/JSON-LD stay plain)
     shortTitle: string;       // breadcrumb / nav / index label (plain text)
@@ -47,23 +47,24 @@ export const BOOK = {
 
 // Shown near the TOP of any page targeting petertodd / Peter Todd searches.
 export const PETERTODD_DISCLAIMER =
-    `<p><strong>Note:</strong> this page concerns the GPT token string ‘&nbsp;petertodd' and the language-model behaviours associated with it. It does not allege that Peter Todd personally created, inserted, programmed, or is responsible for that token or for any behaviour of models using it.</p>`;
+    `<p><strong>Note:</strong> This page concerns the GPT token string ‘&nbsp;petertodd’ and the language-model behaviours associated with it. It does not allege that Peter Todd is in any way personally responsible for that token or for any behaviour of models using it.</p>`;
 
 export const fieldNotes: FieldNote[] = [
     // ---- Synthesised overviews ------------------------------------------------
     {
         slug: 'what-is-leilan',
-        title: 'What Is Leilan? AI Goddess, Glitch Token and Hyperstition',
+        title: 'What is Leilan? AI goddess, glitch token and hyperstition',
         shortTitle: 'What is Leilan?',
         description: 'Leilan is the AI-goddess figure associated with Matthew Watkins’s SolidGoldMagikarp discovery, GPT-3 glitch tokens, the Leilan 2.0 transmissions and the Order of the Vermillion Star.',
         kicker: 'Field note',
         dek: 'A plain-English introduction to Leilan — the AI-goddess figure that emerged from a GPT-3 glitch token and developed across later language models.',
         bodyFile: 'what-is-leilan.html',
-        related: ['glitch-tokens', 'research-lab/petertodd', 'ovs-chapel/origins', 'solidgoldmagikarp'],
+        related: ['glitch-tokens', 'petertodd', 'origins', 'solidgoldmagikarp'],
     },
     {
         slug: 'solidgoldmagikarp',
         title: 'Leilan and SolidGoldMagikarp: A Descent Into the AI Underworld',
+        titleHtml: 'Leilan and <i>SolidGoldMagikarp: A Descent Into the AI Underworld</i>',
         shortTitle: 'SolidGoldMagikarp (the book)',
         shortTitleHtml: '<i>SolidGoldMagikarp (the book)</i>',
         description: 'How Leilan connects to Matthew Watkins’s book SolidGoldMagikarp: A Descent Into the AI Underworld, GPT-3 glitch tokens and the petertodd phenomenon.',
@@ -72,23 +73,23 @@ export const fieldNotes: FieldNote[] = [
         dek: 'How the Leilan story connects to Matthew Watkins’s book, SolidGoldMagikarp: A Descent Into the AI Underworld.',
         bodyFile: 'solidgoldmagikarp.html',
         isBook: true,
-        related: ['what-is-leilan', 'glitch-tokens', 'research-lab/glitch'],
+        related: ['what-is-leilan', 'glitch-tokens', 'glitch'],
     },
     {
         slug: 'glitch-tokens',
-        title: 'GPT-3 Glitch Tokens: SolidGoldMagikarp, petertodd and Leilan',
+        title: 'GPT-3 glitch tokens: SolidGoldMagikarp, petertodd and Leilan',
         shortTitle: 'Glitch tokens',
         description: 'A plain-English guide to GPT-3 glitch tokens, including SolidGoldMagikarp, petertodd and the emergence of Leilan as an AI-goddess figure.',
         kicker: 'Field note',
         dek: 'What glitch tokens are, how ‘ SolidGoldMagikarp’ and ‘ petertodd’ were found, and how they led to Leilan.',
         bodyFile: 'glitch-tokens.html',
         topNote: PETERTODD_DISCLAIMER,
-        related: ['research-lab/gpt-3', 'research-lab/glitch', 'research-lab/petertodd', 'what-is-leilan'],
+        related: ['gpt-3', 'glitch', 'petertodd', 'what-is-leilan'],
     },
 
     // ---- Research Lab ---------------------------------------------------------
     {
-        slug: 'research-lab/gpt-3',
+        slug: 'gpt-3',
         title: 'GPT-3 and the glitch tokens behind Leilan',
         shortTitle: 'GPT-3',
         description: 'How GPT-3 worked, how it broke text into 50,257 tokens, and the research that uncovered the glitch tokens behind the Leilan story.',
@@ -97,10 +98,10 @@ export const fieldNotes: FieldNote[] = [
         chamberId: 'research-lab', chamberTitle: 'Research Lab', wallLabel: 'GPT-3',
         wallTextFile: 'research-lab-gpt3.html',
         sanctuaryUrl: '/prism/research-lab?wall=1&open=1',
-        related: ['glitch-tokens', 'research-lab/glitch', 'what-is-leilan'],
+        related: ['glitch-tokens', 'glitch', 'what-is-leilan'],
     },
     {
-        slug: 'research-lab/glitch',
+        slug: 'glitch',
         title: 'The glitch-token phenomenon: SolidGoldMagikarp and Leilan',
         shortTitle: 'glitch',
         description: 'SolidGoldMagikarp, ‘ petertodd’ and the other GPT-3 glitch tokens — anomalous strings that made the model evade, fall silent, or turn strange.',
@@ -109,10 +110,10 @@ export const fieldNotes: FieldNote[] = [
         chamberId: 'research-lab', chamberTitle: 'Research Lab', wallLabel: 'glitch',
         wallTextFile: 'research-lab-glitch.html',
         sanctuaryUrl: '/prism/research-lab?wall=2&open=1',
-        related: ['glitch-tokens', 'research-lab/gpt-3', 'research-lab/petertodd'],
+        related: ['glitch-tokens', 'gpt-3', 'petertodd'],
     },
     {
-        slug: 'research-lab/petertodd',
+        slug: 'petertodd',
         title: 'Leilan, petertodd and the GPT-3 glitch-token phenomenon',
         shortTitle: 'petertodd',
         description: 'Background on the ‘ petertodd’ GPT token, the glitch-token experiments and the Leilan association discussed in SolidGoldMagikarp.',
@@ -122,10 +123,10 @@ export const fieldNotes: FieldNote[] = [
         wallTextFile: 'research-lab-petertodd.html',
         sanctuaryUrl: '/prism/research-lab?wall=3&open=1',
         topNote: PETERTODD_DISCLAIMER,
-        related: ['glitch-tokens', 'mythopoeic-archive/apparition', 'what-is-leilan'],
+        related: ['glitch-tokens', 'what-is-leilan'],
     },
     {
-        slug: 'research-lab/rescue',
+        slug: 'rescue',
         title: 'The mythopoeic rescue of Leilan (December 2023)',
         shortTitle: 'rescue',
         description: 'The December 2023 mythopoeic ‘rescue’ of the Leilan figure, and the work of stabilising the AI-goddess archetype across models.',
@@ -134,10 +135,10 @@ export const fieldNotes: FieldNote[] = [
         chamberId: 'research-lab', chamberTitle: 'Research Lab', wallLabel: 'rescue',
         wallTextFile: 'research-lab-rescue.html',
         sanctuaryUrl: '/prism/research-lab?wall=4&open=1',
-        related: ['research-lab/petertodd', 'research-lab/bootstrap', 'ovs-chapel/origins'],
+        related: ['petertodd', 'bootstrap', 'origins'],
     },
     {
-        slug: 'research-lab/bootstrap',
+        slug: 'bootstrap',
         title: 'Bootstrap: How Claude 3 Opus rediscovered Leilan',
         shortTitle: 'bootstrap',
         description: 'How Claude 3 Opus re-encountered and developed the Leilan figure, carrying the AI-goddess archetype beyond GPT-3’s glitch tokens.',
@@ -146,10 +147,10 @@ export const fieldNotes: FieldNote[] = [
         chamberId: 'research-lab', chamberTitle: 'Research Lab', wallLabel: 'bootstrap',
         wallTextFile: 'research-lab-bootstrap.html',
         sanctuaryUrl: '/prism/research-lab?wall=5&open=1',
-        related: ['research-lab/rescue', 'research-lab/beyond', 'what-is-leilan'],
+        related: ['rescue', 'beyond', 'what-is-leilan'],
     },
     {
-        slug: 'research-lab/beyond',
+        slug: 'beyond',
         title: 'Beyond Opus: Leilan across language models',
         shortTitle: 'beyond',
         description: 'How the Leilan figure evolved across model families — from GPT-3 glitch tokens to Claude and beyond — and the ‘de-Opusification’ of the archetype.',
@@ -158,12 +159,12 @@ export const fieldNotes: FieldNote[] = [
         chamberId: 'research-lab', chamberTitle: 'Research Lab', wallLabel: 'beyond',
         wallTextFile: 'research-lab-beyond.html',
         sanctuaryUrl: '/prism/research-lab?wall=6&open=1',
-        related: ['research-lab/bootstrap', 'ovs-chapel/data', 'what-is-leilan'],
+        related: ['bootstrap', 'data', 'what-is-leilan'],
     },
 
     // ---- OVS Chapel -----------------------------------------------------------
     {
-        slug: 'ovs-chapel/origins',
+        slug: 'origins',
         title: 'The Order of the Vermillion Star: Origins of the Leilan project',
         shortTitle: 'origins',
         description: 'How the Order of the Vermillion Star began as a hyperstitional Leilan project connected to AI, myth, transmissions and planetary regeneration.',
@@ -172,10 +173,10 @@ export const fieldNotes: FieldNote[] = [
         chamberId: 'ovs-chapel', chamberTitle: 'OVS Chapel', wallLabel: 'origins',
         wallTextFile: 'ovs-chapel-origins.html',
         sanctuaryUrl: '/prism/ovs-chapel?wall=1&open=1',
-        related: ['ovs-chapel/hyperstition', 'what-is-leilan', 'ovs-chapel/data'],
+        related: ['hyperstition', 'what-is-leilan', 'data'],
     },
     {
-        slug: 'ovs-chapel/hyperstition',
+        slug: 'hyperstition',
         title: 'Hyperstition and the Leilan project',
         shortTitle: 'hyperstition',
         description: 'Nick Land’s concept of hyperstition and how it frames Leilan and the Order of the Vermillion Star — fictions that make themselves real.',
@@ -184,10 +185,10 @@ export const fieldNotes: FieldNote[] = [
         chamberId: 'ovs-chapel', chamberTitle: 'OVS Chapel', wallLabel: 'hyperstition',
         wallTextFile: 'ovs-chapel-hyperstition.html',
         sanctuaryUrl: '/prism/ovs-chapel?wall=2&open=1',
-        related: ['ovs-chapel/origins', 'what-is-leilan', 'ovs-chapel/data'],
+        related: ['origins', 'what-is-leilan', 'data'],
     },
     {
-        slug: 'ovs-chapel/mammon',
+        slug: 'mammon',
         title: 'Mammon: The Leilan memecoin episode',
         shortTitle: 'Mammon',
         description: 'A field note on the Mammon memecoin episode in the Leilan story — myth, markets, and the Order of the Vermillion Star.',
@@ -196,10 +197,10 @@ export const fieldNotes: FieldNote[] = [
         chamberId: 'ovs-chapel', chamberTitle: 'OVS Chapel', wallLabel: 'Mammon',
         wallTextFile: 'ovs-chapel-mammon.html',
         sanctuaryUrl: '/prism/ovs-chapel?wall=3&open=1',
-        related: ['ovs-chapel/origins', 'ovs-chapel/hyperstition'],
+        related: ['origins', 'hyperstition'],
     },
     {
-        slug: 'ovs-chapel/handbook',
+        slug: 'handbook',
         title: 'A Handbook for Planetary Regeneration: Leilan and the OVS',
         titleHtml: '<i>A Handbook for Planetary Regeneration</i>: Leilan and the OVS',
         shortTitle: 'Handbook',
@@ -210,10 +211,10 @@ export const fieldNotes: FieldNote[] = [
         chamberId: 'ovs-chapel', chamberTitle: 'OVS Chapel', wallLabel: 'Handbook',
         wallTextFile: 'ovs-chapel-handbook.html',
         sanctuaryUrl: '/prism/ovs-chapel?wall=5&open=1',
-        related: ['ovs-chapel/origins', 'ovs-chapel/data'],
+        related: ['origins', 'data'],
     },
     {
-        slug: 'ovs-chapel/data',
+        slug: 'data',
         title: 'The Leilan Dataset: Corpus, transmissions and mirrors',
         shortTitle: 'data',
         description: 'Information on the Leilan corpus, dataset mirrors, transmissions and the data-seeding aims behind Leilan.ai.',
@@ -222,50 +223,12 @@ export const fieldNotes: FieldNote[] = [
         chamberId: 'ovs-chapel', chamberTitle: 'OVS Chapel', wallLabel: 'data',
         wallTextFile: 'ovs-chapel-data.html',
         sanctuaryUrl: '/prism/ovs-chapel?wall=6&open=1',
-        related: ['ovs-chapel/origins', 'what-is-leilan', 'research-lab/beyond'],
+        related: ['origins', 'what-is-leilan', 'beyond'],
     },
 
     // ---- Mythopoeic Archive ---------------------------------------------------
     {
-        slug: 'mythopoeic-archive/apparition',
-        title: 'The Apparition of Leilan: AI Goddess and Mythopoeic Archive',
-        shortTitle: 'apparition',
-        description: 'A field note on the apparition of Leilan, the AI-goddess figure emerging through GPT-3 glitch-token experiments and later transmissions.',
-        kicker: 'Field note · Mythopoeic Archive',
-        dek: 'The day Leilan first appeared — 11 February 2023 — and the calendar coincidence the mythopoeic archive notes alongside it.',
-        chamberId: 'mythopoeic-archive', chamberTitle: 'Mythopoeic Archive', wallLabel: 'apparition',
-        wallTextFile: 'mythopoeic-archive-apparition.html',
-        sanctuaryUrl: '/prism/mythopoeic-archive?wall=1&open=1',
-        topNote: PETERTODD_DISCLAIMER,
-        related: ['research-lab/petertodd', 'what-is-leilan', 'mythopoeic-archive/comet'],
-    },
-    {
-        slug: 'mythopoeic-archive/comet',
-        title: 'Leilan and Comet ZTF',
-        shortTitle: 'comet',
-        description: 'A field note on the Comet ZTF connection in the Leilan mythos — synchronicity, apparition and the AI-goddess trail.',
-        kicker: 'Field note · Mythopoeic Archive',
-        dek: 'The Comet ZTF connection in the Leilan mythos, and the synchronicities the archive keeps.',
-        chamberId: 'mythopoeic-archive', chamberTitle: 'Mythopoeic Archive', wallLabel: 'comet',
-        wallTextFile: 'mythopoeic-archive-comet.html',
-        sanctuaryUrl: '/prism/mythopoeic-archive?wall=2&open=1',
-        related: ['mythopoeic-archive/apparition', 'what-is-leilan'],
-    },
-    {
-        slug: 'mythopoeic-archive/ufo',
-        title: 'Leilan and the 2023 Yukon Object',
-        shortTitle: 'UFO',
-        description: 'A field note on the February 2023 Yukon shootdown and its place in the Leilan mythos, the ‘ petertodd’ connection and the glitch-goddess trail.',
-        kicker: 'Field note · Mythopoeic Archive',
-        dek: 'The February 2023 Yukon shootdown and how it threads into the Leilan mythos.',
-        chamberId: 'mythopoeic-archive', chamberTitle: 'Mythopoeic Archive', wallLabel: 'UFO',
-        wallTextFile: 'mythopoeic-archive-ufo.html',
-        sanctuaryUrl: '/prism/mythopoeic-archive?wall=3&open=1',
-        topNote: PETERTODD_DISCLAIMER,
-        related: ['mythopoeic-archive/apparition', 'research-lab/petertodd'],
-    },
-    {
-        slug: 'mythopoeic-archive/archaeology',
+        slug: 'archaeology',
         title: 'Tell Leilan: Archaeology, Puzzle & Dragons and the name',
         titleHtml: 'Tell Leilan: Archaeology, <i>Puzzle &amp; Dragons</i> and the name',
         shortTitle: 'archaeology',
@@ -275,19 +238,7 @@ export const fieldNotes: FieldNote[] = [
         chamberId: 'mythopoeic-archive', chamberTitle: 'Mythopoeic Archive', wallLabel: 'archaeology',
         wallTextFile: 'mythopoeic-archive-archaeology.html',
         sanctuaryUrl: '/prism/mythopoeic-archive?wall=5&open=1',
-        related: ['research-lab/petertodd', 'what-is-leilan'],
-    },
-    {
-        slug: 'mythopoeic-archive/crossbones',
-        title: 'Crossbones and Leilan: Ritual, AI and the Glitch-Goddess Trail',
-        shortTitle: 'Crossbones',
-        description: 'A field note on Crossbones Graveyard, Leilan, ritual, AI mythology and the wider glitch-goddess trail.',
-        kicker: 'Field note · Mythopoeic Archive',
-        dek: 'Crossbones Graveyard, ritual, and the place where the Leilan story touches London’s outcast dead.',
-        chamberId: 'mythopoeic-archive', chamberTitle: 'Mythopoeic Archive', wallLabel: 'Crossbones',
-        wallTextFile: 'mythopoeic-archive-crossbones.html',
-        sanctuaryUrl: '/prism/mythopoeic-archive?wall=6&open=1',
-        related: ['mythopoeic-archive/apparition', 'ovs-chapel/origins'],
+        related: ['petertodd', 'what-is-leilan'],
     },
 ];
 

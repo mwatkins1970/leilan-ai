@@ -660,7 +660,7 @@ Each field note should include:
 
 For the wall text frame itself, add a real `<a href="/field-notes/..." target="_blank" rel="noopener">Open field-note version</a>` where aesthetically acceptable. Do not use JS-only buttons for this; search engines need crawlable links.
 
-Consider adding `noindex,follow` to `/immersive` and `/prism/*` if SEO implementation establishes field notes as canonical search landing pages. This is primarily an SEO decision, but it also prevents search users from landing directly on heavy routes when a lightweight field-note equivalent exists. Do not do this until SEO.md decision is confirmed.
+Adding `noindex,follow` to `/immersive` and `/prism/*` keeps search users off heavy routes when a lightweight field-note equivalent exists. This is now implemented: both route groups carry `noindex,follow` and the field-note layer is the canonical search surface (see `CLAUDE.md` → Field-Note Layer).
 
 ## 13. Bot and crawler considerations
 
@@ -674,7 +674,7 @@ Do not block Google/Bing from field notes. But consider bot hygiene:
 - Do not include direct video links in sitemaps unless deliberate.
 - If abusive bots appear, use Netlify/Cloudflare protections or external CDN rules rather than over-restricting good crawlers.
 
-Potential `robots.txt` should be coordinated with SEO.md. Do not block `/field-notes/`, `/archive`, `/data`, `/transmission/`, or sitemap.
+A `public/robots.txt` already ships (added with the field-note layer): it allows everything and points to the sitemap. Do not block `/field-notes/`, `/archive`, `/data`, `/transmission/`, or sitemap.
 
 ## 14. Plan B hosting / launch resilience
 

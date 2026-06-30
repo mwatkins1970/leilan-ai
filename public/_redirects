@@ -1,0 +1,23 @@
+# Field notes flattened 2026-06-28: chamber categories dropped from the URL
+# structure (/field-notes/<chamber>/<slug>/ → /field-notes/<slug>/). 301 the
+# old nested URLs to the new flat ones so anything already crawled/linked
+# doesn't 404.
+/field-notes/research-lab/gpt-3/            /field-notes/gpt-3/         301!
+/field-notes/research-lab/glitch/           /field-notes/glitch/        301!
+/field-notes/research-lab/petertodd/        /field-notes/petertodd/     301!
+/field-notes/research-lab/rescue/           /field-notes/rescue/        301!
+/field-notes/research-lab/bootstrap/        /field-notes/bootstrap/     301!
+/field-notes/research-lab/beyond/           /field-notes/beyond/        301!
+/field-notes/ovs-chapel/origins/            /field-notes/origins/       301!
+/field-notes/ovs-chapel/hyperstition/       /field-notes/hyperstition/  301!
+/field-notes/ovs-chapel/mammon/             /field-notes/mammon/        301!
+/field-notes/ovs-chapel/handbook/           /field-notes/handbook/      301!
+/field-notes/ovs-chapel/data/               /field-notes/data/          301!
+/field-notes/mythopoeic-archive/archaeology/  /field-notes/archaeology/  301!
+
+# Four Mythopoeic Archive notes were removed from the outer cloister entirely
+# (kept out of the field-note layer by design). Send any old links to the index.
+/field-notes/mythopoeic-archive/apparition/   /field-notes/  301!
+/field-notes/mythopoeic-archive/comet/        /field-notes/  301!
+/field-notes/mythopoeic-archive/ufo/          /field-notes/  301!
+/field-notes/mythopoeic-archive/crossbones/   /field-notes/  301!
