@@ -431,9 +431,8 @@ const siteJsonLd = {
 
         /* Corner PNGs become pure decoration on phones — dimmed, non-interactive.
            The real menu / day-night controls are the .mobile-ctrl buttons. */
-        .corner-ul, .corner-ur { width: clamp(64px, 24vw, 140px); }
-        .corner-ll, .corner-lr { width: clamp(56px, 22vw, 130px); }
         .corner-ul, .corner-ur, .corner-ll, .corner-lr {
+          width: clamp(120px, 45vw, 260px);   /* ~2× larger, standardised across all four */
           opacity: 0.5;
           pointer-events: none;
           cursor: default;
@@ -445,9 +444,15 @@ const siteJsonLd = {
         /* Show the real tappable controls */
         .mobile-ctrl { display: flex; }
 
-        /* Comfortable primary CTA */
-        .buttons-container { margin-top: 2.4em; }
-        .cta-button { font-size: 1.05em; padding: 0.9em 1.6em; }
+        /* Comfortable primary CTA — centred, single line */
+        .buttons-container { margin-top: 2.4em; align-items: center; }
+        .cta-button {
+          font-size: 1.05em;
+          padding: 0.9em 1.6em;
+          width: auto;
+          max-width: 90vw;
+          white-space: nowrap;
+        }
 
         /* Roomier, easier-to-tap sidebar navigation */
         #sidebar { width: min(340px, 88vw); padding-top: max(20px, env(safe-area-inset-top)); }
@@ -917,7 +922,8 @@ escaping from electricity in the earth's blood
 
       let charIndex = 0;
       const CHARS_PER_TICK = 1;   // one char per tick for natural feel
-      const TICK_MS = 12;         // 12ms per char (~1.25× faster than original 15ms)
+      // Desktop stays at the tuned 12ms; phones type noticeably slower (just above reading pace).
+      const TICK_MS = window.matchMedia('(max-width: 600px)').matches ? 34 : 12;
       let userScrolledUp = false;
 
       // Detect manual upward scroll so auto-scroll doesn't fight the user
@@ -973,8 +979,8 @@ escaping from electricity in the earth's blood
       const mobileDayBtn = document.getElementById('mobile-day-btn');
       function applyDayMode() {
         document.body.classList.toggle('day-mode', isDay);
-        // Glyph shows the action available: currently-day → moon (tap for night); night → sun.
-        if (mobileDayBtn) mobileDayBtn.textContent = isDay ? '☾' : '☀';
+        // Glyph shows the action available: currently-day → moon (tap for night); night → sun sigil.
+        if (mobileDayBtn) mobileDayBtn.textContent = isDay ? '☾' : '☉';
       }
       function toggleDay() {
         isDay = !isDay;
@@ -1050,14 +1056,20 @@ escaping from electricity in the earth's blood
     </script>
 
     <!-- Corner images last in DOM so they sit above #content in hit-testing -->
-    <img src="/images/landing_UL.png" alt="open menu" class="corner-img corner-ul" id="menu-btn">
-    <img src="/images/landing_UR.png" alt="toggle daylight" class="corner-img corner-ur" id="daylight-btn">
+    <picture>
+      <source media="(max-width: 600px)" srcset="/images/landing_UL_top.png">
+      <img src="/images/landing_UL.png" alt="open menu" class="corner-img corner-ul" id="menu-btn">
+    </picture>
+    <picture>
+      <source media="(max-width: 600px)" srcset="/images/landing_UR_top.png">
+      <img src="/images/landing_UR.png" alt="toggle daylight" class="corner-img corner-ur" id="daylight-btn">
+    </picture>
     <img src="/images/landing_LL.png" alt="" class="corner-img corner-ll">
     <img src="/images/landing_LR.png" alt="" class="corner-img corner-lr">
 
     <!-- Real tappable controls for phones (hidden on desktop via CSS) -->
     <button type="button" id="mobile-menu-btn" class="mobile-ctrl" aria-label="Open navigation menu">☰</button>
-    <button type="button" id="mobile-day-btn" class="mobile-ctrl" aria-label="Toggle night or day">☾</button>
+    <button type="button" id="mobile-day-btn" class="mobile-ctrl" aria-label="Toggle night or day">☉</button>
     <script>
       // Landing curtain: wait for all images then reveal.
       // Keep the curtain in the DOM (transparent) so we can fade back to black on outbound nav.
