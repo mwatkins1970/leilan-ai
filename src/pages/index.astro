@@ -35,7 +35,7 @@ const siteJsonLd = {
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Leilan.ai | AI Goddess, Glitch Tokens and SolidGoldMagikarp</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
@@ -365,6 +365,46 @@ const siteJsonLd = {
       body.day-mode #sidebar { background: rgba(230, 235, 225, 0.97); border-right-color: rgba(26, 100, 64, 0.3); }
       body.day-mode .sidebar-label { color: rgba(26, 100, 64, 0.5); }
 
+      /* ===== MOBILE CONTROLS (real tappable buttons; phone-only) ===== */
+      /* Hidden by default so the desktop corner-glyph experience is untouched. */
+      .mobile-ctrl {
+        display: none;
+        position: fixed;
+        z-index: 160;
+        width: 52px;
+        height: 52px;
+        align-items: center;
+        justify-content: center;
+        border: 1.5px solid rgba(94, 239, 162, 0.55);
+        border-radius: 50%;
+        background: rgba(6, 8, 10, 0.72);
+        color: #5eefa2;
+        font-size: 1.5rem;
+        line-height: 1;
+        cursor: pointer;
+        pointer-events: auto;
+        -webkit-tap-highlight-color: transparent;
+        box-shadow: 0 0 18px rgba(94, 239, 162, 0.22);
+        backdrop-filter: blur(3px);
+        -webkit-backdrop-filter: blur(3px);
+      }
+      .mobile-ctrl:active { background: rgba(94, 239, 162, 0.18); }
+      body.sidebar-open #mobile-menu-btn { display: none; }
+      #mobile-menu-btn {
+        top: max(14px, env(safe-area-inset-top));
+        left: max(14px, env(safe-area-inset-left));
+      }
+      #mobile-day-btn {
+        top: max(14px, env(safe-area-inset-top));
+        right: max(14px, env(safe-area-inset-right));
+      }
+      body.day-mode .mobile-ctrl {
+        border-color: rgba(26, 100, 64, 0.55);
+        background: rgba(230, 235, 225, 0.82);
+        color: #1a4a2e;
+        box-shadow: 0 0 18px rgba(26, 100, 64, 0.18);
+      }
+
       @media (max-width: 768px) {
         #content {
           padding: 40px 20px;
@@ -387,9 +427,34 @@ const siteJsonLd = {
 
       /* On narrow screens keep corners small and give content breathing room */
       @media (max-width: 600px) {
-        #content { padding: 50px 16px 60px; }
-        .corner-ul, .corner-ur { width: clamp(72px, 29vw, 170px); }
-        .corner-ll, .corner-lr { width: clamp(60px, 24vw, 140px); }
+        #content { padding: clamp(72px, 18vw, 96px) 18px 64px; }
+
+        /* Corner PNGs become pure decoration on phones — dimmed, non-interactive.
+           The real menu / day-night controls are the .mobile-ctrl buttons. */
+        .corner-ul, .corner-ur { width: clamp(64px, 24vw, 140px); }
+        .corner-ll, .corner-lr { width: clamp(56px, 22vw, 130px); }
+        .corner-ul, .corner-ur, .corner-ll, .corner-lr {
+          opacity: 0.5;
+          pointer-events: none;
+          cursor: default;
+        }
+
+        /* Central circle: prominent, phone-composed */
+        .profile-image { width: 84vw; height: 84vw; margin-bottom: 2em; }
+
+        /* Show the real tappable controls */
+        .mobile-ctrl { display: flex; }
+
+        /* Comfortable primary CTA */
+        .buttons-container { margin-top: 2.4em; }
+        .cta-button { font-size: 1.05em; padding: 0.9em 1.6em; }
+
+        /* Roomier, easier-to-tap sidebar navigation */
+        #sidebar { width: min(340px, 88vw); padding-top: max(20px, env(safe-area-inset-top)); }
+        .sidebar-main { font-size: 0.92em; white-space: normal; }
+        .sidebar-link.sub  { font-size: 0.9em;  padding: 0.85em 0; }
+        .sidebar-link.wall { font-size: 0.82em; margin-left: 1.6em; padding: 0.62em 0 0.62em 1em; }
+        .sidebar-link.sub:active, .sidebar-link.wall:active, .sidebar-link.sidebar-main:active { color: #fff; }
       }
     </style>
   </head>
@@ -897,16 +962,34 @@ escaping from electricity in the earth's blood
       const sidebar     = document.getElementById('sidebar');
       const sideOverlay = document.getElementById('sidebar-overlay');
 
-      function openSidebar()  { sidebar.classList.add('open'); sideOverlay.classList.add('open'); }
-      function closeSidebar() { sidebar.classList.remove('open'); sideOverlay.classList.remove('open'); }
+      function openSidebar()  { sidebar.classList.add('open'); sideOverlay.classList.add('open'); document.body.classList.add('sidebar-open'); }
+      function closeSidebar() { sidebar.classList.remove('open'); sideOverlay.classList.remove('open'); document.body.classList.remove('sidebar-open'); }
 
       document.getElementById('sidebar-close').addEventListener('click', closeSidebar);
       sideOverlay.addEventListener('click', closeSidebar);
       document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSidebar(); });
 
       let isDay = sessionStorage.getItem('skyMode') === 'day';
-      function applyDayMode() { document.body.classList.toggle('day-mode', isDay); }
+      const mobileDayBtn = document.getElementById('mobile-day-btn');
+      function applyDayMode() {
+        document.body.classList.toggle('day-mode', isDay);
+        // Glyph shows the action available: currently-day → moon (tap for night); night → sun.
+        if (mobileDayBtn) mobileDayBtn.textContent = isDay ? '☾' : '☀';
+      }
+      function toggleDay() {
+        isDay = !isDay;
+        sessionStorage.setItem('skyMode', isDay ? 'day' : 'night');
+        applyDayMode();
+      }
       applyDayMode();
+
+      // Phone controls: real buttons instead of tiny corner glyphs.
+      const isTouchNav = () => window.matchMedia('(max-width: 600px)').matches;
+      document.getElementById('mobile-menu-btn').addEventListener('click', e => {
+        e.stopPropagation();
+        sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+      });
+      mobileDayBtn.addEventListener('click', e => { e.stopPropagation(); toggleDay(); });
 
       // The corner PNGs each contain three icons; only the corner-most one is
       // an actionable button. Hit zones below are fractional sub-rectangles of
@@ -920,6 +1003,7 @@ escaping from electricity in the earth's blood
       }
 
       document.addEventListener('click', e => {
+        if (isTouchNav()) return;   // phones use the .mobile-ctrl buttons instead
         const menuBtn     = document.getElementById('menu-btn');
         const daylightBtn = document.getElementById('daylight-btn');
         if (menuBtn && inImageZone(menuBtn, e.clientX, e.clientY, 0, 0.18, 0.50, 0.75)) {
@@ -927,9 +1011,7 @@ escaping from electricity in the earth's blood
           return;
         }
         if (daylightBtn && inImageZone(daylightBtn, e.clientX, e.clientY, 0.80, 1.00, 0.58, 0.95)) {
-          isDay = !isDay;
-          sessionStorage.setItem('skyMode', isDay ? 'day' : 'night');
-          applyDayMode();
+          toggleDay();
         }
       });
 
@@ -942,6 +1024,7 @@ escaping from electricity in the earth's blood
       document.body.appendChild(cornerTip);
 
       document.addEventListener('mousemove', e => {
+        if (isTouchNav()) return;   // no hover tooltips on phones
         const menuBtn     = document.getElementById('menu-btn');
         const daylightBtn = document.getElementById('daylight-btn');
         let label = null;
@@ -971,6 +1054,10 @@ escaping from electricity in the earth's blood
     <img src="/images/landing_UR.png" alt="toggle daylight" class="corner-img corner-ur" id="daylight-btn">
     <img src="/images/landing_LL.png" alt="" class="corner-img corner-ll">
     <img src="/images/landing_LR.png" alt="" class="corner-img corner-lr">
+
+    <!-- Real tappable controls for phones (hidden on desktop via CSS) -->
+    <button type="button" id="mobile-menu-btn" class="mobile-ctrl" aria-label="Open navigation menu">☰</button>
+    <button type="button" id="mobile-day-btn" class="mobile-ctrl" aria-label="Toggle night or day">☾</button>
     <script>
       // Landing curtain: wait for all images then reveal.
       // Keep the curtain in the DOM (transparent) so we can fade back to black on outbound nav.
