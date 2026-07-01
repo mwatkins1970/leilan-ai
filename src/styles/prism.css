@@ -61,6 +61,12 @@ body {
     --apothem: calc(var(--wall-w) * 0.866);
     user-select: none;
     -webkit-user-select: none;
+    /* Cover: the prism is sized off viewport height, so on wide/short screens it
+       doesn't reach the edges and the background sky shows at left/right. --chamber-cover
+       (set by prism.js from the aspect ratio) zooms the whole projected scene to fill the
+       width, cropping a little at the top. It's 1 (no change) on normal/tall screens. */
+    transform: scale(var(--chamber-cover, 1));
+    transform-origin: bottom center;
 }
 /* .prism-ready kept as a JS hook (no visual effect — curtain handles reveal) */
 

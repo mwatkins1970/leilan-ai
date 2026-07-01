@@ -4,6 +4,8 @@
 // data.astro / the LessWrong interstitials), and the standard back-links footer.
 // Page-specific content (breadcrumb, H1, body, related) is slotted in by the route.
 
+import OrientationGate from '../components/OrientationGate.astro';
+
 interface Props {
     pageTitle: string;                 // full <title> text
     description: string;
@@ -50,6 +52,7 @@ const ogImageUrl = new URL(ogImage, Astro.site).href;
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Space+Mono:wght@400;700&family=Tangerine:wght@400;700&display=swap" rel="stylesheet" />
   </head>
   <body>
+    <OrientationGate />
     <main class="field-note">
       <slot />
     </main>

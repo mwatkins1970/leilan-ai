@@ -135,6 +135,12 @@ function shrineHeavensLocked() {
 
 // --- Wall sizing: maintain image aspect ratio + compute hexagonal apothem ---
 const IMG_ASPECT = 2766 / 2776;
+// The prism's on-screen width is roughly COVER_K × viewport height. When the
+// viewport is wider than that (wide/short landscape shapes), scale the whole
+// scene up so it still covers the full width — cropping a little at the top —
+// rather than letting the background sky show at the left/right edges. At 16:9
+// and narrower the factor is 1, so normal desktops are unchanged.
+const COVER_K = 1.78;
 function updateWallSize() {
     const wallArea = document.getElementById('wall-area');
     if (!wallArea) return;
@@ -142,6 +148,8 @@ function updateWallSize() {
     const wallW = h * IMG_ASPECT;
     wallArea.style.setProperty('--wall-w', wallW + 'px');
     wallArea.style.setProperty('--apothem', (wallW * Math.sqrt(3) / 2) + 'px');
+    const cover = Math.max(1, (window.innerWidth / window.innerHeight) / COVER_K);
+    wallArea.style.setProperty('--chamber-cover', cover.toFixed(4));
 }
 updateWallSize();
 window.addEventListener('resize', updateWallSize);
@@ -304,7 +312,8 @@ body.shrine-heavens-reading #shrine-heavens-overlay .shrine-heavens-panel {
   transform: translateX(-50%) translateY(0);
 }
 #shrine-heavens-title {
-  margin: 0;
+  margin: 0 auto;
+  max-width: clamp(20rem, 46vw, 42rem);   /* fits the sky opening; matches the body */
   text-align: center;
   font: 400 clamp(1.5rem, 2.2vw, 2.2rem) "IBM Plex Mono", monospace;
   letter-spacing: 0.08em;
@@ -324,6 +333,9 @@ body.shrine-heavens-reading #shrine-heavens-overlay .shrine-heavens-panel {
   overflow-x: hidden;
   scroll-behavior: smooth;
   padding: 0 0.4rem 0.4rem;
+  max-width: clamp(20rem, 46vw, 42rem);   /* scales with viewport; matches the title */
+  margin-left: auto;
+  margin-right: auto;
   font: 400 clamp(0.95rem, 1.1vw, 1.1rem) / 1.8 "IBM Plex Mono", monospace;
   color: #8fffb8;
   text-shadow: 0 0 10px rgba(115,255,185,0.30);
@@ -358,6 +370,7 @@ body.shrine-heavens-reading #shrine-heavens-overlay .shrine-heavens-panel {
   justify-content: center;
   gap: 1.2rem;
   flex-shrink: 0;
+  flex-wrap: wrap;          /* buttons stack rather than overflow on a narrow (portrait) screen */
 }
 .shrine-scroll-btn {
   display: flex;
@@ -456,6 +469,11 @@ body:not(.shrine-heavens-active) #shrine-heavens-overlay,
 body:not(.shrine-heavens-active) #shrine-heavens-overlay * {
   pointer-events: none;
 }
+/* While a transmission is open, let the reader be read in portrait too —
+   suppress the rotate-to-landscape gate. "Eternal return" removes
+   .shrine-heavens-reading (before the tilt-down), so the gate reappears in
+   portrait and the user is asked to turn the phone back to landscape. */
+body.shrine-heavens-reading #portrait-gate[data-cinematic] { display: none !important; }
 `;
     document.head.appendChild(style);
 

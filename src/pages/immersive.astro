@@ -1,6 +1,7 @@
 ---
 // Immersive 3D Experience
 import VolumeControl from '../components/VolumeControl.astro';
+import OrientationGate from '../components/OrientationGate.astro';
 ---
 
 <!DOCTYPE html>
@@ -105,6 +106,7 @@ import VolumeControl from '../components/VolumeControl.astro';
     </style>
 </head>
 <body>
+    <OrientationGate cinematic={true} />
     <canvas id="sky-canvas"></canvas>
     <canvas id="webgl-canvas"></canvas>
     <div id="fade-overlay"></div>

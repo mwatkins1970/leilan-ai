@@ -5,6 +5,7 @@ import { getCollection } from 'astro:content';
 import '../../styles/prism.css';
 import WallPanel from '../../components/WallPanel.astro';
 import VolumeControl from '../../components/VolumeControl.astro';
+import OrientationGate from '../../components/OrientationGate.astro';
 import imageCaptions from '../../data/image-captions.json';
 import masksRaw from '../../data/masks_and_chains.json';
 
@@ -86,6 +87,7 @@ const masksJson = JSON.stringify(masks);
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Cinzel:wght@400;600&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&family=Marcellus&family=IM+Fell+English:ital@0;1&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
+    <OrientationGate cinematic={true} />
     <div class="scene-curtain" id="scene-curtain" aria-hidden="true"></div>
     <div class="page-fade-overlay" aria-hidden="true"></div>
     <VolumeControl />
