@@ -390,6 +390,8 @@ const siteJsonLd = {
       }
       .mobile-ctrl:active { background: rgba(94, 239, 162, 0.18); }
       body.sidebar-open #mobile-menu-btn { display: none; }
+      #mobile-day-btn { font-size: 2rem; }                 /* larger crescent moon (day-mode) */
+      /* Sun sizing lives inline on the <img> (JS-injected, so scoped CSS can't reach it). */
       #mobile-menu-btn {
         top: max(14px, env(safe-area-inset-top));
         left: max(14px, env(safe-area-inset-left));
@@ -979,8 +981,8 @@ escaping from electricity in the earth's blood
       const mobileDayBtn = document.getElementById('mobile-day-btn');
       function applyDayMode() {
         document.body.classList.toggle('day-mode', isDay);
-        // Glyph shows the action available: currently-day → moon (tap for night); night → rayed sun.
-        if (mobileDayBtn) mobileDayBtn.textContent = isDay ? '☾' : '☼';
+        // Glyph shows the action available: currently-day → moon (tap for night); night → rayed sun sigil.
+        if (mobileDayBtn) mobileDayBtn.innerHTML = isDay ? '☾' : '<img src="/images/sun-sigil.svg" alt="" class="sun-ico" style="width:26px;height:26px;display:block">';
       }
       function toggleDay() {
         isDay = !isDay;
@@ -1069,7 +1071,7 @@ escaping from electricity in the earth's blood
 
     <!-- Real tappable controls for phones (hidden on desktop via CSS) -->
     <button type="button" id="mobile-menu-btn" class="mobile-ctrl" aria-label="Open navigation menu">☰</button>
-    <button type="button" id="mobile-day-btn" class="mobile-ctrl" aria-label="Toggle night or day">☼</button>
+    <button type="button" id="mobile-day-btn" class="mobile-ctrl" aria-label="Toggle night or day"><img src="/images/sun-sigil.svg" alt="" class="sun-ico" style="width:26px;height:26px;display:block"></button>
     <script>
       // Landing curtain: wait for all images then reveal.
       // Keep the curtain in the DOM (transparent) so we can fade back to black on outbound nav.
