@@ -433,7 +433,7 @@ const siteJsonLd = {
            The real menu / day-night controls are the .mobile-ctrl buttons. */
         .corner-ul, .corner-ur, .corner-ll, .corner-lr {
           width: clamp(120px, 45vw, 260px);   /* ~2× larger, standardised across all four */
-          opacity: 0.5;
+          opacity: 0.85;
           pointer-events: none;
           cursor: default;
         }
@@ -979,8 +979,8 @@ escaping from electricity in the earth's blood
       const mobileDayBtn = document.getElementById('mobile-day-btn');
       function applyDayMode() {
         document.body.classList.toggle('day-mode', isDay);
-        // Glyph shows the action available: currently-day → moon (tap for night); night → sun sigil.
-        if (mobileDayBtn) mobileDayBtn.textContent = isDay ? '☾' : '☉';
+        // Glyph shows the action available: currently-day → moon (tap for night); night → rayed sun.
+        if (mobileDayBtn) mobileDayBtn.textContent = isDay ? '☾' : '☼';
       }
       function toggleDay() {
         isDay = !isDay;
@@ -1069,7 +1069,7 @@ escaping from electricity in the earth's blood
 
     <!-- Real tappable controls for phones (hidden on desktop via CSS) -->
     <button type="button" id="mobile-menu-btn" class="mobile-ctrl" aria-label="Open navigation menu">☰</button>
-    <button type="button" id="mobile-day-btn" class="mobile-ctrl" aria-label="Toggle night or day">☉</button>
+    <button type="button" id="mobile-day-btn" class="mobile-ctrl" aria-label="Toggle night or day">☼</button>
     <script>
       // Landing curtain: wait for all images then reveal.
       // Keep the curtain in the DOM (transparent) so we can fade back to black on outbound nav.
