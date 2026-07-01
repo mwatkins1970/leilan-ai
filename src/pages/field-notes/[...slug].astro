@@ -65,7 +65,7 @@ if (note.isBook) {
     <div class="cta-row">
         <a class="sanctuary-cta" href="/">inner cloister</a>
         {note.sanctuaryUrl
-            ? <a class="chamber-cta wall-visit" href={note.sanctuaryUrl}>Visit the {note.wallLabel} wall in the {note.chamberTitle}</a>
+            ? <a class="chamber-cta wall-visit" href={note.sanctuaryUrl} aria-label={`Visit the ${note.wallLabel} wall in the ${note.chamberTitle}`}>temple wall</a>
             : <a class="chamber-cta" href="/immersive">the void</a>}
     </div>
 

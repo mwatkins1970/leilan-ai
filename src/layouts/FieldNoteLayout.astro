@@ -47,7 +47,7 @@ const ogImageUrl = new URL(ogImage, Astro.site).href;
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Space+Mono:wght@400;700&family=Tangerine:wght@400;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Space+Mono:wght@400;700&family=Tangerine:wght@400;700&display=swap" rel="stylesheet" />
   </head>
   <body>
     <main class="field-note">
@@ -59,8 +59,6 @@ const ogImageUrl = new URL(ogImage, Astro.site).href;
         <a href="/field-notes/">field notes</a>
         <span aria-hidden="true">·</span>
         <a class="fn-foot-enter" href="/">inner cloister</a>
-        <span aria-hidden="true">·</span>
-        <a href="/immersive">the void</a>
         <span aria-hidden="true">·</span>
         <a href="/archive">archive</a>
         <span aria-hidden="true">·</span>
@@ -96,6 +94,7 @@ const ogImageUrl = new URL(ogImage, Astro.site).href;
       body {
         margin: 0;
         min-height: 100vh;
+        overflow-x: hidden;
         font-family: var(--font-body);
         background-color: var(--bg);
         background-image: var(--bg-image);
@@ -210,6 +209,7 @@ const ogImageUrl = new URL(ogImage, Astro.site).href;
         font-size: 1.95rem;
         line-height: 1;
         letter-spacing: 0.01em;
+        animation: ctaPulse 5s ease-in-out infinite;              /* warm glow-breath */
       }
       /* "the void" — a glitching terminal */
       .field-note .chamber-cta {
@@ -217,16 +217,18 @@ const ogImageUrl = new URL(ogImage, Astro.site).href;
         font-size: 0.92rem;
         letter-spacing: 0.16em;
         text-transform: lowercase;
-        animation: voidGlitch 7s steps(1) infinite;
+        animation: voidGlitch 7s steps(1) infinite, ctaPulse 5s ease-in-out infinite;
+        animation-delay: 0s, -2.5s;                               /* pulse in opposite phase */
       }
-      /* The wall-note "Visit the … wall" CTA keeps a calm serif (long label). */
+      /* The wall-note CTA — carved "temple wall" inscription (Cinzel caps). */
       .field-note .wall-visit {
-        font-family: Georgia, "Times New Roman", serif;
-        font-style: italic;
-        font-size: 1.04rem;
-        letter-spacing: 0.03em;
-        text-transform: none;
-        animation: none;
+        font-family: 'Cinzel', Georgia, serif;
+        font-style: normal;
+        font-size: 0.82rem;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        animation: ctaPulse 5s ease-in-out infinite;
+        animation-delay: -2.5s;                                   /* opposite phase, no glitch */
       }
       /* The aura that pokes through the page — a blurred golden halo behind the egg. */
       .field-note .sanctuary-cta::before,
@@ -247,6 +249,26 @@ const ogImageUrl = new URL(ogImage, Astro.site).href;
         0%, 100% { opacity: 0.3;  transform: scale(0.94); }
         50%      { opacity: 0.85; transform: scale(1.1); }
       }
+      /* The egg breathing slowly — a gentle swell + warm glow (a bare glow is
+         invisible gold-on-cream, so the scale carries it). Paired eggs run
+         opposite phase, so they alternate. */
+      @keyframes ctaPulse {
+        0%, 100% {
+          transform: scale(0.985);
+          box-shadow:
+            inset 0 1px 0 rgba(243, 217, 138, 0.14),
+            0 6px 22px rgba(0, 0, 0, 0.5),
+            0 0 10px rgba(176, 132, 58, 0.15);
+        }
+        50% {
+          transform: scale(1.04);
+          box-shadow:
+            inset 0 1px 0 rgba(243, 217, 138, 0.28),
+            0 9px 28px rgba(0, 0, 0, 0.5),
+            0 0 34px rgba(243, 217, 138, 0.6),
+            0 0 14px rgba(176, 132, 58, 0.5);
+        }
+      }
       @keyframes voidGlitch {
         0%, 86%, 100% { text-shadow: 0 0 10px rgba(243,217,138,0.55), 0 0 26px rgba(216,184,106,0.3); }
         88% { text-shadow: -2px 0 rgba(0,255,231,0.75), 2px 0 rgba(255,42,109,0.75), 0 0 10px rgba(243,217,138,0.35); }
@@ -257,6 +279,7 @@ const ogImageUrl = new URL(ogImage, Astro.site).href;
       /* Golden glow-up + swell on hover (kept — you liked it). */
       .field-note .sanctuary-cta:hover,
       .field-note .chamber-cta:hover {
+        animation: none;                         /* hover glow-up wins over the breath */
         transform: translateY(-3px) scale(1.04);
         color: #fff3cf;
         border-color: rgba(243, 217, 138, 0.7);
@@ -275,10 +298,12 @@ const ogImageUrl = new URL(ogImage, Astro.site).href;
       @media (prefers-reduced-motion: reduce) {
         .field-note .sanctuary-cta::before,
         .field-note .chamber-cta::before { animation: none; opacity: 0.5; }
-        .field-note .chamber-cta { animation: none; }
+        .field-note .sanctuary-cta,
+        .field-note .chamber-cta,
+        .field-note .wall-visit { animation: none; }
       }
 
-      .field-note .fn-body { font-size: var(--fs-body); }
+      .field-note .fn-body { font-size: var(--fs-body); overflow-wrap: break-word; }
       .field-note .fn-body p { margin: 0 0 1.15em; }
       .field-note .fn-body h2 {
         font-family: var(--font-head);
@@ -352,6 +377,32 @@ const ogImageUrl = new URL(ogImage, Astro.site).href;
       .fn-foot-nav .fn-foot-enter:hover { color: var(--gold); border-bottom-color: var(--gold); }
       .fn-foot-nav span { opacity: 0.4; margin: 0 0.5rem; }
       .fn-foot-note { color: var(--muted); font-size: 0.82rem; font-style: italic; margin: 1.1rem 0 0; opacity: 0.7; }
+
+      /* ---- Phone portrait: a comfortable reading pass (desktop untouched) ---- */
+      @media (max-width: 600px) {
+        .field-note {
+          width: calc(100% - 2.6rem);            /* ~21px side margins */
+          padding-top: clamp(2rem, 9vw, 3rem);
+        }
+        .field-note .breadcrumb { margin-bottom: 1.8rem; }
+
+        /* Two eggs read better offset on a narrow screen: first upper-left,
+           second lower-right — a diagonal rather than a centred stack. */
+        .field-note .cta-row {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 1.4rem;
+          margin-bottom: 3rem;
+        }
+        .field-note .cta-row > :first-child { align-self: flex-start; }
+        .field-note .cta-row > :last-child  { align-self: flex-end; }
+        .field-note .sanctuary-cta,
+        .field-note .chamber-cta { max-width: 86vw; }
+
+        /* Roomier footer so the inline nav links are easy to tap */
+        .fn-foot { padding: 2rem 1rem 2.6rem; }
+        .fn-foot-nav { line-height: 2.1; }
+      }
     </style>
   </body>
 </html>
