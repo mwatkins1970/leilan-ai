@@ -621,6 +621,24 @@ body:not(.sky-mode) .sky-toggle { display: none; }
     pointer-events: none;
 }
 
+/* Image-label variant: the stylised word+arrow PNGs are centred with
+   transform: translateX(-50%). The wordDissolve keyframes above only set
+   transform: scale(), which would replace that translate and make the cluster
+   jump/slide to the right for a frame — very visible on deep-link ?open=1
+   arrivals (e.g. the rescue wall). These keyframes carry the -50% through so it
+   dissolves in place. Higher specificity (three classes) wins over the rule
+   above regardless of source order. */
+@keyframes wordDissolveCentered {
+    0%   { opacity: 1;   filter: blur(0px)  brightness(1);   transform: translateX(-50%) scale(1); }
+    18%  { opacity: 1;   filter: blur(0px)  brightness(2.2); transform: translateX(-50%) scale(1.06); }
+    40%  { opacity: 0.7; filter: blur(3px)  brightness(1.5); transform: translateX(-50%) scale(1.08); }
+    100% { opacity: 0;   filter: blur(16px) brightness(1);   transform: translateX(-50%) scale(0.88); }
+}
+.wall-word.wall-word-img.dissolving {
+    animation: wordDissolveCentered 0.75s ease-in forwards;
+    pointer-events: none;
+}
+
 /* Image-based label (transparency PNG of stylised text in place of the word) */
 .wall-word-img {
     line-height: 0;
