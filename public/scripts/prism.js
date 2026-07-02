@@ -2053,8 +2053,16 @@ function openWordOnWall(wallNum) {
         wordEl.style.display = 'none';
         frame.classList.add('visible');
         activeTextBody = frame.querySelector('.wall-text-body');
-        // Hide archway overlay while text frame is open (it intercepts mousedown for scroll)
-        if (archwayOverlay && wallNum === getFacingWall()) archwayOverlay.style.display = 'none';
+        // Hide archway overlay while text frame is open (it otherwise intercepts
+        // mousedown for scroll) — EXCEPT on a door wall (e.g. Research Lab's rescue
+        // wall, which is both a word-panel and the door back to the central chamber).
+        // There the overlay is the door's only live hit-target and must stay on top
+        // of the open frame; otherwise the door goes dead (no "return to centre"
+        // tooltip) and clicks in the door zone fall through to the wall text's links.
+        const _wallHasDoor = !!window.PRISM_CONFIG?.destinations?.[wallNum];
+        if (archwayOverlay && wallNum === getFacingWall() && !_wallHasDoor) {
+            archwayOverlay.style.display = 'none';
+        }
         updateWallPortraitReader();   // sync the portrait reader if already in portrait
     }
     wordEl.addEventListener('animationend', revealFrame, { once: true });
