@@ -424,23 +424,25 @@ export const prisms: Record<string, PrismConfig> = {
         // swarm overlay (initAsciiSwarm) is what fills each wall visually.
         wallBorder: false,
         walls: [
+            // No wall bg image — panels render dark via CSS ([data-prism-id="ascii-gallery"]
+            // .wall-panel background-color). Omitting bg avoids fetching wall-bg.jpg (~2.5 MB)
+            // for an image that was only ever display:none here.
             // Wall 1 — facing on entry — ASCII molecules only
-            { archway: false, bg: '/images/wall-bg.jpg', content: { type: 'ascii-wall' } },
+            { archway: false, content: { type: 'ascii-wall' } },
             // Wall 2
-            { archway: false, bg: '/images/wall-bg.jpg', content: { type: 'ascii-wall' } },
+            { archway: false, content: { type: 'ascii-wall' } },
             // Wall 3
-            { archway: false, bg: '/images/wall-bg.jpg', content: { type: 'ascii-wall' } },
+            { archway: false, content: { type: 'ascii-wall' } },
             // Wall 4 — door back to Scriptorium (face Scriptorium wall 1, the orb wall)
             {
                 archway: true,
                 destination: '/prism/gpt3-library?wall=1',
-                bg: '/images/wall-bg.jpg',
                 content: { type: 'ascii-wall' },
             },
             // Wall 5
-            { archway: false, bg: '/images/wall-bg.jpg', content: { type: 'ascii-wall' } },
+            { archway: false, content: { type: 'ascii-wall' } },
             // Wall 6
-            { archway: false, bg: '/images/wall-bg.jpg', content: { type: 'ascii-wall' } },
+            { archway: false, content: { type: 'ascii-wall' } },
         ],
     },
 
