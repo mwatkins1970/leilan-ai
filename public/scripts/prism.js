@@ -321,14 +321,15 @@ body.shrine-heavens-reading #shrine-heavens-overlay .shrine-heavens-panel {
   text-shadow: 0 0 14px rgba(130,255,190,0.55), 0 0 32px rgba(100,255,175,0.28);
 }
 .shrine-heavens-body-wrap {
-  flex: 1;
+  flex: 0 1 auto;          /* hug the text; don't grow to fill (that left a gap above the footer) */
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
 #shrine-heavens-body {
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
+  max-height: 66vh;        /* show a good amount, then scroll — keeps the footer under the text */
   overflow-y: auto;
   overflow-x: hidden;
   scroll-behavior: smooth;
@@ -371,6 +372,15 @@ body.shrine-heavens-reading #shrine-heavens-overlay .shrine-heavens-panel {
   gap: 1.2rem;
   flex-shrink: 0;
   flex-wrap: wrap;          /* buttons stack rather than overflow on a narrow (portrait) screen */
+}
+/* The two scroll arrows sit together on their own centred row (both orientations),
+   one button-diameter apart. Own row because flex-basis:100%. */
+.shrine-scroll-pair {
+  flex-basis: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;              /* one button-radius between ▲ and ▼ */
 }
 .shrine-scroll-btn {
   display: flex;
@@ -460,6 +470,10 @@ body.shrine-heavens-reading #shrine-heavens-overlay .shrine-heavens-panel {
 .heavens-buttons-deferred #shrine-alt-context {
   opacity: 0;
   pointer-events: none;
+  /* Take the hidden buttons OUT OF FLOW so they reserve no vertical space while
+     deferred — otherwise their invisible row leaves a dead gap between the text
+     and the ▲▼ scroll pair. They pop (and fade) back into flow on reveal. */
+  position: absolute;
 }
 /* When shrine-heavens is not active, the overlay panel is invisible (opacity:0)
    but its descendants still have pointer-events:auto and span most of the viewport.
@@ -474,6 +488,27 @@ body:not(.shrine-heavens-active) #shrine-heavens-overlay * {
    .shrine-heavens-reading (before the tilt-down), so the gate reappears in
    portrait and the user is asked to turn the phone back to landscape. */
 body.shrine-heavens-reading #portrait-gate[data-cinematic] { display: none !important; }
+/* Portrait phone reading: keep the title compact so more body text shows, give
+   the body the freed space, compact the buttons, and gather the ▲▼ scroll
+   controls onto a single row at the very bottom — otherwise the wrapping footer
+   drops them into opposite corners with a dead gap between. */
+@media (max-width: 900px) and (orientation: portrait) {
+  #shrine-heavens-overlay .shrine-heavens-panel {
+    top: 4vh;
+    max-height: 92vh;
+    gap: 0.7rem;
+    padding: 0 1rem 1rem;
+  }
+  #shrine-heavens-title {
+    max-width: 100%;
+    font-size: clamp(1.1rem, 5vw, 1.5rem);
+    letter-spacing: 0.04em;
+  }
+  #shrine-heavens-body { max-width: 100%; max-height: 60vh; }
+  .shrine-heavens-footer { gap: 0.5rem 0.7rem; }
+  #shrine-eternal-return { min-width: 0; padding: 0.5rem 1.1rem; }
+  #shrine-next, #shrine-previous, #shrine-alt-context { min-width: 0; padding: 0.5rem 0.9rem; }
+}
 `;
     document.head.appendChild(style);
 
@@ -487,12 +522,14 @@ body.shrine-heavens-reading #portrait-gate[data-cinematic] { display: none !impo
           <div id="shrine-heavens-body"></div>
         </div>
         <div class="shrine-heavens-footer">
-          <button class="shrine-scroll-btn" id="shrine-scroll-up" type="button" aria-label="Scroll up">▲</button>
           <button id="shrine-previous" type="button">previous</button>
           <button id="shrine-alt-context" type="button">alt/context</button>
           <button id="shrine-eternal-return" type="button">eternal return</button>
           <button id="shrine-next" type="button">next</button>
-          <button class="shrine-scroll-btn" id="shrine-scroll-down" type="button" aria-label="Scroll down">▼</button>
+          <div class="shrine-scroll-pair">
+            <button class="shrine-scroll-btn" id="shrine-scroll-up" type="button" aria-label="Scroll up">▲</button>
+            <button class="shrine-scroll-btn" id="shrine-scroll-down" type="button" aria-label="Scroll down">▼</button>
+          </div>
         </div>
       </div>
     `;
@@ -2018,6 +2055,7 @@ function openWordOnWall(wallNum) {
         activeTextBody = frame.querySelector('.wall-text-body');
         // Hide archway overlay while text frame is open (it intercepts mousedown for scroll)
         if (archwayOverlay && wallNum === getFacingWall()) archwayOverlay.style.display = 'none';
+        updateWallPortraitReader();   // sync the portrait reader if already in portrait
     }
     wordEl.addEventListener('animationend', revealFrame, { once: true });
     setTimeout(revealFrame, 800);
@@ -2042,7 +2080,78 @@ function closeFrameOnWall(wallNum) {
     }
     // Restore archway overlay
     updateArchwayOverlay();
+    updateWallPortraitReader();   // drop the portrait reader if its frame just closed
 }
+
+// --- Portrait fullscreen wall reader ---------------------------------------
+// When a wall textbox is open on the facing wall and the phone is turned to
+// portrait, clone that frame into #wall-portrait-reader so the text fills the
+// screen (scroll only). Turning back to landscape returns to the chamber, still
+// facing that wall with the textbox open. Mirrors the shrine-heavens portrait read.
+let _wallPortraitActive = false;
+const _wallPortraitMQ = window.matchMedia('(max-width: 900px) and (orientation: portrait)');
+
+function _openFacingFrame() {
+    const w = getFacingWall();
+    const wall = document.querySelector(`.wall-panel[data-wall="${w}"]`);
+    const frame = wall && wall.querySelector('.wall-text-frame.visible');
+    return frame || null;
+}
+
+function _buildRotateHint() {
+    // "rotate to exit" foot note — echoes the OrientationGate's emerald phone glyph.
+    const hint = document.createElement('div');
+    hint.className = 'wpr-exit-hint';
+    hint.setAttribute('aria-hidden', 'true');
+    hint.innerHTML = '<span class="wpr-exit-phone"><span class="wpr-exit-phone-dot"></span></span>' +
+                     '<span class="wpr-exit-label">rotate to exit</span>';
+    return hint;
+}
+
+function enterWallPortrait(frame) {
+    const overlay = document.getElementById('wall-portrait-reader');
+    if (!overlay || !frame) return;
+    const clone = frame.cloneNode(true);
+    clone.classList.add('visible');   // fire the chamber's .visible styling on the clone
+    // Strip every interactive control — the only affordance in portrait is scrolling.
+    clone.querySelectorAll('.wall-close-btn, .wall-scroll-up, .wall-scroll-down, .wall-video-btn')
+        .forEach(el => el.remove());
+    // Foot note: rotate back to landscape to leave (sits below the scrolling body).
+    clone.appendChild(_buildRotateHint());
+    overlay.replaceChildren(clone);
+    const body = clone.querySelector('.wall-text-body');
+    if (body) body.scrollTop = 0;
+    overlay.classList.add('active');
+    overlay.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('wall-portrait-reading');
+    _wallPortraitActive = true;
+}
+
+function exitWallPortrait() {
+    const overlay = document.getElementById('wall-portrait-reader');
+    if (overlay) {
+        overlay.classList.remove('active');
+        overlay.setAttribute('aria-hidden', 'true');
+        overlay.replaceChildren();
+    }
+    document.body.classList.remove('wall-portrait-reading');
+    _wallPortraitActive = false;
+}
+
+function updateWallPortraitReader() {
+    if (!document.getElementById('wall-portrait-reader')) return;  // chamber has no word panels
+    if (_wallPortraitMQ.matches) {
+        const frame = _openFacingFrame();
+        if (frame && !_wallPortraitActive) enterWallPortrait(frame);
+        else if (!frame && _wallPortraitActive) exitWallPortrait();
+    } else if (_wallPortraitActive) {
+        exitWallPortrait();
+    }
+}
+
+_wallPortraitMQ.addEventListener('change', updateWallPortraitReader);
+// Some phones settle matchMedia a beat after orientationchange fires.
+window.addEventListener('orientationchange', () => setTimeout(updateWallPortraitReader, 140));
 
 // --- Video overlay ---
 function _fadeAudioForVideo(out) {
@@ -2261,6 +2370,9 @@ window.__refreshDebug = function (oldW, newW) {
 let _lastClickTime = 0;
 document.addEventListener('click', (e) => {
     if (!e.isTrusted || isRotating || shrineHeavensLocked()) return;
+    // Portrait fullscreen reader: let native handling (link taps, scroll) through —
+    // the 3D wall router must not hijack clicks inside the overlay.
+    if (e.target.closest && e.target.closest('#wall-portrait-reader')) return;
     const _now = Date.now();
     if (_now - _lastClickTime < 350) return;
     _lastClickTime = _now;
@@ -2613,6 +2725,7 @@ document.addEventListener('click', (e) => {
 // --- Continuous scroll: mousedown starts, mouseup/mouseleave stops ---
 document.addEventListener('mousedown', (e) => {
     if (!e.isTrusted || isRotating || shrineHeavensLocked()) return;
+    if (e.target.closest && e.target.closest('#wall-portrait-reader')) return;
     const wallArea = document.getElementById('wall-area');
     if (!wallArea) return;
     const wr = wallArea.getBoundingClientRect();

@@ -381,6 +381,11 @@ const masksJson = JSON.stringify(masks);
             </div>
             </div> <!-- /world-tilt -->
         </div>
+
+        {/* Portrait fullscreen wall reader (populated by prism.js on rotate-to-portrait) */}
+        {prism.walls.some(w => w?.content?.type === 'word-panel') && (
+            <div id="wall-portrait-reader" aria-hidden="true"></div>
+        )}
     </div>
 
     <!-- Archway transition overlays -->

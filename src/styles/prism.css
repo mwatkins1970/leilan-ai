@@ -119,7 +119,12 @@ body {
     inset: 0;
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    /* `fill` maps the square bracket overlay exactly onto the wall panel, so the
+       corner brackets keep consistent margins from the true wall corners at every
+       viewport (cover cropped ~0.4% off the sides, tightening the horizontal margin).
+       The %-based text frame references the same panel box, so its corners register
+       onto the brackets identically at all landscape sizes. */
+    object-fit: fill;
     object-position: center center;
     z-index: 0;
     pointer-events: none;
@@ -457,7 +462,11 @@ body {
 /* --- Navigation arrows --- */
 .nav-arrow {
     position: fixed;
-    bottom: 24px;
+    /* Keep the arrows in a bottom band that shrinks with viewport height, so on
+       short/landscape phones they hug the lower corners and never rise into the
+       wall-label "words" (which live in the upper-middle of the scene). On normal
+       and tall screens the clamps resolve to the original 24px / 80px. */
+    bottom: clamp(8px, 2.4vh, 24px);
     top: auto;
     transform: none;
     z-index: 100;
@@ -465,7 +474,7 @@ body {
     align-items: center;
     justify-content: center;
     width: 48px;
-    height: 80px;
+    height: clamp(46px, 13vh, 80px);
     text-decoration: none;
     opacity: 0.85;
     transition: opacity 0.3s, background 0.3s, border-color 0.3s;
@@ -3074,3 +3083,174 @@ body.day-mode .cinematic-btn:hover {
     border-color: rgba(255, 255, 255, 0.90);
     color: rgba(255, 255, 255, 1);
 }
+
+/* ============================================================================
+   Portrait fullscreen wall reader
+   ----------------------------------------------------------------------------
+   When a wall textbox is open on the facing wall and the user turns a phone to
+   portrait, prism.js clones that frame into #wall-portrait-reader so the text
+   fills the screen (scroll only — the ×, ▲/▼ and video buttons are stripped
+   from the clone). The clone keeps its .wall-text-frame / .wall-text-body
+   classes and lives inside .chamber, so every per-chamber look (OVS vermillion,
+   the serif fonts, link colours) is inherited from the cascade for free.
+   To leave, the user rotates back to landscape (handled in prism.js), landing
+   back in the chamber still facing that wall with the textbox open.
+   ============================================================================ */
+#wall-portrait-reader {
+    position: absolute;
+    inset: 0;
+    z-index: 2000;              /* .chamber isn't a stacking context, so this sits
+                                   above the wall-area (z1) and nav-arrows (z100) */
+    display: none;
+    background: #05060a;        /* solid backdrop under the (semi-transparent) frame */
+}
+#wall-portrait-reader.active { display: block; }
+
+/* Strip the wall-sized positioning off the cloned frame and let it fill the screen.
+   The id gives these rules a higher specificity than any .chamber[...] frame rule,
+   so only position/size/chrome are overridden — colours and fonts still cascade. */
+#wall-portrait-reader .wall-text-frame {
+    position: absolute;
+    inset: 0;
+    left: 0;
+    top: 0;
+    right: auto;
+    bottom: auto;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    /* The chamber's reveal keyframes (frameFadeInFull*) run on .visible and, being
+       `forwards`, HOLD a translate(-50%,-50%) that would yank this fullscreen clone
+       off the top-left corner. A CSS animation beats a normal `transform` declaration,
+       so the animation must be switched off here for `transform: none` to take hold. */
+    animation: none !important;
+    transform: none !important;
+    border: none;
+    box-shadow: none;
+    display: flex;
+}
+#wall-portrait-reader .wall-text-body {
+    flex: 1;
+    padding: max(26px, env(safe-area-inset-top)) max(22px, env(safe-area-inset-right)) 12px
+             max(22px, env(safe-area-inset-left));
+    -webkit-overflow-scrolling: touch;
+}
+
+/* "rotate to exit" foot note — a compact echo of the OrientationGate: emerald mono
+   with a small rotating-phone glyph. Sits below the scrolling body (flex item), so it
+   never covers the text. Decorative only — rotating the device is what actually exits. */
+.wpr-exit-hint {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    padding: 0.5rem 0.9rem max(0.55rem, env(safe-area-inset-bottom));
+    pointer-events: none;
+    color: #5eefa2;
+    font-family: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+    font-weight: 300;
+    font-size: 0.8rem;
+    letter-spacing: 0.09em;
+    text-transform: lowercase;
+    text-shadow: 0 0 10px rgba(94, 239, 162, 0.55), 0 0 24px rgba(94, 239, 162, 0.22);
+}
+.wpr-exit-phone {
+    flex: 0 0 auto;
+    width: 15px;
+    height: 26px;
+    border: 2px solid currentColor;
+    border-radius: 4px;
+    position: relative;
+    box-shadow: 0 0 10px rgba(94, 239, 162, 0.35);
+    animation: wprPhoneTurn 3.6s ease-in-out infinite;
+}
+.wpr-exit-phone-dot {
+    position: absolute;
+    bottom: 3px;
+    left: 50%;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+    transform: translateX(-50%);
+    opacity: 0.85;
+}
+@keyframes wprPhoneTurn {
+    0%, 26%   { transform: rotate(0deg); }
+    54%, 100% { transform: rotate(90deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .wpr-exit-phone { animation: none; }
+}
+
+/* While the portrait reader is open, suppress the rotate-to-landscape gate (so the
+   text is readable in portrait) and hide the chamber chrome — the only action is to
+   scroll, or rotate back to landscape to leave. */
+body.wall-portrait-reading #portrait-gate[data-cinematic] { display: none !important; }
+body.wall-portrait-reading .nav-arrow,
+body.wall-portrait-reading .sky-toggle,
+body.wall-portrait-reading .prism-minimap,
+body.wall-portrait-reading .vol-ctl { display: none !important; }
+
+/* ============================================================================
+   Combined word + arrow (+ "start here") cluster images
+   ----------------------------------------------------------------------------
+   Each textbox wall's word, clockwise path-arrow and optional start marker are
+   now baked into ONE transparency PNG (…_combined.png), generated to match the
+   desktop arrangement. Fusing them means the arrow can never drift above/onto
+   the word at other viewport ratios — it's one image. The cluster is centred
+   horizontally and absolutely placed at its captured top/height (vh, measured
+   off the desktop layout). startImage/arrowImage were dropped from these walls
+   in prisms.ts, so the old per-wall arrow/start rules above are now inert.
+   ============================================================================ */
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="1"] .wall-word-img,
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="2"] .wall-word-img,
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="3"] .wall-word-img,
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="4"] .wall-word-img,
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="5"] .wall-word-img,
+.chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="1"] .wall-word-img,
+.chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="2"] .wall-word-img,
+.chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="3"] .wall-word-img,
+.chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="5"] .wall-word-img,
+.chamber[data-prism-id="mythopoeic-archive"] .wall-panel[data-wall="1"] .wall-word-img,
+.chamber[data-prism-id="mythopoeic-archive"] .wall-panel[data-wall="2"] .wall-word-img,
+.chamber[data-prism-id="mythopoeic-archive"] .wall-panel[data-wall="3"] .wall-word-img,
+.chamber[data-prism-id="mythopoeic-archive"] .wall-panel[data-wall="5"] .wall-word-img {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    filter: none;               /* the word's drop-shadow is baked into the PNG */
+}
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="1"] .wall-word-img img,
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="2"] .wall-word-img img,
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="3"] .wall-word-img img,
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="4"] .wall-word-img img,
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="5"] .wall-word-img img,
+.chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="1"] .wall-word-img img,
+.chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="2"] .wall-word-img img,
+.chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="3"] .wall-word-img img,
+.chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="5"] .wall-word-img img,
+.chamber[data-prism-id="mythopoeic-archive"] .wall-panel[data-wall="1"] .wall-word-img img,
+.chamber[data-prism-id="mythopoeic-archive"] .wall-panel[data-wall="2"] .wall-word-img img,
+.chamber[data-prism-id="mythopoeic-archive"] .wall-panel[data-wall="3"] .wall-word-img img,
+.chamber[data-prism-id="mythopoeic-archive"] .wall-panel[data-wall="5"] .wall-word-img img {
+    height: 100%;
+    width: auto;
+    max-width: none;
+    transform: none;
+}
+/* Per-wall placement (top / height in vh) captured from the desktop cluster. */
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="1"] .wall-word-img { top: 19.73vh; height: 29.42vh; }
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="2"] .wall-word-img { top: 32.94vh; height: 16.21vh; }
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="3"] .wall-word-img { top: 29.97vh; height: 19.18vh; }
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="4"] .wall-word-img { top: 31.84vh; height: 17.31vh; }
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="5"] .wall-word-img { top: 29.97vh; height: 19.18vh; }
+.chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="1"] .wall-word-img { top: 23.57vh; height: 27.53vh; }
+.chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="2"] .wall-word-img { top: 30.85vh; height: 20.24vh; }
+.chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="3"] .wall-word-img { top: 30.88vh; height: 20.22vh; }
+.chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="5"] .wall-word-img { top: 30.78vh; height: 20.31vh; }
+.chamber[data-prism-id="mythopoeic-archive"] .wall-panel[data-wall="1"] .wall-word-img { top: 21.03vh; height: 30.98vh; }
+.chamber[data-prism-id="mythopoeic-archive"] .wall-panel[data-wall="2"] .wall-word-img { top: 31.56vh; height: 20.40vh; }
+.chamber[data-prism-id="mythopoeic-archive"] .wall-panel[data-wall="3"] .wall-word-img { top: 31.56vh; height: 20.35vh; }
+.chamber[data-prism-id="mythopoeic-archive"] .wall-panel[data-wall="5"] .wall-word-img { top: 31.56vh; height: 20.98vh; }
