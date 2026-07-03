@@ -202,6 +202,10 @@ export const prisms: Record<string, PrismConfig> = {
             {
                 archway: false,
                 bg: '/images/wall-bg.jpg',
+                // Hosted on Cloudflare R2 (zero egress, off Netlify's bandwidth budget).
+                // The ▶ video button renders only when videoSrc is set; video is
+                // click-to-load (no fetch until clicked).
+                videoSrc: 'https://pub-5a2d69eb071c44f6bcc6eb73b02d9328.r2.dev/research-gpt3.mp4',
                 content: {
                     type: 'word-panel',
                     label: 'GPT-3',
@@ -527,7 +531,7 @@ export const prisms: Record<string, PrismConfig> = {
                     labelImage: '/images/MYTHOS_Crossbones.webp',
                     text: wallText('mythopoeic-archive-crossbones.html'),
                 },
-                videoSrc: '/video/crossbones.mp4',
+                videoSrc: 'https://pub-5a2d69eb071c44f6bcc6eb73b02d9328.r2.dev/crossbones2.mp4',
             },
         ],
     },
