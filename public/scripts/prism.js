@@ -148,6 +148,16 @@ const IMG_ASPECT = 2766 / 2776;
 // the wedges preserved).
 const COVER_K = 1.78;
 const COVER_MAX_VIEWPORT_H = 560; // px; above this we treat it as a laptop/desktop, not a landscape phone
+// Hard ceiling on the zoom: even on a wide/short landscape phone, never zoom so
+// far that the night sky above the ceiling wedges is cropped away — a sliver of
+// sky must always show. Filling the very last edge of width is less important
+// than keeping the open-air-cathedral framing. Tunable: raise it to fill more
+// width (less sky), lower it to guarantee more sky.
+const COVER_MAX = 1.06;
+// Half-width of the visible 3-wall front, as a fraction of viewport-height × cover.
+// COVER_K/2 is where the prism "just fills" the width, i.e. the outer wall corners —
+// so the pillarbox edge sits there. Tune up to nudge the black edges inward.
+const PILLAR_EDGE_K = COVER_K / 2;
 function updateWallSize() {
     const wallArea = document.getElementById('wall-area');
     if (!wallArea) return;
@@ -155,10 +165,23 @@ function updateWallSize() {
     const wallW = h * IMG_ASPECT;
     wallArea.style.setProperty('--wall-w', wallW + 'px');
     wallArea.style.setProperty('--apothem', (wallW * Math.sqrt(3) / 2) + 'px');
-    const cover = window.innerHeight <= COVER_MAX_VIEWPORT_H
+    const coverRaw = window.innerHeight <= COVER_MAX_VIEWPORT_H
         ? Math.max(1, (window.innerWidth / window.innerHeight) / COVER_K)
         : 1;
+    const cover = Math.min(coverRaw, COVER_MAX);
     wallArea.style.setProperty('--chamber-cover', cover.toFixed(4));
+
+    // Pillarbox: only needed on the wide/short (landscape-phone) case, where the
+    // zoom got CAPPED (coverRaw > COVER_MAX) so the prism can't fill the width and
+    // the outer-wall artefact shows at the edges. On normal desktop cover is 1, the
+    // prism sits at its natural size and the edges are just sky — so NO bars there.
+    const capped = coverRaw > COVER_MAX;
+    const sceneHalfW = PILLAR_EDGE_K * window.innerHeight * cover;
+    const barW = capped ? Math.max(0, window.innerWidth / 2 - sceneHalfW) : 0;
+    const pl = document.getElementById('pillar-left');
+    const pr = document.getElementById('pillar-right');
+    if (pl) pl.style.width = barW + 'px';
+    if (pr) pr.style.width = barW + 'px';
 }
 updateWallSize();
 window.addEventListener('resize', updateWallSize);
@@ -2130,9 +2153,22 @@ function enterWallPortrait(frame) {
     if (!overlay || !frame) return;
     const clone = frame.cloneNode(true);
     clone.classList.add('visible');   // fire the chamber's .visible styling on the clone
-    // Strip every interactive control — the only affordance in portrait is scrolling.
-    clone.querySelectorAll('.wall-close-btn, .wall-scroll-up, .wall-scroll-down, .wall-video-btn')
+    // Strip the controls that don't belong in portrait (scroll is the only text
+    // affordance), but KEEP an enabled video button so a reader can also watch the
+    // wall's video. Any disabled/placeholder video button is removed.
+    clone.querySelectorAll('.wall-close-btn, .wall-scroll-up, .wall-scroll-down, .wall-video-btn.wall-video-disabled')
         .forEach(el => el.remove());
+    // cloneNode drops event listeners, and the chamber's capture-phase click
+    // router only covers the walls — so wire the kept video button directly, and
+    // mount the video over this fullscreen reader (not the hidden wall behind it).
+    const vbtn = clone.querySelector('.wall-video-btn[data-video-src]');
+    if (vbtn) {
+        vbtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openWallVideo(getFacingWall(), overlay);
+        });
+    }
     // Foot note: rotate back to landscape to leave (sits below the scrolling body).
     clone.appendChild(_buildRotateHint());
     overlay.replaceChildren(clone);
@@ -2180,18 +2216,46 @@ function _fadeAudioForVideo(out) {
     g.linearRampToValueAtTime(out ? 0 : 1, now + (out ? 3 : 8));
 }
 
-function openWallVideo(wallNum) {
+// Diagonal opposing-arrows icons: expand (arrows to opposite corners) / collapse
+// (arrows to centre). Inline SVG so they render identically everywhere.
+const _VIDEO_FS_EXPAND = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>';
+const _VIDEO_FS_COLLAPSE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 9h-6V3"/><path d="M3 15h6v6"/><path d="M15 9l6-6"/><path d="M9 15l-6 6"/></svg>';
+
+// Toggle fullscreen for a video overlay. Fullscreens the overlay (so our own
+// controls stay visible); falls back to native <video> fullscreen on iOS.
+function toggleVideoFullscreen(overlay) {
+    if (!overlay) return;
+    const video = overlay.querySelector('video');
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+        (document.exitFullscreen || document.webkitExitFullscreen || function () {}).call(document);
+    } else if (overlay.requestFullscreen) {
+        overlay.requestFullscreen().catch(() => {});
+    } else if (overlay.webkitRequestFullscreen) {
+        overlay.webkitRequestFullscreen();
+    } else if (video && video.webkitEnterFullscreen) {
+        video.webkitEnterFullscreen();
+    }
+}
+
+function openWallVideo(wallNum, mount) {
     const wall = document.querySelector(`.wall-panel[data-wall="${wallNum}"]`);
     if (!wall) return;
     const videoBtn = wall.querySelector('.wall-video-btn[data-video-src]');
     const src = videoBtn?.dataset?.videoSrc;
     if (!src) return;
 
-    // Close text frame
-    closeFrameOnWall(wallNum);
+    // Where the video overlay mounts. Default = the wall panel (landscape). When
+    // called from the portrait fullscreen reader, mount is that reader overlay, so
+    // the video plays over it instead of on the hidden wall behind it.
+    const host = mount || wall;
 
-    // Remove any existing overlay on this wall
-    const existing = wall.querySelector('.wall-video-overlay');
+    // Close the wall's text frame only in the normal (wall) case. In portrait we
+    // leave it open — closing it would tear the portrait reader down mid-open, and
+    // we want it still open when the user rotates back to landscape.
+    if (!mount) closeFrameOnWall(wallNum);
+
+    // Remove any existing overlay on the host
+    const existing = host.querySelector('.wall-video-overlay');
     if (existing) existing.remove();
 
     // Fade chamber audio out before video plays
@@ -2201,13 +2265,14 @@ function openWallVideo(wallNum) {
     const overlay = document.createElement('div');
     overlay.className = 'wall-video-overlay';
     overlay.innerHTML = `
+        <button class="wall-video-fs" type="button" aria-label="Fullscreen" title="Fullscreen"></button>
         <button class="wall-video-close" type="button" aria-label="Close video">×</button>
         <div class="wall-video-loader">
             <div class="hourglass"></div>
             <div class="hourglass-label">loading</div>
         </div>
     `;
-    wall.appendChild(overlay);
+    host.appendChild(overlay);
 
     // Fade in
     requestAnimationFrame(() => {
@@ -2245,21 +2310,58 @@ function openWallVideo(wallNum) {
     const closeBtn = overlay.querySelector('.wall-video-close');
     closeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        closeWallVideo(wallNum);
+        closeVideoOverlay(overlay);
     });
+
+    // Fullscreen toggle (upper-left). Fullscreens the whole overlay so our own
+    // ×/⛶ controls stay visible (and the ⛶ becomes the "return to the wall"
+    // affordance); falls back to native video fullscreen on iOS, which can only
+    // fullscreen the <video> itself.
+    // Fullscreen toggle (the capture-phase router also routes clicks here for the
+    // wall overlay; this direct listener covers the portrait-reader overlay, which
+    // the router doesn't reach).
+    const fsBtn = overlay.querySelector('.wall-video-fs');
+    fsBtn.innerHTML = _VIDEO_FS_EXPAND;
+    fsBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleVideoFullscreen(overlay);
+    });
+    // Reflect state on the icon; self-cleans once the overlay is gone.
+    const onFsChange = () => {
+        if (!document.body.contains(overlay)) {
+            document.removeEventListener('fullscreenchange', onFsChange);
+            document.removeEventListener('webkitfullscreenchange', onFsChange);
+            return;
+        }
+        const on = (document.fullscreenElement || document.webkitFullscreenElement) === overlay;
+        fsBtn.innerHTML = on ? _VIDEO_FS_COLLAPSE : _VIDEO_FS_EXPAND;
+        fsBtn.title = on ? 'Exit fullscreen' : 'Fullscreen';
+        fsBtn.setAttribute('aria-label', fsBtn.title);
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('webkitfullscreenchange', onFsChange);
 }
 
-function closeWallVideo(wallNum) {
-    const wall = document.querySelector(`.wall-panel[data-wall="${wallNum}"]`);
-    if (!wall) return;
-    const overlay = wall.querySelector('.wall-video-overlay');
+// Close a specific video overlay wherever it's mounted (wall panel or the
+// portrait reader). The close button keeps a direct reference to its overlay,
+// so this works regardless of where the video was opened.
+function closeVideoOverlay(overlay) {
     if (!overlay) return;
+    // If we're closing while this overlay is fullscreen, drop out of fullscreen first.
+    if ((document.fullscreenElement || document.webkitFullscreenElement) === overlay) {
+        (document.exitFullscreen || document.webkitExitFullscreen || function () {}).call(document);
+    }
     const video = overlay.querySelector('video');
     if (video) { video.pause(); video.src = ''; }
     overlay.classList.remove('visible');
     overlay.addEventListener('transitionend', () => overlay.remove(), { once: true });
     // Fade chamber audio back in
     _fadeAudioForVideo(false);
+}
+
+function closeWallVideo(wallNum) {
+    const wall = document.querySelector(`.wall-panel[data-wall="${wallNum}"]`);
+    closeVideoOverlay(wall && wall.querySelector('.wall-video-overlay'));
 }
 
 function scrollWall(wallNum, direction) {
@@ -2565,6 +2667,20 @@ document.addEventListener('click', (e) => {
     // If a video overlay is showing, handle its close button
     const videoOverlay = wall.querySelector('.wall-video-overlay.visible');
     if (videoOverlay) {
+        // Fullscreen toggle (upper-left) — must be checked BEFORE the outside-video
+        // close below, since the ⛶ sits in the dark margin outside the video and
+        // would otherwise be read as "click outside → close". stopPropagation keeps
+        // the button's own listener from also firing (which would toggle twice).
+        const vFs = videoOverlay.querySelector('.wall-video-fs');
+        if (vFs) {
+            const r = vFs.getBoundingClientRect();
+            if (e.clientX >= r.left - 8 && e.clientX <= r.right + 8 &&
+                e.clientY >= r.top - 8  && e.clientY <= r.bottom + 8) {
+                e.stopPropagation();
+                toggleVideoFullscreen(videoOverlay);
+                return;
+            }
+        }
         const vClose = videoOverlay.querySelector('.wall-video-close');
         if (vClose) {
             const r = vClose.getBoundingClientRect();
@@ -6190,9 +6306,15 @@ if (prismContainer) prismContainer.style.transition = 'none';
     const _wa = document.getElementById('wall-area');
     const promises = [];
 
-    // All <img> elements on the page
+    // All <img> elements on the page. Wait on decode() — download AND decode to a
+    // paint-ready bitmap — not just the load event. Otherwise a large background
+    // (e.g. a moiré WebP) finishes downloading, the curtain lifts after two frames,
+    // and the bitmap paints a beat later: the piecemeal "black wall, then moiré"
+    // reveal. decode() holds the curtain until the image can actually be painted.
     document.querySelectorAll('img').forEach(img => {
-        if (!img.complete) {
+        if (img.decode) {
+            promises.push(img.decode().catch(() => {}));
+        } else if (!img.complete) {
             promises.push(new Promise(r => {
                 img.addEventListener('load', r, { once: true });
                 img.addEventListener('error', r, { once: true });
@@ -6206,11 +6328,11 @@ if (prismContainer) prismContainer.style.transition = 'none';
         if (bg && bg !== 'none') {
             const url = bg.replace(/^url\(["']?/, '').replace(/["']?\)$/, '');
             const preload = new Image();
-            promises.push(new Promise(r => {
-                preload.onload = r;
-                preload.onerror = r;
-                preload.src = url;
-            }));
+            preload.src = url;
+            // decode() = paint-ready (see the <img> note above); fall back to load.
+            promises.push(preload.decode
+                ? preload.decode().catch(() => {})
+                : new Promise(r => { preload.onload = r; preload.onerror = r; }));
         }
     });
 

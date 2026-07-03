@@ -148,6 +148,12 @@ const masksJson = JSON.stringify(masks);
         <!-- Click overlay for archway — sits outside the 3D container -->
         <div class="archway-click-overlay" id="archway-click-overlay"></div>
 
+        <!-- Pillarbox masks: hide the hexagon's outer-wall artefact at the far
+             left/right when the prism is narrower than the viewport (width set by
+             prism.js from the same COVER_K the sizing uses). -->
+        <div class="chamber-pillarbox left" id="pillar-left" aria-hidden="true"></div>
+        <div class="chamber-pillarbox right" id="pillar-right" aria-hidden="true"></div>
+
         <div class="wall-area" id="wall-area">
             <div id="world-tilt">
             <div class="prism-container" id="prism-container">

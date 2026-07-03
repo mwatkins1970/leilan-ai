@@ -18,6 +18,22 @@ body {
     overflow: hidden;
 }
 
+/* Pillarbox masks — black bars down the far left/right that hide the hexagon's
+   outer-wall artefact when the prism doesn't fill the viewport width. Width is
+   set per-frame by prism.js (0 when the prism already fills the width). Above the
+   scene (z1) but below the nav arrows (z100) and other UI. */
+.chamber-pillarbox {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    background: #000;
+    z-index: 6;
+    pointer-events: none;
+}
+.chamber-pillarbox.left  { left: 0; }
+.chamber-pillarbox.right { right: 0; }
+
 /* Opaque curtain sits on top of everything while assets load.
    The browser paints the scene normally behind it so all layers
    (sky canvas, CSS backgrounds, images) are fully composited
@@ -586,6 +602,20 @@ body:not(.sky-mode) .sky-toggle { display: none; }
     pointer-events: auto;
 }
 
+/* The three last-clockwise walls (research "beyond", ovs "data", mythos
+   "Crossbones") have no arrow, so their word image is flex-centred here rather
+   than absolutely positioned in vh like walls 1–5. But `padding-top: 41%`
+   resolves against --wall-w, which prism.js derives from the wall-area's RENDERED
+   height — including the --chamber-cover zoom on short/landscape viewports. At
+   cover > 1 that gives the word an extra cover factor the vh-positioned walls
+   don't have, so it drops below the shared baseline. Pin these panels to the vh
+   equivalent (0.41 × 77.72vh ≈ 31.87vh) so they track walls 1–5 at every aspect. */
+.chamber[data-prism-id="research-lab"]       .wall-panel[data-wall="6"] .wall-word-panel,
+.chamber[data-prism-id="ovs-chapel"]         .wall-panel[data-wall="6"] .wall-word-panel,
+.chamber[data-prism-id="mythopoeic-archive"] .wall-panel[data-wall="6"] .wall-word-panel {
+    padding-top: 31.87vh;
+}
+
 /* The large label word */
 .wall-word {
     font-family: 'Cormorant Garamond', 'Georgia', serif;
@@ -637,6 +667,18 @@ body:not(.sky-mode) .sky-toggle { display: none; }
 .wall-word.wall-word-img.dissolving {
     animation: wordDissolveCentered 0.75s ease-in forwards;
     pointer-events: none;
+}
+
+/* EXCEPTION — the last-clockwise walls (research "beyond", ovs "data", mythos
+   "Crossbones") have no path arrow, so their word image is NOT in the absolute +
+   translateX(-50%) cluster block below; it's flex-centred by .wall-word-panel.
+   For those, wordDissolveCentered's translateX(-50%) would shove the word half its
+   width to the LEFT on dissolve, so they revert to the plain (scale-only)
+   wordDissolve, which stays put under flex centring. */
+.chamber[data-prism-id="research-lab"]      .wall-panel[data-wall="6"] .wall-word.dissolving,
+.chamber[data-prism-id="ovs-chapel"]        .wall-panel[data-wall="6"] .wall-word.dissolving,
+.chamber[data-prism-id="mythopoeic-archive"] .wall-panel[data-wall="6"] .wall-word.dissolving {
+    animation: wordDissolve 0.75s ease-in forwards;
 }
 
 /* Image-based label (transparency PNG of stylised text in place of the word) */
@@ -956,8 +998,13 @@ body:not(.sky-mode) .sky-toggle { display: none; }
     pointer-events: auto;
 }
 .wall-video-overlay video {
-    max-width: 88%;
-    max-height: 72%;
+    /* Fill as much of the square wall as possible while leaving a thin frame and
+       keeping the × close button (top-right) clear. A PORTRAIT video (e.g. the
+       phone-filmed Crossbones) is limited by max-height, so 94% lets it fill the
+       wall's height; a LANDSCAPE video is limited by max-width. The video always
+       scales to fit inside this box preserving its own aspect ratio. */
+    max-width: 92%;
+    max-height: 94%;
     border: 1px solid rgba(180, 160, 100, 0.3);
     border-radius: 3px;
     background: #000;
@@ -974,6 +1021,30 @@ body:not(.sky-mode) .sky-toggle { display: none; }
     z-index: 25;
 }
 .wall-video-close:hover { color: rgba(240, 215, 140, 1); }
+
+/* Fullscreen toggle — mirrors the × but in the upper-left corner. Holds an inline
+   SVG (diagonal opposing arrows) tinted via currentColor. */
+.wall-video-fs {
+    position: absolute;
+    top: 6%; left: 8%;
+    line-height: 0;
+    color: rgba(220, 195, 120, 0.8);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    z-index: 25;
+}
+.wall-video-fs svg { width: 2.6vh; height: 2.6vh; display: block; }
+.wall-video-fs:hover { color: rgba(240, 215, 140, 1); }
+
+/* When the overlay itself is fullscreen, fill the screen and let the video grow
+   to nearly the whole viewport. Separate rules per vendor pseudo-class: a browser
+   that doesn't recognise one selector would otherwise drop the whole rule. */
+.wall-video-overlay:fullscreen { width: 100%; height: 100%; background: #000; }
+.wall-video-overlay:fullscreen video { max-width: 98%; max-height: 98%; }
+.wall-video-overlay:-webkit-full-screen { width: 100%; height: 100%; background: #000; }
+.wall-video-overlay:-webkit-full-screen video { max-width: 98%; max-height: 98%; }
 
 /* --- Steampunk hourglass loader --- */
 .wall-video-loader {
