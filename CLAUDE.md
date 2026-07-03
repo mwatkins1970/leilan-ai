@@ -1,6 +1,6 @@
 # Leilan.ai — Claude Code Master Reference
 
-*Last refreshed: 2026-06-27.*
+*Last refreshed: 2026-07-03.*
 
 ## What This Site Is
 
@@ -19,7 +19,7 @@ This repo's `.md` files and what each is for:
 - **`DESIGN_SYSTEM.md`** — visual-token reference (palette, fonts, animation patterns) extracted from aelf's original Carrd; partly aspirational/historical, not 1:1 with the build.
 - **`AUDIO.md`** — complete technical reference for the generative audio system (immersive soundscape + the 7-chamber event engine). Read in full before any audio change.
 - **`BANDWIDTH.md`** — bandwidth-optimisation & launch-resilience plan (Netlify free-tier budget, asset weights, lazy-loading).
-- **`VIDEO_BUTTONS.md`** — how the per-wall `▶ video` button works and how to reinstate the disabled placeholders.
+- **`VIDEO_BUTTONS.md`** — per-wall `▶ video` button mechanics + the R2-hosted, click-to-load playback overlay (fullscreen, portrait). See also the *Video System* section here.
 
 *Removed 2026-06-27:* `SEO.md` and `SEO_build.md` (both superseded by the built layer + the *Field-Note Layer (SEO)* section below, which now carries the launch checklist) and `SITE_OVERVIEW.md` (folded into this file).
 
@@ -313,7 +313,7 @@ Entry from main wall 6. Door on wall 4 → `/prism/main?wall=3`.
 | 3 | UFO | February 2023 Yukon UFO shootdown |
 | 4 | horoscope image + door | Astrological chart; clicking it triggers heavens-tilt with full chart + interpretive panel |
 | 5 | archaeology | Tell Leilan + Puzzle & Dragons origins |
-| 6 | Crossbones | Crossbones Graveyard ritual (has `crossbones.mp4` video) |
+| 6 | Crossbones | Crossbones Graveyard ritual (captioned portrait video, streamed from Cloudflare R2 — see *Video System*) |
 
 ### ART GALLERY (`/prism/art-gallery`) — `ART_background.jpeg`
 Entry from main wall 3. Six random gallery walls; door on wall 4. Wall 4 uses `GALLERY_POOL_WIDE` only (w/h ≥ 1.2) to fit above the archway.
@@ -386,13 +386,21 @@ A public, indexable "outer cloister" built 2026-06-27. The sanctuary (`/`, `/imm
 
 **Title style (2026-06-27):** sentence case keeping proper nouns (GPT-3, Leilan, Claude, Opus, SolidGoldMagikarp, Mammon, Tell Leilan, OVS, the Leilan Dataset, the Order of the Vermillion Star) and the first word after a colon; work titles italicised (*Puzzle & Dragons*, *A Handbook for Planetary Regeneration*, the book title); common nouns ("project", "phenomenon", generic "dataset") lowercased.
 
-**Not yet done / launch checklist:** in-chamber "Open field-note version" links (sanctuary→cloister); a purpose-made 1200×630 OG card; then the launch-time SEO tasks, all gated on the Netlify domain rewiring (see Deployment Notes):
-- pick `https://leilan.ai` (non-www) as canonical + 301 `http→https` and `www→apex` — must match the `site:` value in `astro.config.mjs`;
-- confirm `/sitemap-index.xml` + `/robots.txt` serve in production;
-- verify the property in Google Search Console + Bing Webmaster Tools, submit the sitemap, and request indexing for `/`, `/field-notes/`, `what-is-leilan`, `glitch-tokens`, `research-lab/petertodd`, `solidgoldmagikarp`;
-- seed backlinks (publisher / Substack / GitHub / Zenodo / Hugging Face / Archive.org), varying the anchor text rather than repeating one phrase.
+**Launch checklist status (updated 2026-07-03):**
+- ✅ **Domain + canonical** — leilan.ai serves this repo's build (see Deployment Notes); `astro.config.mjs` `site: 'https://leilan.ai'`.
+- ✅ **Google Search Console** — property verified (`sc-domain:leilan.ai`); `sitemap-index.xml` submitted and reading **Success** (353 pages discovered, 0 videos — correct, video is off-site on R2); URL inspection on field notes returns "URL is available to Google" with valid breadcrumbs. Request-indexing done for key pages.
+- **Still open:** Bing Webmaster Tools verify + sitemap submit; confirm `http→https` / `www→apex` 301s on the live domain; seed backlinks (publisher / Substack / GitHub / Zenodo / Hugging Face / Archive.org) with varied anchor text; optional polish — in-chamber "Open field-note version" links (sanctuary→cloister) and a purpose-made 1200×630 OG card.
 
 ---
+
+## Video System (Cloudflare R2)
+
+Wall videos are **hosted on Cloudflare R2, not on Netlify** — this keeps large media entirely off Netlify's credit-metered bandwidth (R2 egress is free). `public/video/` has been **deleted** from the repo; do not re-add local video.
+
+- **Wiring a video to a wall:** set `videoSrc` on that wall in `prisms.ts` to the R2 public URL, e.g. `https://pub-5a2d69eb071c44f6bcc6eb73b02d9328.r2.dev/<name>.mp4`. The `▶ video` button renders only on walls with a `videoSrc`; playback is **click-to-load** (nothing fetched until the user clicks — [prism.js](public/scripts/prism.js) `openWallVideo`), so an external URL never touches Netlify bandwidth. Bucket: `leilan-website-video`.
+- **Wired so far:** research-lab wall 1 (GPT-3) → `research-gpt3.mp4`; mythopoeic-archive wall 6 (Crossbones) → `crossbones2.mp4` (captioned portrait cut). ~11 more to come (5 × ~15-min + 7 × 2–3-min) as aelf delivers.
+- **Encoding recipe (HandBrake):** H.264, **"Web Optimized" ticked** (faststart — else it won't stream), RF 22, 720p is plenty at wall-panel size; crop any stray edge. Then upload with **rclone** (the dashboard *and* `wrangler` both cap single uploads at 300 MiB; rclone does multipart, no limit). The user keeps a full rclone/HandBrake cheat-sheet locally (bucket `leilan-website-video`, remote `r2:`, `no_check_bucket=true`; test with `rclone ls r2:leilan-website-video`, upload with `rclone copyto "<file>" r2:leilan-website-video/<name>.mp4 --progress`).
+- **Overlay features** (all in `prism.js` `openWallVideo` / `prism.css` `.wall-video-*`): custom **fullscreen toggle** (⛛ diagonal-arrows SVG, upper-left) that fullscreens the *overlay* (iOS falls back to native `<video>` fullscreen) — the capture-phase click router hit-tests it *before* its outside-click-closes logic; **×** close upper-right; the video fills up to **92%×94%** of the wall (portrait-snug); and it works from the **portrait fullscreen reader** too (the reader keeps an enabled video button; `openWallVideo(wall, readerOverlay)` mounts the video over the reader).
 
 ## Known Issues & Work in Progress
 
@@ -417,10 +425,14 @@ All three `/lesswrong-*.astro` pages contain the phrase "having become become fa
 ### 6. Dropped anchor on the UFO wall LW link
 The original `mythopoeic-archive-ufo.html` link to *petertodd's Last Stand* included the anchor `#The___petertodd____Leilan__connection`. The current `/lesswrong-petertodd-last-stand` interstitial loses this. If desired, the CTA there could accept an anchor param.
 
-### 7. Missing wall videos
-Only Crossbones (`/video/crossbones.mp4`) is wired up. As of 2026-06-27 the `▶ video` button renders **only on walls that have a `videoSrc`** — the disabled placeholder buttons that used to appear on every word-panel wall have been removed, so Crossbones is the only visible video button. See `VIDEO_BUTTONS.md` for how to add a video to a wall (just set `videoSrc`) or restore the old placeholder-on-every-wall behaviour.
+### 7. Video content still being delivered
+Two of ~13 planned wall videos are wired (Research Lab GPT-3, Mythos Crossbones); the rest arrive from aelf over time. Not a bug — see the *Video System* section for how to add each one. `VIDEO_BUTTONS.md` covers the per-wall button mechanics.
 
 ### Resolved
+- **Chamber framing — sky always visible + pillarbox (2026-07-03)**: the `--chamber-cover` zoom (fills width on wide/short landscape phones, `updateWallSize` in `prism.js`) is now **gated to short viewports** (`innerHeight ≤ COVER_MAX_VIEWPORT_H = 560`) *and* **capped** (`COVER_MAX = 1.06`) so it never crops the night sky off the ceiling wedges — a sliver of sky always shows. On desktop cover is a clean `1` (no zoom). When the cap leaves the prism narrower than the viewport (wide/short only — gated on `coverRaw > COVER_MAX`), black **pillarbox** bars (`#pillar-left`/`#pillar-right`, `.chamber-pillarbox`) mask the hexagon's outer-wall artefact at the far edges; width from `PILLAR_EDGE_K = COVER_K/2`. Desktop shows **no bars**. *(Future polish, parked: day-mode pillarbox reads as black letterbox against the blue sky — could be white/"static" fuzz instead; left black for now.)*
+- **Piecemeal chamber reveal (2026-07-03)**: the scene-curtain preloader (`prism.js`, end of file) now waits on `img.decode()` (download **and** decode = paint-ready) instead of just the `load` event, so a large moiré WebP can't paint a beat after the words — the chamber reveals all at once.
+- **Image-label word dissolve slide (2026-07-03)**: stylised word PNGs are centred two different ways — walls 1–5 by `position:absolute; translateX(-50%)` (the cluster block in `prism.css`), the *last-clockwise* walls (beyond/data/Crossbones, no arrow) by flex. The dissolve keyframes must match: `wordDissolveCentered` (carries the `translateX(-50%)`) for the former, plain `wordDissolve` (scale only) for the flex last walls (overridden by `data-wall="6"` selectors). Wrong pairing slid words left/right on click. Also: those three last walls' `.wall-word-panel` `padding-top` was pinned from `41%` (of --wall-w, which includes the cover zoom) to `31.87vh`, so they hold the shared baseline at every aspect.
+- **Bandwidth Phase A + B (2026-07-03)**: dead assets removed (`wall-border.png`, `wall-bg.jpg`, unreferenced gallery variants) and all live imagery compressed — chamber backgrounds/decorative PNGs/transmission images/ascii-art → WebP, gallery JPEGs re-encoded + resized in place. `public/images` 151→82 MB; per-visit chamber art down 67–82%. (Watch: the Phase A "unreferenced" regex missed lettered gallery variants and briefly deleted `image_019a.jpeg`, which is live in `GALLERY_POOL_MAIN` — restored. When pruning gallery files, match `image_[0-9]+[a-z]?`.)
 - Gleaming-white walls (June 2026): `wallSkyFragment` remapped from dark `baseGrey * faceColors` to a bright white range while preserving per-face shading — see Design System above.
 - Inner wall appearance (April 2026): all sections use sky shader with `faceColors`; `groundGlow` opacity zeroed.
 - Rim outlines (April 2026): now a proper `THREE.Mesh` with thick quad ribbons.

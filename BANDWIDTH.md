@@ -1,7 +1,15 @@
 # BANDWIDTH.md — Leilan.ai bandwidth optimisation and launch resilience plan
 
-Last updated: 2026-06-27
+Last updated: 2026-07-03
 Audience: coding agent maintaining `mwatkins1970/leilan-ai`.
+
+## STATUS (2026-07-03) — what's done, what's parked
+
+- ✅ **Hosting model corrected** — Netlify is now **credit-metered** (300 credits/mo Free; ~15 GB bandwidth-equivalent, *not* the old 100 GB). The whole "100 GB budget" framing below is superseded; see CLAUDE.md → *Deployment Notes* for the credit model + the commit/wip/deploy workflow.
+- ✅ **Phase A + B done** — dead assets removed; all live imagery compressed to WebP / re-encoded (`public/images` 151→82 MB; per-visit chamber art down 67–82%). Gallery JPEGs re-encoded + resized in place (kept `.jpeg` filenames — no ref churn).
+- ✅ **Video moved off Netlify entirely** — all wall video is hosted on **Cloudflare R2** (zero egress), click-to-load; `public/video/` deleted. This *executes* the §5 / §14 "move video to external CDN" plan. See CLAUDE.md → *Video System*.
+- ✅ **Curtain** waits on `img.decode()` (paint-ready) so chambers reveal all-at-once.
+- 🅿️ **PARKED — responsive image variants (the small/large idea, §4.2):** serving smaller image dimensions to small screens via `srcset`/`image-set()`. Deferred **pending real measurement** — WebP alone already did the heavy lifting, so the marginal win didn't justify the 2× asset pipeline yet. Revisit if per-route transfer measurements show backgrounds/gallery are still a launch-bandwidth problem. Don't forget this exists.
 
 ## 0. Strategic context
 

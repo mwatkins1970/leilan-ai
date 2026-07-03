@@ -1,13 +1,20 @@
 # Wall Video Buttons — current state & how to reinstate
 
-*Last updated: 2026-06-27.*
+*Last updated: 2026-07-03.*
 
 ## Current behaviour
 
-The `▶ video` button on a word-panel wall now renders **only when that wall's
-config has a `videoSrc`**. As of writing, the only wall with a video is the
-Mythopoeic Archive **Crossbones** wall (`/video/crossbones.mp4`), so that is the
-only visible video button on the site.
+The `▶ video` button on a word-panel wall renders **only when that wall's config
+has a `videoSrc`**, and playback is **click-to-load** (nothing fetched until the
+click). Videos are **hosted on Cloudflare R2, not locally** — `public/video/` is
+gone. Wired so far: Research Lab **GPT-3** (`research-gpt3.mp4`) and Mythopoeic
+Archive **Crossbones** (`crossbones2.mp4`), both on the `leilan-website-video`
+R2 bucket. See CLAUDE.md → *Video System* for the R2 / rclone workflow.
+
+The playback overlay (`openWallVideo` in `prism.js`) has a **×** close (upper-
+right), a **fullscreen toggle** (diagonal-arrows SVG, upper-left; fullscreens the
+overlay, iOS falls back to native video fullscreen), fills up to 92%×94% of the
+wall, and also works from the **portrait fullscreen reader**.
 
 Previously every word-panel wall rendered a *disabled placeholder* video button
 (dim, `cursor: not-allowed`, `.wall-video-disabled`). Those placeholders have
@@ -18,13 +25,13 @@ or the CSS.
 
 ## To add a video to a wall (the normal case)
 
-Just give that wall a `videoSrc` in `src/data/prisms.ts`, e.g.:
+Compress + upload the clip to R2 (see CLAUDE.md → *Video System*), then give that
+wall a `videoSrc` in `src/data/prisms.ts` pointing at the R2 public URL, e.g.:
 
 ```ts
 {
     archway: false,
-    bg: '/images/wall-bg.jpg',
-    videoSrc: '/video/your-clip.mp4',
+    videoSrc: 'https://pub-5a2d69eb071c44f6bcc6eb73b02d9328.r2.dev/your-clip.mp4',
     content: { type: 'word-panel', label: '…', text: wallText('….html') },
 },
 ```
