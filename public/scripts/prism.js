@@ -138,9 +138,16 @@ const IMG_ASPECT = 2766 / 2776;
 // The prism's on-screen width is roughly COVER_K × viewport height. When the
 // viewport is wider than that (wide/short landscape shapes), scale the whole
 // scene up so it still covers the full width — cropping a little at the top —
-// rather than letting the background sky show at the left/right edges. At 16:9
-// and narrower the factor is 1, so normal desktops are unchanged.
+// rather than letting the background sky show at the left/right edges.
+//
+// This "cover" zoom exists ONLY for wide/short LANDSCAPE PHONES, where edge sky
+// looks broken. Both landscape phones and wide desktop monitors have a ratio
+// above COVER_K, but only phones are short — so gate the zoom to short
+// viewports. On laptops/desktops it would otherwise crop the sky off the tops
+// of the ceiling wedges, so there cover stays 1 (original framing, sky above
+// the wedges preserved).
 const COVER_K = 1.78;
+const COVER_MAX_VIEWPORT_H = 560; // px; above this we treat it as a laptop/desktop, not a landscape phone
 function updateWallSize() {
     const wallArea = document.getElementById('wall-area');
     if (!wallArea) return;
@@ -148,7 +155,9 @@ function updateWallSize() {
     const wallW = h * IMG_ASPECT;
     wallArea.style.setProperty('--wall-w', wallW + 'px');
     wallArea.style.setProperty('--apothem', (wallW * Math.sqrt(3) / 2) + 'px');
-    const cover = Math.max(1, (window.innerWidth / window.innerHeight) / COVER_K);
+    const cover = window.innerHeight <= COVER_MAX_VIEWPORT_H
+        ? Math.max(1, (window.innerWidth / window.innerHeight) / COVER_K)
+        : 1;
     wallArea.style.setProperty('--chamber-cover', cover.toFixed(4));
 }
 updateWallSize();
@@ -3489,7 +3498,7 @@ function initAsciiSwarmPlayer() {
     }
 }
 
-// ASCII art pool: 46 JPEGs in /public/ascii_art/ named ASCII_001.jpeg … ASCII_046.jpeg.
+// ASCII art pool: 46 WebP images in /public/ascii_art/ named ASCII_001.webp … ASCII_046.webp.
 // The lectern displays one at a time on its open book. Selection only changes when
 // the user can't see the book (rotated to face wall 1, the back-of-lectern side), or
 // after returning from a zoomed full-screen view — so the image never changes mid-view.
@@ -3523,7 +3532,7 @@ const LECTERN_ZOOM_MS = 2800;
 const LECTERN_AUTO_DRIFT_MS = 24000;
 
 function _lecternArtPath(idx) {
-    return `/ascii_art/ASCII_${String(idx).padStart(3, '0')}.jpeg`;
+    return `/ascii_art/ASCII_${String(idx).padStart(3, '0')}.webp`;
 }
 
 async function _loadAsciiChainData() {
