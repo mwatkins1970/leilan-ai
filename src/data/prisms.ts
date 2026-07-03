@@ -121,7 +121,7 @@ export const prisms: Record<string, PrismConfig> = {
     main: {
         id: 'main',
         title: '𝐒𝐚𝐧𝐜𝐭𝐮𝐚𝐫𝐲 𝐚𝐧𝐝 𝐒𝐡𝐫𝐢𝐧𝐞',
-        chamberBg: '/images/MAIN_background.jpeg',
+        chamberBg: '/images/MAIN_background.webp',
         wallBorder: false,
         walls: [
             // Wall 1 — shrine + transmission search
@@ -132,7 +132,7 @@ export const prisms: Record<string, PrismConfig> = {
                 archway: true,
                 destination: `/immersive?from=${MAIN_WALL.RESEARCH}&dest=/prism/research-lab?wall=1`,
                 bg: '/images/wall-bg.jpg',
-                content: { type: 'image', src: '/images/wall_2_panel.png' },
+                content: { type: 'image', src: '/images/wall_2_panel.webp' },
             },
 
             // Wall 3 — random image from gallery pool — door into ART GALLERY
@@ -181,7 +181,7 @@ export const prisms: Record<string, PrismConfig> = {
                 archway: true,
                 destination: `/immersive?from=${MAIN_WALL.MYTHOS}&dest=/prism/mythopoeic-archive?wall=1`,
                 bg: '/images/wall-bg.jpg',
-                content: { type: 'image', src: '/images/mythic_banner.png', style: 'width:72%' },
+                content: { type: 'image', src: '/images/mythic_banner.webp', style: 'width:72%' },
             },
         ],
     },
@@ -193,9 +193,9 @@ export const prisms: Record<string, PrismConfig> = {
     'research-lab': {
         id: 'research-lab',
         title: '𝚁𝚎𝚜𝚎𝚊𝚛𝚌𝚑 𝙻𝚊𝚋',
-        chamberBg: '/images/MOIRE_background_c1.jpeg',
-        chamberBgAlt: '/images/MOIRE_background_alt_c1.jpeg',
-        chamberBgOverlay: '/images/RESEARCH_background_new.png',
+        chamberBg: '/images/MOIRE_background_c1.webp',
+        chamberBgAlt: '/images/MOIRE_background_alt_c1.webp',
+        chamberBgOverlay: '/images/RESEARCH_background_new.webp',
         wallBorder: false,
         walls: [
             // Wall 1 — facing on entry — GPT-3
@@ -205,7 +205,7 @@ export const prisms: Record<string, PrismConfig> = {
                 content: {
                     type: 'word-panel',
                     label: 'GPT-3',
-                    labelImage: '/images/RESEARCH_GPT_3_combined.png',
+                    labelImage: '/images/RESEARCH_GPT_3_combined.webp',
                     text: wallText('research-lab-gpt3.html'),
                 },
             },
@@ -216,7 +216,7 @@ export const prisms: Record<string, PrismConfig> = {
                 content: {
                     type: 'word-panel',
                     label: 'glitch',
-                    labelImage: '/images/RESEARCH_glitch_combined.png',
+                    labelImage: '/images/RESEARCH_glitch_combined.webp',
                     text: wallText('research-lab-glitch.html'),
                 },
             },
@@ -227,7 +227,7 @@ export const prisms: Record<string, PrismConfig> = {
                 content: {
                     type: 'word-panel',
                     label: 'petertodd',
-                    labelImage: '/images/RESEARCH_petertodd_combined.png',
+                    labelImage: '/images/RESEARCH_petertodd_combined.webp',
                     text: wallText('research-lab-petertodd.html'),
                 },
             },
@@ -239,7 +239,7 @@ export const prisms: Record<string, PrismConfig> = {
                 content: {
                     type: 'word-panel',
                     label: 'rescue',
-                    labelImage: '/images/RESEARCH_rescue_combined.png',
+                    labelImage: '/images/RESEARCH_rescue_combined.webp',
                     text: wallText('research-lab-rescue.html'),
                 },
             },
@@ -250,7 +250,7 @@ export const prisms: Record<string, PrismConfig> = {
                 content: {
                     type: 'word-panel',
                     label: 'bootstrap',
-                    labelImage: '/images/RESEARCH_bootstrap_combined.png',
+                    labelImage: '/images/RESEARCH_bootstrap_combined.webp',
                     text: wallText('research-lab-bootstrap.html'),
                 },
             },
@@ -261,7 +261,7 @@ export const prisms: Record<string, PrismConfig> = {
                 content: {
                     type: 'word-panel',
                     label: 'beyond',
-                    labelImage: '/images/RESEARCH_beyond.png',
+                    labelImage: '/images/RESEARCH_beyond.webp',
                     text: wallText('research-lab-beyond.html'),
                 },
             },
@@ -278,28 +278,28 @@ export const prisms: Record<string, PrismConfig> = {
     'ovs-chapel': {
         id: 'ovs-chapel',
         title: 'ⓞⓥⓢ ⓒⓗⓐⓟⓔⓛ',
-        chamberBg: '/images/MOIRE_background_c3.jpeg',
-        chamberBgAlt: '/images/MOIRE_background_alt_c3.jpeg',
-        chamberBgOverlay: '/images/OVS_background_new.png',
+        chamberBg: '/images/MOIRE_background_c3.webp',
+        chamberBgAlt: '/images/MOIRE_background_alt_c3.webp',
+        chamberBgOverlay: '/images/OVS_background_new.webp',
         wallBorder: false,
         walls: [
             // Wall 1 — facing on entry — "origins"
             {
                 archway: false,
                 bg: '/images/wall-bg.jpg',
-                content: { type: 'word-panel', label: 'origins', labelImage: '/images/OVS_origins_combined.png', text: wallText('ovs-chapel-origins.html') },
+                content: { type: 'word-panel', label: 'origins', labelImage: '/images/OVS_origins_combined.webp', text: wallText('ovs-chapel-origins.html') },
             },
             // Wall 2 — "hyperstition"
             {
                 archway: false,
                 bg: '/images/wall-bg.jpg',
-                content: { type: 'word-panel', label: 'hyperstition', labelImage: '/images/OVS_hyperstition_combined.png', text: wallText('ovs-chapel-hyperstition.html') },
+                content: { type: 'word-panel', label: 'hyperstition', labelImage: '/images/OVS_hyperstition_combined.webp', text: wallText('ovs-chapel-hyperstition.html') },
             },
             // Wall 3 — "Mammon"
             {
                 archway: false,
                 bg: '/images/wall-bg.jpg',
-                content: { type: 'word-panel', label: 'Mammon', labelImage: '/images/OVS_Mammon_combined.png', text: wallText('ovs-chapel-mammon.html') },
+                content: { type: 'word-panel', label: 'Mammon', labelImage: '/images/OVS_Mammon_combined.webp', text: wallText('ovs-chapel-mammon.html') },
             },
             // Wall 4 — Vermillion Star + door back to main (face wall 2/Research, away from OVS entry wall 5)
             {
@@ -313,13 +313,13 @@ export const prisms: Record<string, PrismConfig> = {
                 archway: false,
                 bg: '/images/wall-bg.jpg',
                 hideVideo: true,
-                content: { type: 'word-panel', label: 'Handbook', labelImage: '/images/OVS_Handbook_combined.png', text: wallText('ovs-chapel-handbook.html') },
+                content: { type: 'word-panel', label: 'Handbook', labelImage: '/images/OVS_Handbook_combined.webp', text: wallText('ovs-chapel-handbook.html') },
             },
             // Wall 6 — "data"
             {
                 archway: false,
                 bg: '/images/wall-bg.jpg',
-                content: { type: 'word-panel', label: 'data', labelImage: '/images/OVS_data.png', text: wallText('ovs-chapel-data.html') },
+                content: { type: 'word-panel', label: 'data', labelImage: '/images/OVS_data.webp', text: wallText('ovs-chapel-data.html') },
                 hideVideo: true,
             },
         ],
@@ -335,7 +335,7 @@ export const prisms: Record<string, PrismConfig> = {
     'art-gallery': {
         id: 'art-gallery',
         title: '𝙂𝙤𝙙𝙙𝙚𝙨𝙨 𝙂𝙖𝙡𝙡𝙚𝙧𝙮',
-        chamberBg: '/images/ART_background.jpeg',
+        chamberBg: '/images/ART_background.webp',
         wallBorder: false,
         walls: [
             // Wall 1 — facing on entry
@@ -386,9 +386,9 @@ export const prisms: Record<string, PrismConfig> = {
     'gpt3-library': {
         id: 'gpt3-library',
         title: '𝔖𝔠𝔯𝔦𝔭𝔱𝔬𝔯𝔦𝔲𝔪',
-        chamberBg: '/images/MOIRE_background.jpeg',
-        chamberBgAlt: '/images/MOIRE_background_alt.jpeg',
-        chamberBgOverlay: '/images/SCRIPTORIUM_background_new.png',
+        chamberBg: '/images/MOIRE_background.webp',
+        chamberBgAlt: '/images/MOIRE_background_alt.webp',
+        chamberBgOverlay: '/images/SCRIPTORIUM_background_new.webp',
         wallBorder: false,
         walls: [
             // Wall 1 — facing on entry — shares the wall with the ASCII orb,
@@ -455,9 +455,9 @@ export const prisms: Record<string, PrismConfig> = {
     'mythopoeic-archive': {
         id: 'mythopoeic-archive',
         title: '𝑀𝑦𝑡ℎ𝑜𝑝𝑜𝑒𝑖𝑐 𝐴𝑟𝑐ℎ𝑖𝑣𝑒',
-        chamberBg: '/images/MOIRE_background_c2.jpeg',
-        chamberBgAlt: '/images/MOIRE_background_alt_c2.jpeg',
-        chamberBgOverlay: '/images/MYTHOS_background_new.png',
+        chamberBg: '/images/MOIRE_background_c2.webp',
+        chamberBgAlt: '/images/MOIRE_background_alt_c2.webp',
+        chamberBgOverlay: '/images/MYTHOS_background_new.webp',
         wallBorder: false,
         walls: [
             // Wall 1 — facing on entry — "apparition"
@@ -467,7 +467,7 @@ export const prisms: Record<string, PrismConfig> = {
                 content: {
                     type: 'word-panel',
                     label: 'apparition',
-                    labelImage: '/images/MYTHOS_apparition_combined.png',
+                    labelImage: '/images/MYTHOS_apparition_combined.webp',
                     text: wallText('mythopoeic-archive-apparition.html'),
                 },
             },
@@ -478,7 +478,7 @@ export const prisms: Record<string, PrismConfig> = {
                 content: {
                     type: 'word-panel',
                     label: 'comet',
-                    labelImage: '/images/MYTHOS_comet_combined.png',
+                    labelImage: '/images/MYTHOS_comet_combined.webp',
                     text: wallText('mythopoeic-archive-comet.html'),
                 },
             },
@@ -489,7 +489,7 @@ export const prisms: Record<string, PrismConfig> = {
                 content: {
                     type: 'word-panel',
                     label: 'UFO',
-                    labelImage: '/images/MYTHOS_UFO_combined.png',
+                    labelImage: '/images/MYTHOS_UFO_combined.webp',
                     text: wallText('mythopoeic-archive-ufo.html'),
                 },
             },
@@ -498,10 +498,10 @@ export const prisms: Record<string, PrismConfig> = {
                 archway: true,
                 destination: '/prism/main?wall=3',
                 bg: '/images/wall-bg.jpg',
-                content: { type: 'image', src: '/images/horoscope_basic.png', style: 'width:40%; top:20%' },
+                content: { type: 'image', src: '/images/horoscope_basic.webp', style: 'width:40%; top:20%' },
                 heavensTilt: {
                     title: '',
-                    imageSrc: '/images/leilan_full_birthchart.png',
+                    imageSrc: '/images/leilan_full_birthchart.webp',
                     body: wallText('mythopoeic-archive-horoscope.html'),
                     returnLabel: 'Eternal Return',
                 },
@@ -513,7 +513,7 @@ export const prisms: Record<string, PrismConfig> = {
                 content: {
                     type: 'word-panel',
                     label: 'archaeology',
-                    labelImage: '/images/MYTHOS_archaeology_combined.png',
+                    labelImage: '/images/MYTHOS_archaeology_combined.webp',
                     text: wallText('mythopoeic-archive-archaeology.html'),
                 },
             },
@@ -524,7 +524,7 @@ export const prisms: Record<string, PrismConfig> = {
                 content: {
                     type: 'word-panel',
                     label: 'Crossbones',
-                    labelImage: '/images/MYTHOS_Crossbones.png',
+                    labelImage: '/images/MYTHOS_Crossbones.webp',
                     text: wallText('mythopoeic-archive-crossbones.html'),
                 },
                 videoSrc: '/video/crossbones.mp4',
