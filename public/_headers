@@ -1,0 +1,30 @@
+# Cache-Control policy (Netlify). Cuts repeat-visit / multi-chamber bandwidth on
+# the credit-metered plan. HTML is intentionally NOT listed here — it keeps
+# Netlify's default (revalidated) so content + deploys appear promptly.
+#
+# Rule of thumb: only content-hashed filenames may be cached "immutable". Files
+# with STABLE names (prism.js, /images/*) use a short max-age + stale-while-
+# revalidate, so a new deploy still reaches returning visitors instead of locking
+# them to a stale copy.
+
+# Astro fingerprinted build assets (hashed JS/CSS) — filename changes on content
+# change, so it is always safe to cache forever.
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Runtime scripts/styles with stable filenames (prism.js etc.) — cache for an
+# hour, then serve-stale-while-revalidating for a week so updates still land.
+/scripts/*
+  Cache-Control: public, max-age=3600, stale-while-revalidate=604800
+
+# Images (stable filenames; rarely change now that compression is done).
+/images/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+# ASCII-art lectern pieces (interaction-only, stable).
+/ascii_art/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+# Data JSON (transmission/search/passage indexes).
+/data/*
+  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
