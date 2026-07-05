@@ -258,7 +258,7 @@ function getExcerpt(body: string | undefined): string {
 
     <div class="transmission-grid" id="transmissionGrid">
       {allTransmissions.map(t => (
-        <a class="transmission-card" href={`/transmission/${t.id}`} data-search={`${t.data.title} ${t.data.query}`.toLowerCase()}>
+        <a class="transmission-card" href={`/transmission/${t.id}/`} data-search={`${t.data.title} ${t.data.query}`.toLowerCase()}>
           <div class="transmission-header">
             <div class="transmission-id">#{t.data.id}</div>
             <div class="transmission-date">{t.data.date}</div>
