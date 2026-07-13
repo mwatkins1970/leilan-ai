@@ -50,6 +50,47 @@ body {
     opacity: 0;
 }
 
+/* "Materialising" shimmer while the curtain holds — the cathedral coalescing out
+   of the dark rather than a blank black wait. Purely decorative: the whole curtain
+   (glow included) fades out via .lift the instant the scene is paint-ready, so on a
+   fast load it's barely a blink; it only really shows when the wait is long enough
+   to matter. A soft emerald glow breathes at centre with a slow shimmer sweep over
+   it. Emerald #5eefa2 = the sanctuary's accent light. */
+.scene-curtain::before,
+.scene-curtain::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.scene-curtain::before {
+    background: radial-gradient(ellipse 58% 42% at 50% 50%,
+        rgba(94, 239, 162, 0.13) 0%,
+        rgba(94, 239, 162, 0.05) 34%,
+        transparent 68%);
+    animation: curtainBreath 3.4s ease-in-out infinite;
+}
+.scene-curtain::after {
+    background: linear-gradient(115deg,
+        transparent 42%,
+        rgba(180, 245, 210, 0.055) 50%,
+        transparent 58%);
+    background-size: 220% 220%;
+    animation: curtainShimmer 4.2s linear infinite;
+}
+@keyframes curtainBreath {
+    0%, 100% { opacity: 0.4; transform: scale(0.97); }
+    50%      { opacity: 1;   transform: scale(1.05); }
+}
+@keyframes curtainShimmer {
+    0%   { background-position: 115% 115%; }
+    100% { background-position: -15% -15%; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .scene-curtain::before { animation: none; opacity: 0.7; }
+    .scene-curtain::after  { animation: none; opacity: 0; }
+}
+
 /* Sky canvas — full viewport background layer */
 .sky-layer {
     position: absolute;

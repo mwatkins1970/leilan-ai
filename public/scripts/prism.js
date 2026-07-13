@@ -1756,7 +1756,13 @@ if (archwayOverlay) {
 const skyCanvas = document.getElementById('sky-canvas');
 const skyCtx = skyCanvas.getContext('2d');
 
-// Day/night state
+// Day/night state — true celestial time: if the visitor hasn't chosen a sky yet
+// this session, default to their actual local time of day (day 07:00–18:59) and
+// store it so every page agrees. The ☀/☾ toggle still overrides at any time.
+if (!sessionStorage.getItem('skyMode')) {
+    const _hr = new Date().getHours();
+    sessionStorage.setItem('skyMode', (_hr >= 7 && _hr < 19) ? 'day' : 'night');
+}
 let isNight = sessionStorage.getItem('skyMode') !== 'day';
 const toggleBtn = document.getElementById('sky-toggle');
 const toggleIcon = document.getElementById('sky-toggle-icon');
@@ -1802,36 +1808,103 @@ for (let i = 0; i < 12; i++) {
     });
 }
 
-// Night stars
+// Night stars — a FIXED FIRMAMENT: positions/symbols come from a seeded PRNG,
+// so every visit (and every chamber) shows the same constellation. Stars never
+// blink out or respawn; they only twinkle in brightness (see drawSky).
+function _mulberry32(seed) {
+    return function () {
+        seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+        let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+}
+const _starRand = _mulberry32(0x1E11A2); // the sanctuary's firmament seed
 const NUM_STARS = isSkyView ? 90 : 45;
 const NUM_SMALL_STARS = isSkyView ? 60 : 35;
 const skyStars = [];
 for (let i = 0; i < NUM_STARS; i++) {
     skyStars.push({
-        x: Math.random(),
-        y: Math.random(),
-        sym: starSymbols[Math.floor(Math.random() * starSymbols.length)],
-        phase: Math.random() * Math.PI * 2,
-        speed: 0.2 + Math.random() * 0.4,
-        size: 12 + Math.random() * 12,
-        lifeT: Math.random() * 10,
-        lifeDur: 4 + Math.random() * 8,
-        palIdx: Math.floor(Math.random() * nightPalette.length),
+        x: _starRand(),
+        y: _starRand(),
+        sym: starSymbols[Math.floor(_starRand() * starSymbols.length)],
+        phase: _starRand() * Math.PI * 2,
+        speed: 0.2 + _starRand() * 0.4,
+        size: 12 + _starRand() * 12,
+        palIdx: Math.floor(_starRand() * nightPalette.length),
     });
 }
 for (let i = 0; i < NUM_SMALL_STARS; i++) {
     skyStars.push({
-        x: Math.random(),
-        y: Math.random(),
-        sym: starSymbols[Math.floor(Math.random() * starSymbols.length)],
-        phase: Math.random() * Math.PI * 2,
-        speed: 0.3 + Math.random() * 0.5,
-        size: 5 + Math.random() * 4,
-        lifeT: Math.random() * 10,
-        lifeDur: 3 + Math.random() * 6,
-        palIdx: Math.floor(Math.random() * nightPalette.length),
+        x: _starRand(),
+        y: _starRand(),
+        sym: starSymbols[Math.floor(_starRand() * starSymbols.length)],
+        phase: _starRand() * Math.PI * 2,
+        speed: 0.3 + _starRand() * 0.5,
+        size: 5 + _starRand() * 4,
+        palIdx: Math.floor(_starRand() * nightPalette.length),
     });
 }
+
+// --- Real lunar phase: the night-sky moon shows the moon's ACTUAL current
+// phase, so the cathedral's sky agrees with the one outside the visitor's
+// window. Age is days since a known new moon (2000-01-06 18:14 UTC) folded
+// onto the synodic month; 0 = new, 0.5 = full.
+const _SYNODIC_DAYS = 29.530588853;
+function moonAge01() {
+    const days = (Date.now() - Date.UTC(2000, 0, 6, 18, 14)) / 86400000;
+    return ((days / _SYNODIC_DAYS) % 1 + 1) % 1;
+}
+
+// Draw a phased moon. The lit shape is built as the waxing form (lit limb on
+// the right: right semicircle + terminator half-ellipse whose x-radius is
+// |cos(2π·age)|·r, bulging toward the lit side for a crescent and away for a
+// gibbous) and mirrored horizontally for waning.
+function drawMoon(ctx, cx, cy, r, age) {
+    const ill = (1 - Math.cos(age * Math.PI * 2)) / 2;   // 0 new → 1 full
+    // Halo, brightening with illumination
+    const halo = ctx.createRadialGradient(cx, cy, r * 0.5, cx, cy, r * 3.2);
+    halo.addColorStop(0, `rgba(236,232,215,${(0.05 + 0.15 * ill).toFixed(3)})`);
+    halo.addColorStop(1, 'rgba(236,232,215,0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(cx, cy, r * 3.2, 0, Math.PI * 2); ctx.fill();
+    // Opaque backing disc: the moon is a solid body — it occludes any stars
+    // behind it (they'd otherwise show through the translucent earthshine).
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    // Earthshine disc (the dark part is faintly there, as in life)
+    ctx.fillStyle = 'rgba(205,210,225,0.10)';
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    if (ill > 0.01) {
+        const k = Math.cos(age * Math.PI * 2);   // +1 new … −1 full
+        ctx.save();
+        ctx.translate(cx, cy);
+        if (age >= 0.5) ctx.scale(-1, 1);        // waning: mirror the waxing form
+        ctx.beginPath();
+        ctx.arc(0, 0, r, -Math.PI / 2, Math.PI / 2, false);                          // lit limb
+        ctx.ellipse(0, 0, Math.abs(k) * r, r, 0, Math.PI / 2, -Math.PI / 2, k > 0);  // terminator
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(238,234,220,0.92)';
+        ctx.fill();
+        // A few soft maria, clipped to the disc
+        ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.clip();
+        ctx.fillStyle = 'rgba(150,148,140,0.14)';
+        [[0.30, -0.25, 0.17], [-0.10, 0.18, 0.23], [0.42, 0.32, 0.11], [-0.32, -0.38, 0.13]]
+            .forEach(([mx, my, mr]) => {
+                ctx.beginPath(); ctx.arc(mx * r, my * r, mr * r, 0, Math.PI * 2); ctx.fill();
+            });
+        ctx.restore();
+    }
+}
+
+// --- Shooting stars: brief meteor streaks in the night sky, one every ~16–44s.
+// They spawn in the top ~3–13% of the viewport on shallow trajectories, so they
+// stay inside the sliver of sky visible above the ceiling wedges in normal
+// (non-tilted) chamber view as well as in the wide heavens-tilt sky.
+// (A Comet ZTF cameo lived here briefly — cut for realism: a true comet hangs
+// near-motionless night to night. It may return someday as a fixed apparition.)
+const _meteors = [];
+let _nextMeteorAtMs = 0;
 
 let skyFrame = 0;
 let skyTiltOffset = 0; // normalized 0–1 vertical shift applied to star y-positions during tilt
@@ -1847,15 +1920,31 @@ function animateSkyRotation(delta) {
     _skyRotT0 = performance.now();
 }
 
+// Exact cubic-bezier(0.25, 0.46, 0.45, 0.94) — the chamber walls' CSS rotation
+// curve. The old piecewise-quadratic approximation started slow where the real
+// bezier starts fast, so the stars visibly lagged the walls at the beginning of
+// every rotation. Newton–Raphson solve of x(t) = progress, then evaluate y(t).
+function _rotBezier(x) {
+    if (x <= 0) return 0;
+    if (x >= 1) return 1;
+    const p1x = 0.25, p1y = 0.46, p2x = 0.45, p2y = 0.94;
+    const cx = 3 * p1x, bx = 3 * (p2x - p1x) - cx, ax = 1 - cx - bx;
+    const cy = 3 * p1y, by = 3 * (p2y - p1y) - cy, ay = 1 - cy - by;
+    let t = x;
+    for (let i = 0; i < 5; i++) {
+        const xt = ((ax * t + bx) * t + cx) * t - x;
+        const dxdt = (3 * ax * t + 2 * bx) * t + cx;
+        if (Math.abs(xt) < 1e-4 || dxdt === 0) break;
+        t -= xt / dxdt;
+    }
+    return ((ay * t + by) * t + cy) * t;
+}
+
 function tickSkyRotation() {
     if (_skyRotStart === _skyRotTarget) return;
     const elapsed = performance.now() - _skyRotT0;
     const progress = Math.min(elapsed / SKY_ROT_DURATION, 1.0);
-    // cubic-bezier(0.25, 0.46, 0.45, 0.94) approximation
-    const t = progress;
-    const ease = t < 0.5
-        ? 2 * t * t
-        : 1 - 0.5 * Math.pow(2 - 2 * t, 2);
+    const ease = _rotBezier(progress);
     skyRotationOffset = _skyRotStart + (_skyRotTarget - _skyRotStart) * ease;
     if (progress >= 1.0) {
         skyRotationOffset = _skyRotTarget;
@@ -1962,12 +2051,22 @@ function renderSerpStrip(t) {
     }
 }
 
+let _lastSkyDrawT = 0;
 function drawSky(t) {
     skyFrame++;
     tickSkyRotation();
+    // Render every frame while the sky is MOVING — either a wall rotation
+    // (skyRotationOffset animating) or a heavens tilt (_skyAnimFrame drives
+    // skyTiltOffset in the same rAF as the chamber transform). Otherwise
+    // throttle to every 3rd frame. The old check ignored tilts, so stars
+    // repainted at 20fps while the walls moved at 60 — visible lag.
     const skyRotating = _skyRotStart !== _skyRotTarget;
-    if (!skyRotating && skyFrame % 3 !== 0) { requestAnimationFrame(drawSky); return; }
-    const dt = 3 / 60;
+    const skyMoving = skyRotating || _skyAnimFrame !== null;
+    if (!skyMoving && skyFrame % 3 !== 0) { requestAnimationFrame(drawSky); return; }
+    // Real elapsed time since the last DRAWN frame (skipped frames accumulate),
+    // so meteor/cloud speeds are correct at both 20fps and 60fps.
+    const dt = _lastSkyDrawT ? Math.min(0.1, (t - _lastSkyDrawT) / 1000) : 1 / 60;
+    _lastSkyDrawT = t;
     const w = skyW, h = skyH;
 
     if (isNight) {
@@ -1987,27 +2086,10 @@ function drawSky(t) {
         skyCtx.textAlign = 'center';
         skyCtx.textBaseline = 'middle';
         skyStars.forEach(s => {
-            s.lifeT += dt;
-            const lifeFrac = s.lifeT / s.lifeDur;
-            let lifeAlpha;
-            if (lifeFrac < 0.1) {
-                lifeAlpha = lifeFrac / 0.1;
-            } else if (lifeFrac < 0.8) {
-                lifeAlpha = 1.0;
-            } else if (lifeFrac < 1.0) {
-                lifeAlpha = 1.0 - (lifeFrac - 0.8) / 0.2;
-            } else {
-                s.x = Math.random();
-                s.y = Math.random();
-                s.sym = starSymbols[Math.floor(Math.random() * starSymbols.length)];
-                s.palIdx = Math.floor(Math.random() * nightPalette.length);
-                s.lifeDur = 4 + Math.random() * 8;
-                s.lifeT = 0;
-                lifeAlpha = 0;
-            }
+            // Fixed firmament: stars hold their positions permanently and only
+            // twinkle — brightness breathes between 45% and 100%, never vanishing.
             const twinkle = 0.5 + 0.5 * Math.sin(t * 0.001 * s.speed + s.phase);
-            const drawAlpha = lifeAlpha * (0.3 + 0.7 * twinkle);
-            if (drawAlpha < 0.03) return;
+            const drawAlpha = 0.45 + 0.55 * twinkle;
             const [cr, cg, cb] = nightPalette[s.palIdx];
             skyCtx.font = `400 ${s.size}px "IBM Plex Mono", monospace`;
             skyCtx.fillStyle = `rgba(${cr},${cg},${cb},${drawAlpha.toFixed(3)})`;
@@ -2015,6 +2097,59 @@ function drawSky(t) {
             const drawY = ((s.y + skyTiltOffset) % 1.0 + 1.0) % 1.0 * h;
             skyCtx.fillText(s.sym, drawX, drawY);
         });
+
+        // Moon — real current phase; wraps with chamber rotation like the stars.
+        // Rest position (0.62, 0.075) floats it in the deep sky pocket above the
+        // facing wall, inside the band visible over the ceiling wedges in normal
+        // chamber view (the roofline rises toward the sides); heavens-tilt shifts
+        // it down with the rest of the firmament, rotation slides it around.
+        {
+            const mx = ((0.62 + skyRotationOffset) % 1.0 + 1.0) % 1.0 * w;
+            const my = ((0.075 + skyTiltOffset) % 1.0 + 1.0) % 1.0 * h;
+            drawMoon(skyCtx, mx, my, Math.max(15, Math.min(w, h) * 0.034), moonAge01());
+        }
+
+        // Shooting stars — spawned high (top 3–13% of the viewport) on shallow
+        // trajectories, so they play out inside the thin band of sky visible
+        // above the ceiling wedges in normal chamber view, not just in the big
+        // heavens-tilt sky.
+        if (!_nextMeteorAtMs) _nextMeteorAtMs = t + 8000 + Math.random() * 20000;
+        if (t >= _nextMeteorAtMs) {
+            const dir = Math.random() < 0.5 ? 1 : -1;
+            const ang = 0.25 + Math.random() * 0.35;                    // radians below horizontal
+            const speed = (0.55 + Math.random() * 0.5) * Math.max(w, 480);
+            _meteors.push({
+                x: (0.1 + Math.random() * 0.8) * w,
+                y: (0.03 + Math.random() * 0.10) * h,
+                vx: Math.cos(ang) * speed * dir,
+                vy: Math.sin(ang) * speed * 0.5,
+                life: 0,
+                dur: 0.7 + Math.random() * 0.5,
+                len: 70 + Math.random() * 90,
+            });
+            _nextMeteorAtMs = t + 16000 + Math.random() * 28000;
+        }
+        for (let i = _meteors.length - 1; i >= 0; i--) {
+            const m = _meteors[i];
+            m.life += dt;
+            if (m.life >= m.dur) { _meteors.splice(i, 1); continue; }
+            m.x += m.vx * dt; m.y += m.vy * dt;
+            const p = m.life / m.dur;
+            const env = Math.min(p / 0.15, 1) * Math.min((1 - p) / 0.3, 1);
+            const sp = Math.hypot(m.vx, m.vy);
+            const tailX = m.x - (m.vx / sp) * m.len, tailY = m.y - (m.vy / sp) * m.len;
+            const mg = skyCtx.createLinearGradient(m.x, m.y, tailX, tailY);
+            mg.addColorStop(0, `rgba(255,252,240,${(0.85 * env).toFixed(3)})`);
+            mg.addColorStop(0.25, `rgba(210,220,255,${(0.35 * env).toFixed(3)})`);
+            mg.addColorStop(1, 'rgba(210,220,255,0)');
+            skyCtx.strokeStyle = mg;
+            skyCtx.lineWidth = 1.6;
+            skyCtx.lineCap = 'round';
+            skyCtx.beginPath(); skyCtx.moveTo(m.x, m.y); skyCtx.lineTo(tailX, tailY); skyCtx.stroke();
+            skyCtx.fillStyle = `rgba(255,255,250,${(0.9 * env).toFixed(3)})`;
+            skyCtx.beginPath(); skyCtx.arc(m.x, m.y, 1.4, 0, Math.PI * 2); skyCtx.fill();
+        }
+
     } else {
         const tiltPx = skyTiltOffset * h;
         const grad = skyCtx.createLinearGradient(0, -tiltPx, 0, h - tiltPx);
@@ -2841,6 +2976,11 @@ document.addEventListener('click', (e) => {
         });
         if (closest && minDist < 50) {
             closest.classList.add('lit');
+            // Remember this candle across visits (index among ALL shrine candles,
+            // not just the unlit ones this handler queried).
+            rememberShrineCandle(
+                Array.from(wall.querySelectorAll('.shrine-candle')).indexOf(closest)
+            );
             if (closest.dataset.testChain) {
                 triggerShrineChainTestCandle();
             } else {
@@ -6374,6 +6514,22 @@ if (prismContainer) prismContainer.style.transition = 'none';
 }
 
 // --- Shrine: candles with random burn heights, ~18% lit, click to light ---
+// --- Candle persistence: candles the visitor has lit stay lit across return
+// visits (localStorage). The shrine accumulates a relationship with its pilgrim —
+// the ambient ~18% randomly-lit candles still reshuffle each visit ("other
+// visitors' candles"), but YOURS are always burning when you come back.
+function _persistedShrineCandles() {
+    try { return new Set(JSON.parse(localStorage.getItem('shrineLitCandles') || '[]')); }
+    catch (e) { return new Set(); }
+}
+function rememberShrineCandle(idx) {
+    try {
+        const s = _persistedShrineCandles();
+        s.add(idx);
+        localStorage.setItem('shrineLitCandles', JSON.stringify([...s]));
+    } catch (e) { /* private-mode etc. — the candle still lights this visit */ }
+}
+
 (function initShrine() {
     const candles = Array.from(document.querySelectorAll('.shrine-candle'));
     if (!candles.length) return;
@@ -6388,6 +6544,11 @@ if (prismContainer) prismContainer.style.transition = 'none';
         const idx = Math.floor(Math.random() * candles.length);
         if (idx !== TEST_CHAIN_CANDLE) litSet.add(idx);
     }
+    // Candles this visitor lit on previous visits burn again (even the test-chain
+    // candle, if they once lit it themselves).
+    _persistedShrineCandles().forEach(idx => {
+        if (idx >= 0 && idx < candles.length) litSet.add(idx);
+    });
 
     candles.forEach((candle, i) => {
         const isLit = litSet.has(i);

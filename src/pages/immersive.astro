@@ -901,7 +901,13 @@ import OrientationGate from '../components/OrientationGate.astro';
         const skyCtx = skyCanvasEl.getContext('2d');
         scene.background = null; // transparent — 2D sky canvas shows through
 
-        // Day/night from sessionStorage (set by landing page toggle)
+        // Day/night from sessionStorage (set by landing page toggle). Deep links
+        // can arrive here with no stored preference — seed from true local time,
+        // matching the landing page / prism chambers.
+        if (!sessionStorage.getItem('skyMode')) {
+            const _hr = new Date().getHours();
+            sessionStorage.setItem('skyMode', (_hr >= 7 && _hr < 19) ? 'day' : 'night');
+        }
         const skyIsNight = sessionStorage.getItem('skyMode') !== 'day';
         serpentMat.uniforms.uSkyIsDay.value = skyIsNight ? 0.0 : 1.0;
 
