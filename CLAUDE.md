@@ -1,6 +1,6 @@
 # Leilan.ai — Claude Code Master Reference
 
-*Last refreshed: 2026-07-03.*
+*Last refreshed: 2026-07-13.*
 
 ## What This Site Is
 
@@ -20,6 +20,7 @@ This repo's `.md` files and what each is for:
 - **`AUDIO.md`** — complete technical reference for the generative audio system (immersive soundscape + the 7-chamber event engine). Read in full before any audio change.
 - **`BANDWIDTH.md`** — bandwidth-optimisation & launch-resilience plan (Netlify free-tier budget, asset weights, lazy-loading).
 - **`VIDEO_BUTTONS.md`** — per-wall `▶ video` button mechanics + the R2-hosted, click-to-load playback overlay (fullscreen, portrait). See also the *Video System* section here.
+- **`AMELIORATION.md`** — the aesthetic-polish roadmap + open technical threads (currently: the sky-motion-latency bug, with analysis and ranked fix proposals). **At session start, offer the user what remains on it and let him pick**; update it as items complete.
 
 *Removed 2026-06-27:* `SEO.md` and `SEO_build.md` (both superseded by the built layer + the *Field-Note Layer (SEO)* section below, which now carries the launch checklist) and `SITE_OVERVIEW.md` (folded into this file).
 
@@ -402,6 +403,18 @@ Wall videos are **hosted on Cloudflare R2, not on Netlify** — this keeps large
 - **Encoding recipe (HandBrake):** H.264, **"Web Optimized" ticked** (faststart — else it won't stream), RF 22, 720p is plenty at wall-panel size; crop any stray edge. Then upload with **rclone** (the dashboard *and* `wrangler` both cap single uploads at 300 MiB; rclone does multipart, no limit). The user keeps a full rclone/HandBrake cheat-sheet locally (bucket `leilan-website-video`, remote `r2:`, `no_check_bucket=true`; test with `rclone ls r2:leilan-website-video`, upload with `rclone copyto "<file>" r2:leilan-website-video/<name>.mp4 --progress`).
 - **Overlay features** (all in `prism.js` `openWallVideo` / `prism.css` `.wall-video-*`): custom **fullscreen toggle** (⛛ diagonal-arrows SVG, upper-left) that fullscreens the *overlay* (iOS falls back to native `<video>` fullscreen) — the capture-phase click router hit-tests it *before* its outside-click-closes logic; **×** close upper-right; the video fills up to **92%×94%** of the wall (portrait-snug); and it works from the **portrait fullscreen reader** too (the reader keeps an enabled video button; `openWallVideo(wall, readerOverlay)` mounts the video over the reader).
 
+## Chamber Sky & Ritual Layer (prism.js, 2026-07-13)
+
+Client-side liveness features in the chamber pages (all in `public/scripts/prism.js` unless noted):
+
+- **True celestial time** — with no stored preference, `sessionStorage.skyMode` seeds from the visitor's local hour (day 07:00–18:59); seeded identically in `index.astro`, `prism.js` and `immersive.astro` (deep links). The ☀/☾ toggle still overrides per session.
+- **Fixed firmament** — night-sky stars come from a seeded PRNG (`_mulberry32(0x1E11A2)`): the same constellation every visit and every chamber. No blink-out/respawn; brightness twinkles 45–100%.
+- **Real-phase moon** — `moonAge01()` (synodic month vs the 2000-01-06 new-moon epoch) + `drawMoon()`: halo, earthshine, maria, correct waxing/waning geometry; opaque disc (occludes stars); rest position (0.62, 0.075) in the sky pocket above the facing wall; wraps with rotation/tilt like the stars.
+- **Shooting stars** — one per ~16–44s at night, spawned in the top 3–13% on shallow trajectories so they show in the thin normal-view sky band, not just heavens-tilt. (A Comet ZTF cameo was built then cut for realism — see `AMELIORATION.md`.)
+- **Candle persistence** — shrine candles the visitor lit relight on every return (`localStorage.shrineLitCandles`, restored in `initShrine`, recorded in the shrine click handler). Ambient random ~18% still reshuffle per visit. Immersive 3D candles not yet persisted.
+- **Curtain shimmer** — the scene-curtain (`prism.css`) breathes an emerald glow + shimmer sweep while assets decode; honours `prefers-reduced-motion`.
+- **Sky/wall motion sync** — rotation easing uses an exact `cubic-bezier(0.25,0.46,0.45,0.94)` evaluator (`_rotBezier`); the sky renders full-rate during rotations *and* tilts (`skyMoving`); meteor/cloud speeds use real delta-time. **Residual jerkiness remains — see Known Issue #8 and `AMELIORATION.md`.**
+
 ## Known Issues & Work in Progress
 
 ### 1. Shrine Heavens-Tilt Animation — NEEDS FIX
@@ -427,6 +440,9 @@ The original `mythopoeic-archive-ufo.html` link to *petertodd's Last Stand* incl
 
 ### 7. Video content still being delivered
 Two of ~13 planned wall videos are wired (Research Lab GPT-3, Mythos Crossbones); the rest arrive from aelf over time. Not a bug — see the *Video System* section for how to add each one. `VIDEO_BUTTONS.md` covers the per-wall button mechanics.
+
+### 8. Sky motion latency during rotation / heavens-tilt
+The star canvas moves slightly jerkily/behind the walls during chamber rotations and tilts (compositor-thread CSS transform vs main-thread canvas repaint). Two rounds of fixes have improved it (exact bezier sync, full-rate redraw, real dt); residual jank remains. **Full analysis + ranked fix proposals in `AMELIORATION.md`** (start with `transitionstart` clock-sync and draw-cost reduction; the structural fix is moving the sky onto a compositor-animated transform).
 
 ### Resolved
 - **Chamber framing — sky always visible + pillarbox (2026-07-03)**: the `--chamber-cover` zoom (fills width on wide/short landscape phones, `updateWallSize` in `prism.js`) is now **gated to short viewports** (`innerHeight ≤ COVER_MAX_VIEWPORT_H = 560`) *and* **capped** (`COVER_MAX = 1.06`) so it never crops the night sky off the ceiling wedges — a sliver of sky always shows. On desktop cover is a clean `1` (no zoom). When the cap leaves the prism narrower than the viewport (wide/short only — gated on `coverRaw > COVER_MAX`), black **pillarbox** bars (`#pillar-left`/`#pillar-right`, `.chamber-pillarbox`) mask the hexagon's outer-wall artefact at the far edges; width from `PILLAR_EDGE_K = COVER_K/2`. Desktop shows **no bars**. *(Future polish, parked: day-mode pillarbox reads as black letterbox against the blue sky — could be white/"static" fuzz instead; left black for now.)*
