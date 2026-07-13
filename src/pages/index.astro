@@ -467,6 +467,15 @@ const siteJsonLd = {
     </style>
   </head>
   <body>
+    <script is:inline>
+      // True celestial time: first arrival with no sky preference defaults to the
+      // visitor's actual local time of day (day 07:00–18:59). Runs before any
+      // other script reads skyMode; the ☀/☾ toggle still overrides for the session.
+      if (!sessionStorage.getItem('skyMode')) {
+        var _hr = new Date().getHours();
+        sessionStorage.setItem('skyMode', (_hr >= 7 && _hr < 19) ? 'day' : 'night');
+      }
+    </script>
     <OrientationGate />
     <div id="landing-curtain" style="position:fixed;inset:0;z-index:99999;background:#000;transition:opacity 0.4s ease-out;pointer-events:none;opacity:1;" aria-hidden="true"></div>
     <canvas id="canvas"></canvas>
@@ -1020,7 +1029,7 @@ escaping from electricity in the earth's blood
           sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
           return;
         }
-        if (daylightBtn && inImageZone(daylightBtn, e.clientX, e.clientY, 0.80, 1.00, 0.58, 0.95)) {
+        if (daylightBtn && inImageZone(daylightBtn, e.clientX, e.clientY, 0.76, 0.97, 0.58, 0.95)) {
           toggleDay();
         }
       });
@@ -1040,7 +1049,7 @@ escaping from electricity in the earth's blood
         let label = null;
         if (menuBtn && inImageZone(menuBtn, e.clientX, e.clientY, 0, 0.18, 0.50, 0.75)) {
           label = 'site navigation';
-        } else if (daylightBtn && inImageZone(daylightBtn, e.clientX, e.clientY, 0.80, 1.00, 0.58, 0.95)) {
+        } else if (daylightBtn && inImageZone(daylightBtn, e.clientX, e.clientY, 0.76, 0.97, 0.58, 0.95)) {
           label = 'toggle night/day';
         }
         if (label) {
