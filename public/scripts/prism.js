@@ -6682,6 +6682,51 @@ if (prismContainer) prismContainer.style.transition = 'none';
     Promise.race([Promise.all(promises), timeout]).then(liftCurtain);
 }
 
+// --- Tab-return curtain: coming back to a long-backgrounded tab, Chrome has
+// usually evicted the decoded wall bitmaps and their GPU layers. The sky
+// canvas (JS-painted) reappears instantly while the wall images re-decode
+// asynchronously — walls visibly "rebuild" over sky. Fix: cover the scene
+// SYNCHRONOUSLY inside the visibilitychange handler, so the tab's first paint
+// after unhide is the curtain rather than the ragged scene; re-decode the
+// chamber imagery behind it; lift with a quick fade. Short absences skip the
+// curtain entirely — eviction is unlikely and a flash would be worse. Also
+// covers back/forward-cache restores (they fire the same visible transition).
+{
+    const RETURN_MIN_HIDDEN_MS = 10000;
+    let _hiddenAt = 0;
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            _hiddenAt = performance.now();
+            return;
+        }
+        if (!_hiddenAt || performance.now() - _hiddenAt < RETURN_MIN_HIDDEN_MS) return;
+        _hiddenAt = 0;
+        if (document.getElementById('return-curtain')) return;
+        const c = document.createElement('div');
+        c.className = 'scene-curtain';
+        c.id = 'return-curtain';
+        c.setAttribute('aria-hidden', 'true');
+        c.style.transition = 'opacity 0.18s ease-out';
+        document.body.appendChild(c);
+        const proms = [];
+        document.querySelectorAll('.chamber img').forEach(img => {
+            if (img.decode) proms.push(img.decode().catch(() => {}));
+        });
+        Promise.race([
+            Promise.all(proms),
+            new Promise(r => setTimeout(r, 1500)),   // never hold the room hostage
+        ]).then(() => {
+            // Two rAFs: let the re-decoded walls actually paint beneath the
+            // curtain before it lifts (same trick as the load-time curtain).
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+                c.style.opacity = '0';
+                c.addEventListener('transitionend', () => c.remove(), { once: true });
+                setTimeout(() => c.remove(), 500);   // safety net
+            }));
+        });
+    });
+}
+
 // --- Shrine: candles with random burn heights, ~18% lit, click to light ---
 // --- Candle persistence: candles the visitor has lit stay lit across return
 // visits (localStorage). The shrine accumulates a relationship with its pilgrim —

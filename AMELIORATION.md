@@ -1,6 +1,6 @@
 # AMELIORATION.md — aesthetic upgrade roadmap + open technical threads
 
-*Created 2026-07-13 (Fable 5 session). Audience: the next Claude instance working on this repo.*
+*Created 2026-07-13 (Fable 5 session); last updated 2026-07-14. Audience: the next Claude instance working on this repo.*
 
 **How to use this file:** at the start of a session, offer the user (Matthew, "M")
 whatever remains on this list and ask what he wants to work on — he picks, you don't.
@@ -96,18 +96,6 @@ ask M — his eye caught what my static screenshots couldn't.
 
 ## 🎨 REMAINING AESTHETIC ROADMAP (offer these at session start)
 
-### Material & light (the "touch the walls" tier)
-
-- **Candle glow on the shrine wall** — warm flickering light-pool cast upward from
-  lit candles onto the wall behind. (Already on the user-preferences
-  future-refinements list; it's the single biggest warmth upgrade in the central
-  chamber.)
-- **Dust motes** — a handful of slow-drifting luminous specks in each chamber's air.
-  Tiny DOM/canvas cost, huge "consecrated interior" effect.
-- **Illuminated initials** — drop-cap first letters in wall texts and field notes,
-  styled per-chamber (IM Fell English initial in Mythos, etc.). Manuscript-grade,
-  pure CSS.
-
 ### Motion & thresholds (the "seamless dream" tier)
 
 - ~~**Fix the heavens-tilt hinge**~~ — **NON-ISSUE, do not revisit (2026-07-13).**
@@ -126,15 +114,53 @@ ask M — his eye caught what my static screenshots couldn't.
 
 ### Edges & completeness (the "no seams anywhere" tier)
 
-- **A themed 404** — "You have wandered beyond the temple walls…" with a candle and
-  a path back. Cheap, delightful, and exactly the kind of page that gets
-  screenshotted and shared.
 - **Purpose-made OG card (1200×630)** — already on the launch list; it's the site's
   face on every social share, currently just the portrait crop.
 - **Day-mode pillarbox** — the parked white/"static fuzz" idea, so wide-phone day
   view stops reading as letterbox.
 
 ---
+
+## ✅ DONE (2026-07-14 session — the whole "material & light" tier, commit `aa8fa18` + follow-ups)
+
+- **Candle glow on the shrine wall** — every lit candle casts a warm light-pool up
+  the wall: a `::before` radial gradient on `.shrine-candle` shown by the existing
+  `.lit` class (so it follows clicks, ambient and persistence for free), each
+  breathing on its own randomised rhythm (`--glow-dur`/`--glow-delay` set in
+  `initShrine`). No blend modes (Chrome preserve-3d + blends is untrustworthy).
+  Knobs: the gradient in the `.shrine-candle::before` rule (prism.css).
+- **Persisted-candle relight cap** — the persisted set grows monotonically (every
+  candle ever clicked), so a devoted pilgrim arrived to a shrine ablaze. Only the
+  **5 most recent** relight now (`PERSISTED_RELIT_MAX` in `initShrine`); the full
+  history stays in localStorage.
+- **Dust motes** — 1–2px hard pinpricks on a screen-space overlay canvas
+  (`#mote-canvas`, z-index 2, created in prism.js), Brownian-jittered drift with
+  occasional sharp glints (pow-envelope) rather than constant glow; they pan with
+  `skyRotationOffset`/`skyTiltOffset` so the dust belongs to the chamber, not the
+  glass. Drawn from the drawSky rAF. Skipped under `prefers-reduced-motion` and in
+  the ASCII gallery. First version (big soft glowy orbs) was rejected — keep them
+  tiny, sharp, glinting. Knobs: density `/36000`, `s:`, `a:`, `aS:` in `initMotes`.
+- **Illuminated initials** — per-chamber `::first-letter` drop caps on every
+  word-wall text (full 3.3em size): Mythos = gold IM Fell English w/ candle bloom,
+  OVS = deep vermillion-star purple Marcellus, Research = phosphor ice-blue Space
+  Mono. One shared rule + three colour rules in prism.css. Wall-text HTML untouched
+  (shared with field notes). Not yet in the portrait/fullscreen reader (clones text
+  outside the wall panel) — possible follow-up, as are field-note drop caps.
+- **Landing "day/night"** — tooltip/alt/aria all unified to "toggle day/night", and
+  `landing_UR.webp` itself edited by glyph surgery (day+ight blocks transplanted,
+  n rebuilt from h with synthesised edging matched to measured glyph-outline stats,
+  / drawn to stroke weight; lossless WebP). Pristine original recoverable via
+  `git show` if aelf ever redraws it.
+- **Tab-return piecemeal rebuild fix** — see CLAUDE.md Resolved for the full note;
+  summary: visibilitychange re-arms a fast scene-curtain (synchronous insert, so the
+  first paint after unhide is the curtain), re-`decode()`s chamber imagery behind
+  it, lifts in 180ms; only after 10s+ hidden; 1.5s cap.
+- **Themed 404** (`src/pages/404.astro`) — "You have wandered beyond the temple
+  walls…": black + the sanctuary firmament (same mulberry32 seed as the chambers,
+  generated at build time), a CSS candle with breathing light-pool (after the
+  shrine candles), Cormorant italic line, emerald paths back to `/` and
+  `/field-notes/`. Self-contained (~15KB HTML), `noindex`, honours reduced-motion;
+  Netlify serves `dist/404.html` automatically. Not in the sitemap.
 
 ## ✅ DONE (from the original 2026-07-13 pitch — for context)
 
