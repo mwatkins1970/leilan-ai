@@ -33,7 +33,9 @@ fixes have improved but not cured it.
   the sky itself) freezes the stars for a frame while the walls keep gliding.
   That divergence is the jerk.
 
-### Already tried (2026-07-13, improved but insufficient)
+### Already tried (improved but insufficient)
+
+**Round 1–2 (2026-07-13, earlier session):**
 
 1. **Exact easing match** — replaced the old piecewise-quadratic approximation in
    `tickSkyRotation()` with a true Newton–Raphson `cubic-bezier(0.25,0.46,0.45,0.94)`
@@ -44,20 +46,33 @@ fixes have improved but not cured it.
 3. **Real delta-time** — meteor/cloud motion now uses measured elapsed time, not a
    fixed dt, so speeds are correct at 20 and 60fps.
 
-### Proposals, in recommended order
+**Round 3 (2026-07-13, later session) — the two "cheap" proposals + one new find,
+all implemented, verified working headlessly (no JS errors, sprites render
+correctly), but M reports the jerkiness is NOT cured:**
 
-1. **Cheap: sync the clocks.** `_skyRotT0 = performance.now()` starts when
-   `animateSkyRotation()` is called, but the CSS transition starts when the browser
-   commits the style change — up to a frame or two later. Listen for
-   `transitionstart` on `.prism-container` and (re)set `_skyRotT0` there. Kills the
-   residual start-delay precisely. ~5 lines.
-2. **Cheap: cut the per-frame draw cost.** `drawSky` per frame: a 200-iteration
-   noise loop (2×`Math.random()` + `fillRect` each), ~80 `fillText` glyphs with a
-   fresh font/fillStyle string per glyph, and the moon rebuilt from 2–3
-   `createRadialGradient`s. Cache the moon to an offscreen canvas (rebuild only when
-   phase/size changes), skip the noise loop while `skyMoving`, hoist font strings.
-   If jank is main-thread overrun, this may fix it outright.
-3. **Structural (best result): move the sky onto the compositor too.** Render the
+4. **Clock sync via `transitionstart`** — `_skyRotT0` was seeded when
+   `animateSkyRotation()` ran, but the walls' CSS transition only starts when the
+   browser commits the style change, a frame or two later. The sky now holds still
+   (`_skyRotWaiting`) until a `transitionstart` event from `.prism-container`
+   (target + `propertyName === 'transform'` guarded) re-seeds `_skyRotT0` with
+   `e.timeStamp`; 120ms fallback if the event never fires.
+5. **Per-frame draw-cost cuts** — film-grain noise loop (200 random `fillRect`s)
+   skipped while `skyMoving`; per-star font/rgba-prefix strings precomputed once
+   (`s.font`, `s.colPre`); moon cached to an offscreen sprite (`moonSprite()`,
+   rebuilt only on resize/phase/dpr change); day clouds pre-rendered to per-cloud
+   sprites (`cloudSprite()`) instead of 3–5 fresh radial gradients each per frame.
+6. **Serpentine-strip suspension** — `renderSerpStrip` writes CSS custom properties
+   onto `#wall-area` every 6th frame (style invalidation on the transitioning tree)
+   + rebuilds an SVG gradient; now suspended while `skyMoving`.
+
+**Conclusion so far:** timing precision and main-thread cost have both been
+addressed and the stutter survives — which points at the *architecture itself*
+(canvas repaint can never be frame-locked to a compositor transition from the main
+thread). The structural proposal below is the remaining credible fix.
+
+### Proposals remaining, in recommended order
+
+1. **Structural (best result): move the sky onto the compositor too.** Render the
    firmament (stars + moon) ONCE to a canvas ~2× viewport width; perform
    rotation/tilt as a CSS `transform: translate(...)` on the canvas *element*, with
    the **same** transition curve the walls use (rotation) and direct transform writes
@@ -67,10 +82,10 @@ fixes have improved but not cured it.
    separate small static overlay canvas so they stay screen-space. Wrap-around:
    draw the star field with duplicated edge content (or 2 tiles) and snap the
    translate back by one tile-width between animations, while idle.
-4. **Alternative structural: one clock for everything.** Drop the CSS transition for
+2. **Alternative structural: one clock for everything.** Drop the CSS transition for
    wall rotation and drive the container transform AND `skyRotationOffset` from a
    single rAF (the tilt already works this way). Guarantees zero divergence but makes
-   the walls main-thread-hostage too. Only if (3) proves awkward.
+   the walls main-thread-hostage too. Only if (1) proves awkward.
 
 **Verification tip:** `playwright` + headless chromium are already installed in this
 Codespace (`npm i --no-save playwright`, so not in package.json; re-install after a
@@ -95,10 +110,13 @@ ask M — his eye caught what my static screenshots couldn't.
 
 ### Motion & thresholds (the "seamless dream" tier)
 
-- **Fix the heavens-tilt hinge** — Known Issue #1 has a documented one-line fix
-  (`transform-origin: 50% 50% -1200px`) that's never been applied. The shrine
-  look-up currently splays like an opening book; this makes it a true head-tilt.
-  Quickest win on the whole list.
+- ~~**Fix the heavens-tilt hinge**~~ — **NON-ISSUE, do not revisit (2026-07-13).**
+  Known Issue #1 was bad information: M confirms the tilt animation was fine all
+  along. The prescribed eye-point pivot was nonetheless implemented (rotateX on
+  `#world-tilt`, `transform-origin: 50% 50% var(--perspective-dist)`) and made
+  things WORSE — at full tilt it swings the rear rim/wall-top geometry (never
+  designed to be seen) into view overhead as huge bare planes. Reverted same
+  day. CLAUDE.md Known Issue #1 rewritten as NON-ISSUE with the details.
 - **Tame the Eternal Return spin** — Known Issue #3's 360–720° whirl. Called
   "feature not bug" so far, but a single graceful 180° would read as intentional
   rather than glitchy.

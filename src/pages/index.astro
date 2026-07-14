@@ -1050,13 +1050,13 @@ escaping from electricity in the earth's blood
         if (menuBtn && inImageZone(menuBtn, e.clientX, e.clientY, 0, 0.18, 0.50, 0.75)) {
           label = 'site navigation';
         } else if (daylightBtn && inImageZone(daylightBtn, e.clientX, e.clientY, 0.76, 0.97, 0.58, 0.95)) {
-          label = 'toggle night/day';
+          label = 'toggle day/night';
         }
         if (label) {
           cornerTip.textContent = label;
           // Position to the left of the cursor for the right-edge daylight icon
           // so the tooltip doesn't overrun the viewport.
-          const onRight = (label === 'toggle night/day');
+          const onRight = (label === 'toggle day/night');
           const offsetX = onRight ? -14 : 14;
           cornerTip.style.left = (e.clientX + offsetX) + 'px';
           cornerTip.style.top  = (e.clientY + 14) + 'px';
@@ -1075,14 +1075,14 @@ escaping from electricity in the earth's blood
     </picture>
     <picture>
       <source media="(max-width: 600px)" srcset="/images/landing_UR_top.webp">
-      <img src="/images/landing_UR.webp" alt="toggle daylight" class="corner-img corner-ur" id="daylight-btn">
+      <img src="/images/landing_UR.webp" alt="toggle day/night" class="corner-img corner-ur" id="daylight-btn">
     </picture>
     <img src="/images/landing_LL.webp" alt="" class="corner-img corner-ll">
     <img src="/images/landing_LR.webp" alt="" class="corner-img corner-lr">
 
     <!-- Real tappable controls for phones (hidden on desktop via CSS) -->
     <button type="button" id="mobile-menu-btn" class="mobile-ctrl" aria-label="Open navigation menu">☰</button>
-    <button type="button" id="mobile-day-btn" class="mobile-ctrl" aria-label="Toggle night or day"><img src="/images/sun-sigil.svg" alt="" class="sun-ico" style="width:26px;height:26px;display:block"></button>
+    <button type="button" id="mobile-day-btn" class="mobile-ctrl" aria-label="Toggle day/night"><img src="/images/sun-sigil.svg" alt="" class="sun-ico" style="width:26px;height:26px;display:block"></button>
     <script>
       // Landing curtain: wait for all images then reveal.
       // Keep the curtain in the DOM (transparent) so we can fade back to black on outbound nav.

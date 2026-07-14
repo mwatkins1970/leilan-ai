@@ -762,6 +762,10 @@ function resetShrineSearch() {
 // Adds rotateX to the prism-container transform — same axis as the working wall rotation but horizontal.
 // The pivot passes through the hexagon's left/right edge midpoints (the viewer's "ear-to-ear" axis),
 // so the shrine wall drops away downward and the open ceiling reveals the sky canvas above.
+// NOTE (2026-07-13): do NOT "fix" this to a true eye-point pivot (tried via rotateX on
+// #world-tilt with transform-origin z at the perspective distance, reverted same day):
+// a rigid head-tilt swings the rear rim/wall-top geometry — never designed to be seen —
+// into view overhead at full tilt. The wall-plane hinge keeps it below the frame.
 function startLookUpAnim(fromDeg, toDeg, durationMs, onComplete) {
     if (!prismContainer) { onComplete?.(); return; }
     if (_skyAnimFrame) { cancelAnimationFrame(_skyAnimFrame); _skyAnimFrame = null; }
@@ -1295,6 +1299,19 @@ function rotateToWall(targetWall) {
 const rotateLeft = lookRight;
 const rotateRight = lookLeft;
 
+// Sync the sky-rotation clock to the walls' ACTUAL transition start. The CSS
+// transition begins when the browser commits the style change — up to a frame
+// or two after animateSkyRotation() ran — so seeding _skyRotT0 there made the
+// stars run ahead of the walls by that gap on every rotation.
+if (prismContainer) {
+    prismContainer.addEventListener('transitionstart', (e) => {
+        if (e.target !== prismContainer || e.propertyName !== 'transform') return;
+        if (!_skyRotWaiting) return;
+        _skyRotWaiting = false;
+        _skyRotT0 = e.timeStamp || performance.now();
+    });
+}
+
 // Unlock rotation after CSS transition completes
 if (prismContainer) {
     prismContainer.addEventListener('transitionend', (e) => {
@@ -1808,6 +1825,40 @@ for (let i = 0; i < 12; i++) {
     });
 }
 
+// Each cloud's puff is a fixed shape — 3–5 overlapping soft radial gradients
+// (opaque centre → transparent edge, matching immersive.astro) that only ever
+// translate. Rebuilding those gradients per blob per frame was the day sky's
+// main per-frame cost, so render each cloud once to a sprite and blit.
+// Sprite anchor = blob 0's centre, offset by (_padX, _padY) from the top-left.
+function cloudSprite(c) {
+    const dpr = Math.min(window.devicePixelRatio, 2);
+    if (c._sprite && c._dpr === dpr) return c._sprite;
+    const s = c.size;
+    const padX = s * 0.7, padY = s * 0.9;
+    const wpx = padX + (c.blobs - 1) * s * 0.6 + s * 0.7;
+    const hpx = padY * 2;
+    const cv = document.createElement('canvas');
+    cv.width = Math.ceil(wpx * dpr);
+    cv.height = Math.ceil(hpx * dpr);
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    for (let b = 0; b < c.blobs; b++) {
+        const bx = padX + b * s * 0.6;
+        const by = padY + Math.sin(b * 1.2) * s * 0.2;
+        const br = s * (0.5 + Math.sin(b * 0.8) * 0.2);
+        const grad = ctx.createRadialGradient(bx, by, 0, bx, by, br);
+        grad.addColorStop(0,   `rgba(255, 255, 255, ${c.opacity})`);
+        grad.addColorStop(0.4, `rgba(255, 255, 255, ${(c.opacity * 0.65).toFixed(3)})`);
+        grad.addColorStop(1,    'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(bx, by, br, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    c._sprite = cv; c._dpr = dpr; c._padX = padX; c._padY = padY;
+    return cv;
+}
+
 // Night stars — a FIXED FIRMAMENT: positions/symbols come from a seeded PRNG,
 // so every visit (and every chamber) shows the same constellation. Stars never
 // blink out or respawn; they only twinkle in brightness (see drawSky).
@@ -1845,6 +1896,14 @@ for (let i = 0; i < NUM_SMALL_STARS; i++) {
         palIdx: Math.floor(_starRand() * nightPalette.length),
     });
 }
+// Precompute each star's canvas state strings once — building a font string and
+// an rgba() template per star per frame was measurable main-thread cost in
+// drawSky, and every ms there is a potential stutter while the walls rotate.
+skyStars.forEach(s => {
+    s.font = `400 ${s.size}px "IBM Plex Mono", monospace`;
+    const [cr, cg, cb] = nightPalette[s.palIdx];
+    s.colPre = `rgba(${cr},${cg},${cb},`;
+});
 
 // --- Real lunar phase: the night-sky moon shows the moon's ACTUAL current
 // phase, so the cathedral's sky agrees with the one outside the visitor's
@@ -1897,6 +1956,28 @@ function drawMoon(ctx, cx, cy, r, age) {
     }
 }
 
+// Offscreen moon sprite: drawMoon builds 2–3 radial gradients + clipped arcs,
+// which is too expensive to repeat every frame during a rotation/tilt. The
+// moon only changes with radius (resize) or phase (daily), so render it once
+// to a small canvas and blit. Sprite side covers the halo (r × 3.2, both ways).
+let _moonSprite = null, _moonSpriteR = 0, _moonSpriteAge = -1, _moonSpriteDpr = 0;
+function moonSprite(r, age) {
+    const dpr = Math.min(window.devicePixelRatio, 2);
+    const ageKey = Math.round(age * 1000); // phase moves ~0.034/day — plenty
+    if (!_moonSprite || Math.abs(r - _moonSpriteR) > 0.25 ||
+        ageKey !== _moonSpriteAge || dpr !== _moonSpriteDpr) {
+        const side = Math.ceil(r * 3.2 * 2) + 4;
+        _moonSprite = document.createElement('canvas');
+        _moonSprite.width = side * dpr;
+        _moonSprite.height = side * dpr;
+        const mctx = _moonSprite.getContext('2d');
+        mctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        drawMoon(mctx, side / 2, side / 2, r, age);
+        _moonSpriteR = r; _moonSpriteAge = ageKey; _moonSpriteDpr = dpr;
+    }
+    return _moonSprite;
+}
+
 // --- Shooting stars: brief meteor streaks in the night sky, one every ~16–44s.
 // They spawn in the top ~3–13% of the viewport on shallow trajectories, so they
 // stay inside the sliver of sky visible above the ceiling wedges in normal
@@ -1912,12 +1993,18 @@ let skyRotationOffset = 0; // normalized 0–1 horizontal shift applied to star/
 let _skyRotTarget = 0; // target value for animated sky rotation
 let _skyRotStart = 0;  // start value for animated sky rotation
 let _skyRotT0 = 0;     // animation start time
+let _skyRotWaiting = false; // true between animateSkyRotation() and the walls' transitionstart
 const SKY_ROT_DURATION = 800; // ms — matches CSS transition duration
 
 function animateSkyRotation(delta) {
     _skyRotStart = skyRotationOffset;
     _skyRotTarget = _skyRotTarget + delta;
+    // Fallback clock only: the CSS transition on .prism-container doesn't start
+    // until the browser commits the style change, up to a frame or two after
+    // this call. The transitionstart listener below re-seeds _skyRotT0 at the
+    // true start; until it fires, tickSkyRotation holds the sky still.
     _skyRotT0 = performance.now();
+    _skyRotWaiting = true;
 }
 
 // Exact cubic-bezier(0.25, 0.46, 0.45, 0.94) — the chamber walls' CSS rotation
@@ -1942,6 +2029,14 @@ function _rotBezier(x) {
 
 function tickSkyRotation() {
     if (_skyRotStart === _skyRotTarget) return;
+    if (_skyRotWaiting) {
+        // Hold at the start value until the walls' transition actually begins
+        // (transitionstart re-seeds _skyRotT0). If the event never arrives
+        // (shouldn't happen — the transition is always in the stylesheet during
+        // rotations), fall back to the animateSkyRotation clock after 120ms.
+        if (performance.now() - _skyRotT0 < 120) return;
+        _skyRotWaiting = false;
+    }
     const elapsed = performance.now() - _skyRotT0;
     const progress = Math.min(elapsed / SKY_ROT_DURATION, 1.0);
     const ease = _rotBezier(progress);
@@ -1950,6 +2045,82 @@ function tickSkyRotation() {
         skyRotationOffset = _skyRotTarget;
         _skyRotStart = _skyRotTarget;
     }
+}
+
+// --- Dust motes: a handful of slow-drifting luminous specks in the chamber
+// air. Screen-space overlay canvas above the walls (#mote-canvas, z-index 2,
+// pointer-events none — styled in prism.css), appended to <body> so chamber
+// transforms (archway walk-through zoom) don't scale it. Drawn from the same
+// rAF as drawSky at the same cadence. Skipped under prefers-reduced-motion
+// and in the ASCII gallery (whose phosphor-digital air stays dustless).
+const _motesOn = !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+    && document.querySelector('.chamber')?.dataset.prismId !== 'ascii-gallery';
+let _moteCtx = null, _moteW = 0, _moteH = 0;
+const _motes = [];
+(function initMotes() {
+    if (!_motesOn) return;
+    const cv = document.createElement('canvas');
+    cv.id = 'mote-canvas';
+    document.body.appendChild(cv);
+    function sizeMotes() {
+        const dpr = Math.min(window.devicePixelRatio, 2);
+        _moteW = window.innerWidth; _moteH = window.innerHeight;
+        cv.width = _moteW * dpr; cv.height = _moteH * dpr;
+        _moteCtx = cv.getContext('2d');
+        _moteCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    sizeMotes();
+    window.addEventListener('resize', sizeMotes);
+    const n = Math.max(14, Math.min(34, Math.round(_moteW * _moteH / 36000)));
+    for (let i = 0; i < n; i++) {
+        _motes.push({
+            x: Math.random() * _moteW,
+            y: Math.random() * _moteH,
+            vx: (Math.random() - 0.5) * 16,       // lateral drift
+            vy: -3 - Math.random() * 9,           // upward drift (candle-warmed air)
+            wP: Math.random() * Math.PI * 2,      // sway phase
+            wS: 0.3 + Math.random() * 0.7,        // sway speed
+            s: 1 + Math.random() * 1.4,           // hard pinprick, px
+            aP: Math.random() * Math.PI * 2,      // glint phase
+            aS: 0.3 + Math.random() * 0.8,        // glint cycle speed
+            a: 0.35 + Math.random() * 0.35,       // glint peak alpha
+        });
+    }
+})();
+
+// Real dust: tiny hard pinpricks tumbling on air currents, near-invisible until
+// a facet catches the light for a moment. Baseline alpha is very low; a sharp
+// pow() envelope gives each mote a brief glint every ~6–20s, so somewhere in
+// the chamber something faintly catches the light every second or two.
+function drawMotes(t, dt) {
+    if (!_moteCtx || !_motes.length) return;
+    const ctx = _moteCtx;
+    ctx.clearRect(0, 0, _moteW, _moteH);
+    const ts = t * 0.001;
+    const mg = 12; // wrap margin
+    for (const m of _motes) {
+        // Drift + sway, with a touch of Brownian jitter so paths tumble
+        m.vx += (Math.random() - 0.5) * 30 * dt;
+        m.vy += (Math.random() - 0.5) * 30 * dt;
+        m.vx = Math.max(-22, Math.min(22, m.vx));
+        m.vy = Math.max(-18, Math.min(6, m.vy));
+        m.x += (m.vx + Math.sin(ts * m.wS + m.wP) * 7) * dt;
+        m.y += (m.vy + Math.cos(ts * m.wS * 0.8 + m.wP) * 4) * dt;
+        if (m.x < -mg) m.x = _moteW + mg; else if (m.x > _moteW + mg) m.x = -mg;
+        if (m.y < -mg) m.y = _moteH + mg; else if (m.y > _moteH + mg) m.y = -mg;
+        const glint = Math.pow(Math.max(0, Math.sin(ts * m.aS + m.aP)), 10);
+        const alpha = m.a * (0.28 + 0.9 * glint);
+        ctx.globalAlpha = Math.min(0.85, alpha);
+        ctx.fillStyle = 'rgb(255, 249, 235)';
+        // The dust belongs to the chamber, not the screen: pan with the same
+        // rotation/tilt offsets as the star field (under pure rotation about
+        // the viewer, near and far content shifts equally in angle), wrapping
+        // at the viewport like the stars do.
+        const drawX = ((m.x + skyRotationOffset * _moteW) % _moteW + _moteW) % _moteW;
+        const drawY = ((m.y + skyTiltOffset * _moteH) % _moteH + _moteH) % _moteH;
+        ctx.fillRect(drawX, drawY, m.s, m.s);
+    }
+    ctx.globalAlpha = 1;
 }
 
 let skyW = 0, skyH = 0;
@@ -2073,14 +2244,19 @@ function drawSky(t) {
         skyCtx.fillStyle = '#000000';
         skyCtx.fillRect(0, 0, w, h);
 
-        for (let i = 0; i < 200; i++) {
-            const seed = i * 73.137 + skyFrame * 0.01;
-            const nx = ((Math.sin(seed * 1.31) * 0.5 + 0.5) * w + Math.random() * 3) % w;
-            const ny = ((Math.cos(seed * 0.97) * 0.5 + 0.5) * h + Math.random() * 3) % h;
-            const pal = nightPalette[i % nightPalette.length];
-            const a = 0.06 + Math.random() * 0.12;
-            skyCtx.fillStyle = `rgba(${pal[0]},${pal[1]},${pal[2]},${a})`;
-            skyCtx.fillRect(nx, ny, 1, 1);
+        // Film-grain noise: skipped while the sky is moving — 200 fillRects of
+        // random static are invisible during motion but cost real main-thread
+        // time exactly when the walls' compositor transition needs it least.
+        if (!skyMoving) {
+            for (let i = 0; i < 200; i++) {
+                const seed = i * 73.137 + skyFrame * 0.01;
+                const nx = ((Math.sin(seed * 1.31) * 0.5 + 0.5) * w + Math.random() * 3) % w;
+                const ny = ((Math.cos(seed * 0.97) * 0.5 + 0.5) * h + Math.random() * 3) % h;
+                const pal = nightPalette[i % nightPalette.length];
+                const a = 0.06 + Math.random() * 0.12;
+                skyCtx.fillStyle = `rgba(${pal[0]},${pal[1]},${pal[2]},${a})`;
+                skyCtx.fillRect(nx, ny, 1, 1);
+            }
         }
 
         skyCtx.textAlign = 'center';
@@ -2090,9 +2266,8 @@ function drawSky(t) {
             // twinkle — brightness breathes between 45% and 100%, never vanishing.
             const twinkle = 0.5 + 0.5 * Math.sin(t * 0.001 * s.speed + s.phase);
             const drawAlpha = 0.45 + 0.55 * twinkle;
-            const [cr, cg, cb] = nightPalette[s.palIdx];
-            skyCtx.font = `400 ${s.size}px "IBM Plex Mono", monospace`;
-            skyCtx.fillStyle = `rgba(${cr},${cg},${cb},${drawAlpha.toFixed(3)})`;
+            skyCtx.font = s.font;
+            skyCtx.fillStyle = s.colPre + drawAlpha.toFixed(3) + ')';
             const drawX = ((s.x + skyRotationOffset) % 1.0 + 1.0) % 1.0 * w;
             const drawY = ((s.y + skyTiltOffset) % 1.0 + 1.0) % 1.0 * h;
             skyCtx.fillText(s.sym, drawX, drawY);
@@ -2106,7 +2281,10 @@ function drawSky(t) {
         {
             const mx = ((0.62 + skyRotationOffset) % 1.0 + 1.0) % 1.0 * w;
             const my = ((0.075 + skyTiltOffset) % 1.0 + 1.0) % 1.0 * h;
-            drawMoon(skyCtx, mx, my, Math.max(15, Math.min(w, h) * 0.034), moonAge01());
+            const r = Math.max(15, Math.min(w, h) * 0.034);
+            const sprite = moonSprite(r, moonAge01());
+            const side = sprite.width / _moonSpriteDpr;
+            skyCtx.drawImage(sprite, mx - side / 2, my - side / 2, side, side);
         }
 
         // Shooting stars — spawned high (top 3–13% of the viewport) on shallow
@@ -2164,29 +2342,20 @@ function drawSky(t) {
             if (c.x > 1.3) c.x = -0.3;
             const cx = ((c.x + skyRotationOffset) % 1.0 + 1.0) % 1.0 * w;
             const cy = ((c.y + skyTiltOffset) % 1.0 + 1.0) % 1.0 * h;
-            for (let b = 0; b < c.blobs; b++) {
-                const bx = cx + b * c.size * 0.6;
-                const by = cy + Math.sin(b * 1.2) * c.size * 0.2;
-                const br = c.size * (0.5 + Math.sin(b * 0.8) * 0.2);
-                // Soft radial gradient per blob (matches immersive.astro):
-                // opaque centre fading to fully transparent edge, so the
-                // overlapping blobs composite into a single fluffy puff
-                // instead of reading as a row of hard-edged discs. Used
-                // here by the MYTHOPOEIC heavens-tilt sky too, since it
-                // shares this `drawSky` renderer.
-                const grad = skyCtx.createRadialGradient(bx, by, 0, bx, by, br);
-                grad.addColorStop(0,   `rgba(255, 255, 255, ${c.opacity})`);
-                grad.addColorStop(0.4, `rgba(255, 255, 255, ${(c.opacity * 0.65).toFixed(3)})`);
-                grad.addColorStop(1,    'rgba(255, 255, 255, 0)');
-                skyCtx.fillStyle = grad;
-                skyCtx.beginPath();
-                skyCtx.arc(bx, by, br, 0, Math.PI * 2);
-                skyCtx.fill();
-            }
+            const sprite = cloudSprite(c);
+            skyCtx.drawImage(sprite, cx - c._padX, cy - c._padY,
+                sprite.width / c._dpr, sprite.height / c._dpr);
         });
     }
 
-    if (!isSkyView && skyFrame % 6 === 0) renderSerpStrip(t * 0.0003);
+    // Suspend the serpentine-border repaint while the sky moves: it writes CSS
+    // custom properties on #wall-area (style invalidation on the very tree the
+    // compositor is transitioning) and rebuilds an SVG gradient — a guaranteed
+    // main-thread hit right when the walls are gliding. It resumes on arrival;
+    // an 800ms pause in the border shimmer is imperceptible.
+    if (!isSkyView && !skyMoving && skyFrame % 6 === 0) renderSerpStrip(t * 0.0003);
+
+    if (_motesOn) drawMotes(t, dt);
 
     requestAnimationFrame(drawSky);
 }
@@ -6545,8 +6714,12 @@ function rememberShrineCandle(idx) {
         if (idx !== TEST_CHAIN_CANDLE) litSet.add(idx);
     }
     // Candles this visitor lit on previous visits burn again (even the test-chain
-    // candle, if they once lit it themselves).
-    _persistedShrineCandles().forEach(idx => {
+    // candle, if they once lit it themselves) — but only the MOST RECENT few.
+    // The persisted set grows monotonically (every candle ever clicked), so
+    // without a cap a devoted pilgrim arrives to a shrine already ablaze; the
+    // arrival should stay intimate — a few of "your" candles among the ambient.
+    const PERSISTED_RELIT_MAX = 5;
+    [..._persistedShrineCandles()].slice(-PERSISTED_RELIT_MAX).forEach(idx => {
         if (idx >= 0 && idx < candles.length) litSet.add(idx);
     });
 
@@ -6558,6 +6731,10 @@ function rememberShrineCandle(idx) {
         candle.querySelector('.candle-body').style.height = bodyH + 'vh';
         if (isLit) candle.classList.add('lit');
         if (i === TEST_CHAIN_CANDLE) candle.dataset.testChain = 'true';
+        // Wall-glow breathing rhythm: every candle gets its own duration/phase
+        // (set on lit and unlit alike, so candles lit by click later inherit one).
+        candle.style.setProperty('--glow-dur', (2.4 + Math.random() * 2.4).toFixed(2) + 's');
+        candle.style.setProperty('--glow-delay', (-Math.random() * 4).toFixed(2) + 's');
     });
 })();
 

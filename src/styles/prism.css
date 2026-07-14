@@ -129,7 +129,9 @@ body {
 
 /* World-tilt: passthrough preserve-3d wrapper between the perspective container
    and the prism hub. The shrine-heavens tilt is now applied as rotateX on the
-   prism-container directly, not here. */
+   prism-container directly, not here. (2026-07-13: an eye-point pivot was tried
+   here — rotateX + transform-origin z at var(--perspective-dist) — and reverted:
+   see the startLookUpAnim comment in prism.js.) */
 #world-tilt {
     position: absolute;
     inset: 0;
@@ -1413,9 +1415,55 @@ body:not(.sky-mode) .sky-toggle { display: none; }
                 0 0 0.5vh 0.12vh rgba(255, 200, 80, 0.32);
 }
 
+/* Candle glow — the warm light-pool a lit candle casts up the shrine wall.
+   A large soft radial gradient behind each candle: the candle's translateX
+   creates a stacking context, so z-index -1 puts the glow beneath the flame
+   and body but above the shrine backdrop / wall. Appears with .lit (so it
+   follows persistence for free) and breathes slowly; per-candle rhythm comes
+   from --glow-dur / --glow-delay randomised in initShrine (prism.js). No
+   blend mode — Chrome's preserve-3d handling of blends is untrustworthy. */
+.shrine-candle::before {
+    content: '';
+    position: absolute;
+    bottom: -1.5vh;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 18vh;
+    height: 26vh;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0;
+    background: radial-gradient(ellipse at 50% 90%,
+        rgba(255, 214, 120, 0.26) 0%,
+        rgba(255, 178, 70, 0.13) 30%,
+        rgba(255, 140, 30, 0.05) 62%,
+        transparent 84%);
+}
+.shrine-candle.lit::before {
+    opacity: 1;
+    animation: candleGlowBreath var(--glow-dur, 3.1s) ease-in-out var(--glow-delay, 0s) infinite alternate;
+}
+@keyframes candleGlowBreath {
+    from { opacity: 0.68; }
+    to   { opacity: 1; }
+}
+
 @keyframes candleFlicker {
     from { transform: translateX(-50%) scaleY(0.87) scaleX(1.13); opacity: 0.9; }
     to   { transform: translateX(-50%) scaleY(1.13) scaleX(0.87); opacity: 1; }
+}
+
+/* Dust motes — slow-drifting luminous specks in the chamber air. Canvas is
+   created by prism.js (skipped under prefers-reduced-motion and in the ASCII
+   gallery); z-index 2 floats it over the walls but under the archway click
+   overlay (10), nav (50) and every modal/overlay layer. */
+#mote-canvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 2;
 }
 
 /* ===== Poetry passage walls (GPT-3 Library) ===== */
@@ -1616,6 +1664,43 @@ body:not(.sky-mode) .sky-toggle { display: none; }
 }
 .chamber[data-prism-id="mythopoeic-archive"] .wall-text-body p {
     margin-bottom: 0.78em;
+}
+/* Illuminated initials — manuscript drop caps on the first letter of every
+   word-wall text, in each chamber's own face and palette. (Concept approved
+   from the Mythos wall-1 prototype 2026-07-14, then sized to 75% and applied
+   to all walls of the three word chambers.) Float-based ::first-letter, not
+   initial-letter, for cross-browser reach. The wall-text HTML is untouched —
+   field-note pages are unaffected. */
+.chamber[data-prism-id="mythopoeic-archive"] .wall-text-body > p:first-child::first-letter,
+.chamber[data-prism-id="ovs-chapel"] .wall-text-body > p:first-child::first-letter,
+.chamber[data-prism-id="research-lab"] .wall-text-body > p:first-child::first-letter {
+    float: left;
+    font-size: 3.3em;
+    line-height: 0.8;
+    padding: 0.05em 0.1em 0 0;
+    font-style: normal;
+}
+/* Mythos: gold leaf on dark indigo, IM Fell English */
+.chamber[data-prism-id="mythopoeic-archive"] .wall-text-body > p:first-child::first-letter {
+    font-family: 'IM Fell English', serif;
+    color: #d8b25e;
+    text-shadow:
+        0 0 10px rgba(216, 178, 94, 0.40),
+        0 0 28px rgba(216, 178, 94, 0.18);
+}
+/* OVS: deep vermillion-star purple on the vermillion panel, Marcellus */
+.chamber[data-prism-id="ovs-chapel"] .wall-text-body > p:first-child::first-letter {
+    font-family: 'Marcellus', 'Cormorant Garamond', serif;
+    color: #3a0d5c;
+    text-shadow: 0 1px 0 rgba(255, 235, 200, 0.25);
+}
+/* Research: phosphor ice-blue on the terminal panel, Space Mono */
+.chamber[data-prism-id="research-lab"] .wall-text-body > p:first-child::first-letter {
+    font-family: 'Space Mono', 'IBM Plex Mono', monospace;
+    color: #9ed2ff;
+    text-shadow:
+        0 0 10px rgba(120, 200, 255, 0.45),
+        0 0 26px rgba(120, 200, 255, 0.20);
 }
 .chamber[data-prism-id="mythopoeic-archive"] .wall-text-body a {
     color: #a894e8;
