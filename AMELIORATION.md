@@ -114,8 +114,6 @@ ask M — his eye caught what my static screenshots couldn't.
 
 ### Edges & completeness (the "no seams anywhere" tier)
 
-- **Purpose-made OG card (1200×630)** — already on the launch list; it's the site's
-  face on every social share, currently just the portrait crop.
 - **Day-mode pillarbox** — the parked white/"static fuzz" idea, so wide-phone day
   view stops reading as letterbox.
 
@@ -157,10 +155,18 @@ ask M — his eye caught what my static screenshots couldn't.
   it, lifts in 180ms; only after 10s+ hidden; 1.5s cap.
 - **Themed 404** (`src/pages/404.astro`) — "You have wandered beyond the temple
   walls…": black + the sanctuary firmament (same mulberry32 seed as the chambers,
-  generated at build time), a CSS candle with breathing light-pool (after the
-  shrine candles), Cormorant italic line, emerald paths back to `/` and
-  `/field-notes/`. Self-contained (~15KB HTML), `noindex`, honours reduced-motion;
-  Netlify serves `dist/404.html` automatically. Not in the sitemap.
+  generated at build time), the pulsing OVS vermillion star (mirrors the chapel
+  wall star — keep in sync), Cormorant italic line, emerald paths back to `/` and
+  `/field-notes/`, and a soft radial "clearing" (`main::before`) so stars never
+  sit in the text. Self-contained, `noindex`, honours reduced-motion; Netlify
+  serves `dist/404.html` automatically. Not in the sitemap.
+- **Purpose-made OG card** (`public/images/og-card.jpeg`, 1200×630, ~143KB) —
+  goddess portrait right (yin-yang cropped, JPEG blacks floored to pure black),
+  emerald mono `leilan.ai` + Cormorant italic "an AI goddess, glitch tokens & the
+  SolidGoldMagikarp story" left, seeded firmament stars. Wired as `og:image`/
+  `twitter:image` in `index.astro`, `data.astro`, and the `FieldNoteLayout`
+  default. Composited with Pillow (fonts fetched as TTF from Google Fonts).
+  Launch-checklist item retired in CLAUDE.md.
 
 ## ✅ DONE (from the original 2026-07-13 pitch — for context)
 

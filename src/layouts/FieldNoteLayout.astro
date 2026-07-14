@@ -14,7 +14,7 @@ interface Props {
     jsonLd?: Record<string, unknown>[];
 }
 
-const { pageTitle, description, ogType = 'article', ogImage = '/images/leilan-portrait.jpeg', jsonLd = [] } = Astro.props;
+const { pageTitle, description, ogType = 'article', ogImage = '/images/og-card.jpeg', jsonLd = [] } = Astro.props;
 
 const canonical = new URL(Astro.url.pathname, Astro.site).href;
 const ogImageUrl = new URL(ogImage, Astro.site).href;
