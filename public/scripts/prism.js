@@ -64,6 +64,7 @@ let _inChainNavMode = false;
 let _heavensScrollWatcher = null;
 let activeTextBody = null;   // set when a text frame is open, used for keyboard scroll
 const SCROLL_STEP = 120;     // px per arrow-key / button press
+const FRAME_MELT_MS = 420;   // matches the .melting animation in prism.css
 // The shrine search-results box only overflows by a little, so the 120px
 // SCROLL_STEP would jump the whole list in one press. Its arrows step by one
 // result row instead, for gradual scrolling.
@@ -158,10 +159,63 @@ const COVER_MAX = 1.06;
 // COVER_K/2 is where the prism "just fills" the width, i.e. the outer wall corners —
 // so the pillarbox edge sits there. Tune up to nudge the black edges inward.
 const PILLAR_EDGE_K = COVER_K / 2;
+
+// Pillarbox "static fuzz" — plain black bars read as dead letterboxing beside
+// the (always-lit) chamber walls, so both modes carry an animated grain: day a
+// pale paper-grain (`--pillar-noise`, base #e6edf3-ish), night a dark
+// dead-channel static (`--pillar-noise-night`, near-black with sparse brighter
+// flecks). Three 96px tiles per palette are generated once and cycled ~9fps,
+// but only while the bars actually exist (_pillarBarW > 0, set by
+// updateWallSize) and the tab is visible; only the active mode's property is
+// written each tick. Reduced motion gets a single static frame.
+let _pillarBarW = 0;
+(function initPillarNoise() {
+    const makeFrames = (base, spread, fleckChance, fleckDelta) => {
+        const frames = [];
+        for (let f = 0; f < 3; f++) {
+            const cv = document.createElement('canvas');
+            cv.width = cv.height = 96;
+            const ctx = cv.getContext('2d');
+            const img = ctx.createImageData(96, 96);
+            const d = img.data;
+            for (let i = 0; i < d.length; i += 4) {
+                const v = base + Math.random() * spread - spread / 2;
+                const fleck = Math.random() < fleckChance ? fleckDelta : 0;
+                d[i]     = v + fleck - 6;
+                d[i + 1] = v + fleck + 1;
+                d[i + 2] = v + fleck + 8;                   // faint blue cast
+                d[i + 3] = 255;
+            }
+            ctx.putImageData(img, 0, 0);
+            frames.push(`url(${cv.toDataURL()})`);
+        }
+        return frames;
+    };
+    const dayFrames = makeFrames(225, 26, 0.02, -38);   // pale paper-grain
+    const nightFrames = makeFrames(58, 44, 0.05, 85);   // dim-grey TV static, bright flecks
+    document.documentElement.style.setProperty('--pillar-noise', dayFrames[0]);
+    document.documentElement.style.setProperty('--pillar-noise-night', nightFrames[0]);
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    let fi = 0;
+    setInterval(() => {
+        if (document.hidden || _pillarBarW <= 0) return;
+        fi = (fi + 1) % 3;
+        const isDay = document.body.classList.contains('day-mode');
+        document.documentElement.style.setProperty(
+            isDay ? '--pillar-noise' : '--pillar-noise-night',
+            isDay ? dayFrames[fi] : nightFrames[fi]);
+    }, 110);
+})();
+
 function updateWallSize() {
     const wallArea = document.getElementById('wall-area');
     if (!wallArea) return;
-    const h = wallArea.getBoundingClientRect().height;
+    // offsetHeight, NOT getBoundingClientRect().height: the rect includes the
+    // --chamber-cover scale this function itself applies, so measuring it on a
+    // resize (with cover > 1) inflated --wall-w by the cover factor — walls
+    // grew ~6% after any resize on wide/short viewports, silently shifting
+    // the archway geometry that other code derives from wall proportions.
+    const h = wallArea.offsetHeight;
     const wallW = h * IMG_ASPECT;
     wallArea.style.setProperty('--wall-w', wallW + 'px');
     wallArea.style.setProperty('--apothem', (wallW * Math.sqrt(3) / 2) + 'px');
@@ -178,6 +232,7 @@ function updateWallSize() {
     const capped = coverRaw > COVER_MAX;
     const sceneHalfW = PILLAR_EDGE_K * window.innerHeight * cover;
     const barW = capped ? Math.max(0, window.innerWidth / 2 - sceneHalfW) : 0;
+    _pillarBarW = barW;   // gates the day-mode static-fuzz animation
     const pl = document.getElementById('pillar-left');
     const pr = document.getElementById('pillar-right');
     if (pl) pl.style.width = barW + 'px';
@@ -230,6 +285,33 @@ function isWallVisible(wallNum, w = shrinePos) {
     return pos0 === 1 || pos0 === 2 || pos0 === 3;
 }
 
+// Rear rim CAP culling (2026-07-14). The horizontal .rim-wedge-bottom /
+// .rim-vertex-bottom caps face DOWNWARD: the same front faces the heavens
+// tilt legitimately shows from below are what ghost above the rooflines at
+// wide aspect ratios when they belong to walls behind the viewer (sighted
+// through the backface-culled rear walls). No backface-visibility rule can
+// split those two views — the distinction is which wall, not which face —
+// so the caps of walls at hidden positions get .rim-caps-culled here, and
+// everything is un-culled while a heavens tilt runs (the ceiling ring needs
+// all six). An earlier pass that hid whole rim sections left that ring
+// gap-toothed; caps-only + tilt gating is the surviving approach.
+function updateRimCapCulling(unionWithShrinePos = null) {
+    if (document.body.classList.contains('shrine-heavens-active')) return;
+    const hidden = n => !isWallVisible(n)
+        || (unionWithShrinePos !== null && !isWallVisible(n, unionWithShrinePos));
+    document.querySelectorAll('.rim-section[data-rim-wall]').forEach(el => {
+        el.classList.toggle('rim-caps-culled', hidden(parseInt(el.dataset.rimWall, 10)));
+    });
+    // Vertex k bridges walls k and k+1 — its cap shows only when both do.
+    document.querySelectorAll('.rim-vertex[data-rim-vertex]').forEach(el => {
+        const k = parseInt(el.dataset.rimVertex, 10);
+        el.classList.toggle('rim-caps-culled', hidden(k) || hidden(k === 6 ? 1 : k + 1));
+    });
+}
+function uncullRimCaps() {
+    document.querySelectorAll('.rim-caps-culled').forEach(el => el.classList.remove('rim-caps-culled'));
+}
+
 function isRefreshEntryTransition(oldPos0, newPos0) {
     // Refresh when the wall is behind the user (pos 5), one full step before
     // it enters the hidden-but-approaching position on either side.
@@ -259,7 +341,10 @@ if (prismContainer) {
 const _initFacing = document.querySelector(`.wall-panel[data-wall="${getFacingWall()}"]`);
 if (_initFacing) _initFacing.setAttribute('data-facing', '');
 // Disable pointer-events on hidden walls at init (function defined later, call deferred)
-requestAnimationFrame(() => { if (typeof updatePointerEvents === 'function') updatePointerEvents(); });
+requestAnimationFrame(() => {
+    if (typeof updatePointerEvents === 'function') updatePointerEvents();
+    if (typeof updateRimCapCulling === 'function') updateRimCapCulling();
+});
 
 // Minimap data: midpoint of each wall's edge on the hexagon (flat-top, wall 1 = top)
 const minimapMidpoints = [
@@ -902,6 +987,7 @@ function enterShrineHeavens(transmission) {
 
     // Brief pause before tilt, then tilt slowly upward, then slowly fade in the text
     window.setTimeout(() => {
+        uncullRimCaps(); // the tilt's ceiling ring shows all six rims' caps
         startLookUpAnim(0, 90, SHRINE_HEAVENS_UP_MS, () => {
             window.setTimeout(() => {
                 document.body.classList.add('shrine-heavens-reading');
@@ -950,6 +1036,7 @@ function leaveShrineHeavens() {
     window.setTimeout(() => {
         startLookUpAnim(90, 0, SHRINE_HEAVENS_DOWN_MS - PANEL_FADE_MS, () => {
             document.body.classList.remove('shrine-heavens-active');
+            updateRimCapCulling(); // chamber level again — re-cull rear caps
             shrineHeavensUI.overlay.setAttribute('aria-hidden', 'true');
             isShrineHeavensTransitioning = false;
             // Re-run archway overlay positioning now that the chamber is fully
@@ -1028,6 +1115,7 @@ function enterHeavensTilt(wallNum) {
     document.body.classList.add('shrine-heavens-active');
 
     window.setTimeout(() => {
+        uncullRimCaps(); // the tilt's ceiling ring shows all six rims' caps
         startLookUpAnim(0, 90, SHRINE_HEAVENS_UP_MS, () => {
             window.setTimeout(() => {
                 document.body.classList.add('shrine-heavens-reading');
@@ -1245,6 +1333,7 @@ function lookRight() {
     animateSkyRotation(-1/6);
     updatePrismTransform();
     afterRotation();
+    updateRimCapCulling(oldShrinePos); // union-cull while the rotation runs
 }
 
 function lookLeft() {
@@ -1261,6 +1350,7 @@ function lookLeft() {
     animateSkyRotation(1/6);
     updatePrismTransform();
     afterRotation();
+    updateRimCapCulling(oldShrinePos); // union-cull while the rotation runs
 }
 
 function targetShrinePosForFacingWall(targetWall) {
@@ -1293,6 +1383,7 @@ function rotateToWall(targetWall) {
 
     updatePrismTransform();
     afterRotation();
+    updateRimCapCulling(oldShrinePos); // union-cull while the rotation runs
 }
 
 // Back-compat names used elsewhere in this file.
@@ -1318,6 +1409,7 @@ if (prismContainer) {
         if (e.propertyName === 'transform') {
             isRotating = false;
             setFacingTag();
+            updateRimCapCulling(); // rotation settled — exact cull set
             updateAlephChars();
             if (archwayOverlay && archwayOverlay.matches(':hover')) {
                 showArchwayTip();
@@ -1548,11 +1640,23 @@ function enterArchway(wallNum) {
     const startZ = apothem;
     const endZ = apothem * 1.8;
 
-    // Archway center — computed from the actual archway SVG position on the wall
+    // Archway center — anchor to the ACTUAL archway click-overlay rect (the
+    // element the user just clicked, positioned over the real door by
+    // updateArchwayOverlay). Re-deriving from wall-area percentages (the old
+    // way, kept as fallback) silently disagrees with the rendered door
+    // whenever an assumption drifts — e.g. the pre-fix updateWallSize
+    // inflation, or any future transform on the wall stack — and the rings
+    // then radiate from a point that isn't the door.
     const wallArea = document.getElementById('wall-area');
     let cx = window.innerWidth / 2;
     let cy = window.innerHeight * 0.88;
-    if (wallArea) {
+    const _ov = document.getElementById('archway-click-overlay');
+    if (_ov && _ov.style.display !== 'none') {
+        const r = _ov.getBoundingClientRect();
+        cx = r.left + r.width / 2;
+        // Target well into the lower portion of the dark opening
+        cy = r.top + r.height * 0.8;
+    } else if (wallArea) {
         const rect = wallArea.getBoundingClientRect();
         const wallW = parseFloat(wallArea.style.getPropertyValue('--wall-w')) || (rect.height * IMG_ASPECT);
         const wallLeft = rect.left + (rect.width - wallW) / 2;
@@ -1566,6 +1670,24 @@ function enterArchway(wallNum) {
 
     // Spawn shimmer particles from archway center
     spawnShimmerParticles(cx, cy);
+
+    // The door MOVES during the zoom: the prism-container translateZ dolly
+    // magnifies about the PERSPECTIVE origin (mid wall-area), not about the
+    // door — so the door slides down/outward from its click-time position
+    // while the chamber scale stays anchored on (cx, cy). Rings drawn at the
+    // static point visibly drift off the door (worst on short viewports,
+    // where the door sits far from the perspective origin). Fix: re-anchor
+    // the ring centre to the door's LIVE rect each frame. The archway SVG
+    // spans its wall panel; the drawn door's dark opening bottom-centre sits
+    // at (centre, bottom − 6.25% of panel height) — same fractions as the
+    // static formula.
+    const _archEl = document.querySelector(`.wall-panel[data-wall="${wallNum}"] .wall-archway`);
+    function liveDoorCentre() {
+        if (!_archEl) return { x: cx, y: cy };
+        const r = _archEl.getBoundingClientRect();
+        if (!r.width) return { x: cx, y: cy };
+        return { x: r.left + r.width / 2, y: r.bottom - r.height * 0.0625 };
+    }
 
     // Set up chamber for scale-zoom into archway
     const chamber = document.querySelector('.chamber');
@@ -1611,9 +1733,11 @@ function enterArchway(wallNum) {
             vignetteEl.style.opacity = String(Math.min(1, easeT * 1.2));
         }
 
-        // Shimmer effect (starts later, builds gently)
+        // Shimmer effect (starts later, builds gently) — centred on the
+        // door's live position, which the translateZ dolly moves each frame.
         const shimmerProgress = Math.max(0, (rawT - 0.35) / 0.65);
-        drawShimmer(shimmerProgress, cx, cy);
+        const dc = liveDoorCentre();
+        drawShimmer(shimmerProgress, dc.x, dc.y);
 
         if (rawT < 1) {
             requestAnimationFrame(animate);
@@ -1698,7 +1822,12 @@ function updateArchwayOverlay() {
     const wallArea = document.getElementById('wall-area');
     if (!wallArea) return;
     const rect = wallArea.getBoundingClientRect();
-    const wallW = parseFloat(wallArea.style.getPropertyValue('--wall-w')) || (rect.height * IMG_ASPECT);
+    // rect is SCALED by --chamber-cover; --wall-w is layout px. Multiply by
+    // cover so the overlay tracks the door's true on-screen size (it was ~6%
+    // narrow on cover-zoomed wide/short viewports — and the archway rings now
+    // anchor to this rect, so it must be exact).
+    const cover = parseFloat(wallArea.style.getPropertyValue('--chamber-cover')) || 1;
+    const wallW = (parseFloat(wallArea.style.getPropertyValue('--wall-w')) || (wallArea.offsetHeight * IMG_ASPECT)) * cover;
     // Wall is centered horizontally in wall-area
     const wallLeft = rect.left + (rect.width - wallW) / 2;
     // Archway spans 39.5% to 60.5% of wall width, bottom 31.25% of wall height
@@ -2410,18 +2539,24 @@ function closeFrameOnWall(wallNum) {
     if (!wall) return;
     const frame = wall.querySelector('.wall-text-frame.visible');
     if (!frame) return;
+    if (frame.classList.contains('melting')) return;   // melt already underway
     const panel = frame.closest('.wall-word-panel');
     if (!panel) return;
     const wordEl = panel.querySelector('.wall-word');
 
-
-    frame.classList.remove('visible');
+    // Melt away rather than vanish: .melting fades the frame (opacity only —
+    // its base transform differs per chamber, see the wordDissolve slide bug)
+    // while the contents sag downward. The word returns once the melt ends.
     const body = frame.querySelector('.wall-text-body');
     if (activeTextBody === body) activeTextBody = null;
-    if (wordEl) {
-        wordEl.style.display = '';
-        wordEl.classList.remove('dissolving');
-    }
+    frame.classList.add('melting');
+    setTimeout(() => {
+        frame.classList.remove('visible', 'melting');
+        if (wordEl) {
+            wordEl.style.display = '';
+            wordEl.classList.remove('dissolving');
+        }
+    }, FRAME_MELT_MS);
     // Restore archway overlay
     updateArchwayOverlay();
     updateWallPortraitReader();   // drop the portrait reader if its frame just closed
@@ -6684,15 +6819,26 @@ if (prismContainer) prismContainer.style.transition = 'none';
 
 // --- Tab-return curtain: coming back to a long-backgrounded tab, Chrome has
 // usually evicted the decoded wall bitmaps and their GPU layers. The sky
-// canvas (JS-painted) reappears instantly while the wall images re-decode
-// asynchronously — walls visibly "rebuild" over sky. Fix: cover the scene
-// SYNCHRONOUSLY inside the visibilitychange handler, so the tab's first paint
-// after unhide is the curtain rather than the ragged scene; re-decode the
-// chamber imagery behind it; lift with a quick fade. Short absences skip the
-// curtain entirely — eviction is unlikely and a flash would be worse. Also
-// covers back/forward-cache restores (they fire the same visible transition).
+// canvas (JS-painted) reappears instantly while the walls re-rasterise —
+// walls visibly "rebuild" over sky. Fix: cover the scene SYNCHRONOUSLY inside
+// the visibilitychange handler, so the tab's first paint after unhide is the
+// curtain rather than the ragged scene; re-decode the chamber imagery behind
+// it; lift with a quick fade. Short absences skip the curtain entirely —
+// eviction is unlikely and a flash would be worse. Also covers back/forward-
+// cache restores (they fire the same visible transition).
+//
+// IMPORTANT (2026-07-14, round 2): img.decode() alone is NOT a sufficient
+// lift condition here. On tab return the ENCODED image data is usually still
+// in memory cache, so decode() resolves in ~a frame — but what got evicted is
+// the rasterised GPU textures of the big composited 3D wall layers, and the
+// compositor takes several hundred ms to rebuild those. The load-time curtain
+// never hit this because fresh downloads gave raster ample time. So the
+// curtain now ALSO holds a minimum visible time (RETURN_CURTAIN_MIN_MS) —
+// long enough for re-raster to finish under cover, short enough to read as a
+// deliberate re-entry beat rather than a wait.
 {
     const RETURN_MIN_HIDDEN_MS = 10000;
+    const RETURN_CURTAIN_MIN_MS = 600;   // covers compositor re-raster/upload
     let _hiddenAt = 0;
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
@@ -6702,11 +6848,12 @@ if (prismContainer) prismContainer.style.transition = 'none';
         if (!_hiddenAt || performance.now() - _hiddenAt < RETURN_MIN_HIDDEN_MS) return;
         _hiddenAt = 0;
         if (document.getElementById('return-curtain')) return;
+        const shownAt = performance.now();
         const c = document.createElement('div');
         c.className = 'scene-curtain';
         c.id = 'return-curtain';
         c.setAttribute('aria-hidden', 'true');
-        c.style.transition = 'opacity 0.18s ease-out';
+        c.style.transition = 'opacity 0.25s ease-out';
         document.body.appendChild(c);
         const proms = [];
         document.querySelectorAll('.chamber img').forEach(img => {
@@ -6716,13 +6863,17 @@ if (prismContainer) prismContainer.style.transition = 'none';
             Promise.all(proms),
             new Promise(r => setTimeout(r, 1500)),   // never hold the room hostage
         ]).then(() => {
-            // Two rAFs: let the re-decoded walls actually paint beneath the
-            // curtain before it lifts (same trick as the load-time curtain).
-            requestAnimationFrame(() => requestAnimationFrame(() => {
-                c.style.opacity = '0';
-                c.addEventListener('transitionend', () => c.remove(), { once: true });
-                setTimeout(() => c.remove(), 500);   // safety net
-            }));
+            // Hold until the minimum curtain time has elapsed (raster cover),
+            // then two rAFs so the rebuilt frame is composited beneath the
+            // curtain before it lifts.
+            const wait = Math.max(0, RETURN_CURTAIN_MIN_MS - (performance.now() - shownAt));
+            setTimeout(() => {
+                requestAnimationFrame(() => requestAnimationFrame(() => {
+                    c.style.opacity = '0';
+                    c.addEventListener('transitionend', () => c.remove(), { once: true });
+                    setTimeout(() => c.remove(), 600);   // safety net
+                }));
+            }, wait);
         });
     });
 }

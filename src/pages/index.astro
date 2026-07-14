@@ -1013,8 +1013,10 @@ escaping from electricity in the earth's blood
       // The corner PNGs each contain three icons; only the corner-most one is
       // an actionable button. Hit zones below are fractional sub-rectangles of
       // the image, derived from each icon's pixel position in its source PNG
-      // (UL box at x:14-36, y-from-bottom:67-90 in a 325×208 image; UR moon at
-      // x:307-352, y-from-bottom:116-154 in a 358×173 image), with ~5% padding.
+      // (UL menu box at x:20-60, y:107-149 in a 325×209 image — shifted 14px
+      // in from the edge 2026-07-14 to match the UR moon's inset; UR moon
+      // cluster ends 22px from the right edge of a 358×173 image), with ~5%
+      // padding.
       function inImageZone(el, x, y, xStart, xEnd, yStart, yEnd) {
         const r = el.getBoundingClientRect();
         return x >= r.left + r.width  * xStart && x <= r.left + r.width  * xEnd
@@ -1025,7 +1027,7 @@ escaping from electricity in the earth's blood
         if (isTouchNav()) return;   // phones use the .mobile-ctrl buttons instead
         const menuBtn     = document.getElementById('menu-btn');
         const daylightBtn = document.getElementById('daylight-btn');
-        if (menuBtn && inImageZone(menuBtn, e.clientX, e.clientY, 0, 0.18, 0.50, 0.75)) {
+        if (menuBtn && inImageZone(menuBtn, e.clientX, e.clientY, 0.02, 0.23, 0.50, 0.75)) {
           sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
           return;
         }
@@ -1047,7 +1049,7 @@ escaping from electricity in the earth's blood
         const menuBtn     = document.getElementById('menu-btn');
         const daylightBtn = document.getElementById('daylight-btn');
         let label = null;
-        if (menuBtn && inImageZone(menuBtn, e.clientX, e.clientY, 0, 0.18, 0.50, 0.75)) {
+        if (menuBtn && inImageZone(menuBtn, e.clientX, e.clientY, 0.02, 0.23, 0.50, 0.75)) {
           label = 'site navigation';
         } else if (daylightBtn && inImageZone(daylightBtn, e.clientX, e.clientY, 0.76, 0.97, 0.58, 0.95)) {
           label = 'toggle day/night';

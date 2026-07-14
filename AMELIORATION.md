@@ -10,6 +10,118 @@ CLAUDE.md remains the master reference for how the site works.
 
 ---
 
+## 🔴 TOP PRIORITY: tab-return piecemeal rebuild STILL OCCURRING (curtain fix insufficient)
+
+**Reported by M 2026-07-14 night, despite the two-round tab-return curtain fix
+(see CLAUDE.md Resolved — now reopened).** When a chamber tab is neglected for
+a while (other tabs used), returning to it shows the page rebuilding
+piecemeal: **notably the background wall images take ~half a second to paint**
+after the rest. M's acceptance criterion: the page should appear **all at
+once**, even at the cost of a longer all-black (or black-shimmer) hold.
+
+Leads, in credibility order:
+1. **The `.wall-bg` layers are CSS `background-image`s, not `<img>` elements**
+   — and M specifically names "background wall images" as the late-poppers.
+   The return-curtain only re-`decode()`s `.chamber img` ELEMENTS; the big
+   moiré wall backgrounds are never warmed. Fix candidates: on return, also
+   `new Image(src).decode()` every distinct `.wall-bg`/chamber background URL
+   (warms the shared image cache) before lifting; and/or hold longer.
+2. **`RETURN_CURTAIN_MIN_MS = 600` may simply be too short** on M's hardware —
+   the GPU re-raster of the big composited 3D layers can exceed it. Raising
+   the floor (900–1200ms) is cheap; better: lift only after N consecutive
+   fast rAF frames (re-raster settled heuristic), still capped.
+3. **Verify the handler even fires for his pattern** — `RETURN_MIN_HIDDEN_MS`
+   (10s) gate, bfcache restores, and whether Chrome fired `visibilitychange`
+   at all. Temporary logging / a visible debug beacon would settle it.
+The handler lives near the end of prism.js (after the load-time curtain);
+1.5s race cap. Test recipe: open chamber → background the tab ≥ a few minutes
+of active use elsewhere → return; M's eye is the ground truth.
+
+---
+
+## 🔊 NEW BUG: audio static crackle every few seconds
+
+**Reported by M 2026-07-14 night.** An intermittent static crackle cuts
+through the chamber soundscape every few seconds — **aperiodic**, not on a
+regular beat. Confirmed to be the site, not his laptop: turning the site's
+own volume slider down removes it while all other system audio stays clean.
+(Not yet known whether it's chamber-specific or global; ask M which chambers
+he had open.)
+
+Hypotheses to check (READ `AUDIO.md` IN FULL FIRST, per its own warning):
+- **Sum clipping**: the aperiodic every-few-seconds cadence matches the event
+  engine's density — simultaneous event voices + bed may transiently exceed
+  1.0 and hard-clip. Check headroom at/above `masterGain`; a
+  `DynamicsCompressorNode` (or lower master levels) would both diagnose and
+  fix — crackle scaling with the user volume slider is consistent with
+  clipping upstream of `userVol`.
+- **Un-ramped gain steps**: any `gain.value =` / `setValueAtTime` jumps at
+  event onsets/offsets click; audit for missing `linearRamp`/`setTargetAtTime`.
+- **Source restarts without envelope** (pooled/reused nodes starting at a
+  non-zero-crossing).
+- Main-thread jank starving the render quantum is *possible* (the sky rAF got
+  busier this fortnight) but WebAudio runs on its own thread — lower priority.
+
+---
+
+## ✅ RESOLVED (M-confirmed 2026-07-14): ghost rim wedges at wide aspect ratios
+
+**Fixed and confirmed by M's eye on the tunnel at his ratio.**
+
+### What it turned out to be
+Both of the previous session's readings were true at once: M's tunnel WAS
+serving stale CSS (his day-mode pillar bars were black), **and** the ghosts
+are real and survive fresh CSS. With a restarted dev server + fresh tunnel,
+the fuzz canary passed headlessly and the ghost triangles were still there
+at 835×319 — so Attempt 2 (per-face backface culling) was verified
+insufficient, for a geometric reason nobody had spotted:
+
+**The horizontal caps' FRONT faces point DOWN.** Working the `rotateX`
+matrices (and confirming empirically): the from-below view the heavens tilt
+needs and the from-outside-behind ghost view above the rooflines are **the
+same face** of `.rim-wedge-bottom`/`.rim-vertex-bottom` — the rear sections'
+cap undersides sighted through the backface-culled rear walls (the CSS eye
+point sits behind them). No backface rule can ever split those two views;
+the distinction is *which wall*, not *which face*. Per-surface diagnosis
+(hide-one-class-and-diff, headless) pinned the floating corner triangles to
+exactly these caps; the vertical-face backface rules from Attempt 2 are
+correct and retained.
+
+### The fix (in the tree)
+Attempt 1's idea, but **caps-only + heavens-gated** — it cannot gap-tooth
+the tilt ring the way whole-section hiding did, because the vertical
+crenellation faces are never culled and the caps un-cull for the tilt:
+- `updateRimCapCulling(unionWithShrinePos?)` + `uncullRimCaps()` in prism.js
+  (where the Attempt-1 comment sat, near `isWallVisible`): stamps
+  `.rim-caps-culled` on `.rim-section`s whose wall is at a hidden position
+  {0,4,5} and on `.rim-vertex`es where either adjacent wall is hidden
+  (vertex k bridges walls k, k+1). Optional arg = union-culling with the
+  pre-rotation shrinePos.
+- CSS (prism.css, after `.rim-vertex-bottom`): `.rim-caps-culled` hides the
+  two cap classes via `visibility: hidden`.
+- Hooks: init rAF; `lookLeft`/`lookRight`/`rotateToWall` union-cull at
+  rotation start, `transitionend` sets the exact set; `enterShrineHeavens` +
+  `enterHeavensTilt` un-cull everything just before `startLookUpAnim`;
+  `leaveShrineHeavens`'s tilt-down completion re-culls. `updateRimCapCulling`
+  no-ops while `shrine-heavens-active` is on `<body>` (so the `afterRotation`
+  call inside `leaveShrineHeavens`'s snap can't re-cull mid-tilt).
+
+### Headless verification (all passed, no JS errors)
+835×319 + 658×301, day + night: corners clean on load, after rotation, and
+after tilt-return; cull set tracked correctly through lookLeft (union → exact);
+candle heavens tilt (real `triggerShrineTransmissionFromCandle` path) and the
+mythopoeic-archive horoscope tilt (`enterHeavensTilt(4)`) both show the
+complete ceiling ring (culled 7 → 0 during tilt → 7 after).
+
+### Commit state
+All of the above (plus the earlier session's static-fuzz pillarbox, text
+materialisation + frame melt-away, tab-return curtain round 2, archway-ring
+fixes) was committed and mirrored to remote `wip` at the end of the
+2026-07-14 night session — no production deploy; leilan.ai still serves the
+last deliberate `main` push.
+
+---
+
 ## 🔧 OPEN BUG: sky motion latency during chamber rotation / heavens-tilt
 
 **Symptom:** when the chamber rotates (left/right arrows) or tilts back
@@ -96,6 +208,10 @@ ask M — his eye caught what my static screenshots couldn't.
 
 ## 🎨 REMAINING AESTHETIC ROADMAP (offer these at session start)
 
+**M's agreed order (2026-07-14):** text materialisation → day-mode pillarbox →
+Eternal Return spin → sky-motion structural fix (the big one, start it fresh at
+the top of a session).
+
 ### Motion & thresholds (the "seamless dream" tier)
 
 - ~~**Fix the heavens-tilt hinge**~~ — **NON-ISSUE, do not revisit (2026-07-13).**
@@ -108,16 +224,41 @@ ask M — his eye caught what my static screenshots couldn't.
 - **Tame the Eternal Return spin** — Known Issue #3's 360–720° whirl. Called
   "feature not bug" so far, but a single graceful 180° would read as intentional
   rather than glitchy.
-- **Text materialisation** — when a word dissolves and the frame opens, let the text
-  shimmer in over ~400ms (staggered opacity on lines) instead of popping. Matches
-  the curtain-shimmer language.
+- ~~**Text materialisation**~~ — **DONE 2026-07-14**, both directions: on open,
+  paragraphs bloom in staggered (0.42s rise+fade each, ~80ms stagger, capped at
+  8 slots — nth-child rules after `frameFadeIn` in prism.css); on close (any
+  route — all funnel through `closeFrameOnWall`), the frame **melts away**:
+  opacity-only fade on the frame (its base transform differs per chamber — a
+  transform keyframe would snap it, the wordDissolve-slide trap) while the
+  body/controls sag downward. `FRAME_MELT_MS` in prism.js must match the CSS
+  duration. Both honour reduced-motion.
 
 ### Edges & completeness (the "no seams anywhere" tier)
 
-- **Day-mode pillarbox** — the parked white/"static fuzz" idea, so wide-phone day
-  view stops reading as letterbox.
+- ~~**Day-mode pillarbox**~~ — **DONE 2026-07-14, extended to night next
+  session**: the bars carry animated "static fuzz" in BOTH modes — day a pale
+  paper-grain (`--pillar-noise`, `body.day-mode .chamber-pillarbox`), night a
+  dark dead-channel static (`--pillar-noise-night`, base `.chamber-pillarbox`
+  rule; near-black base 18 with sparse +34 glints) after M flagged that black
+  night bars still read as letterboxing beside the lit walls. Three 96px tiles
+  per palette from `initPillarNoise` (prism.js), cycled ~9fps, only the active
+  mode's property written per tick; gated on bars-exist + tab-visible;
+  reduced-motion gets one static frame.
 
 ---
+
+## ✅ DONE (2026-07-14 night session, M-confirmed)
+
+- **Rim ghost wedges** — see the RESOLVED section above.
+- **Night pillarbox static** — see the updated day-mode pillarbox entry below;
+  first cut (base 18) was invisible at 1:1, shipped at base 58 / `#383f46`.
+- **Landing corner margin symmetry** — the UL menu glyph sat 6px (1.9%) from
+  the left edge vs the UR moon cluster's 22px (6.15%) right inset. Menu glyph
+  shifted 14px right inside `landing_UL.webp` (lossless glyph surgery, same
+  method as the UR edit; pristine original in git history); both margins now
+  6.15% of the rendered width. Click + hover-tooltip hit zones updated in
+  `index.astro` (menu zone x 0→0.02, 0.18→0.23); sidebar-open verified.
+  Phone `_top` variant has no menu glyph — untouched.
 
 ## ✅ DONE (2026-07-14 session — the whole "material & light" tier, commit `aa8fa18` + follow-ups)
 
@@ -149,10 +290,12 @@ ask M — his eye caught what my static screenshots couldn't.
   n rebuilt from h with synthesised edging matched to measured glyph-outline stats,
   / drawn to stroke weight; lossless WebP). Pristine original recoverable via
   `git show` if aelf ever redraws it.
-- **Tab-return piecemeal rebuild fix** — see CLAUDE.md Resolved for the full note;
-  summary: visibilitychange re-arms a fast scene-curtain (synchronous insert, so the
-  first paint after unhide is the curtain), re-`decode()`s chamber imagery behind
-  it, lifts in 180ms; only after 10s+ hidden; 1.5s cap.
+- **Tab-return piecemeal rebuild fix (two rounds)** — see CLAUDE.md Resolved for
+  the full note; summary: visibilitychange re-arms a scene-curtain (synchronous
+  insert, so the first paint after unhide is the curtain), re-`decode()`s chamber
+  imagery behind it, and — round 2 — **holds ≥600ms** before a 250ms fade, because
+  decode() resolves instantly on return while the evicted GPU wall textures take
+  ~½s to re-rasterise. Only after 10s+ hidden; 1.5s cap.
 - **Themed 404** (`src/pages/404.astro`) — "You have wandered beyond the temple
   walls…": black + the sanctuary firmament (same mulberry32 seed as the chambers,
   generated at build time), the pulsing OVS vermillion star (mirrors the chapel
