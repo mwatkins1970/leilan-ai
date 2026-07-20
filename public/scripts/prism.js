@@ -1018,15 +1018,30 @@ function leaveShrineHeavens() {
     _heavensTiltSourceWall = null;
     shrinePos = shrinePosFromFacingWall(returnWall);
     currentRotation = (2 - shrinePos) * 60;
-    // Suppress the CSS rotateY transition for this snap — if currentRotation changed
-    // since the candle was lit, the active wall-rotation transition would fire briefly
-    // causing a visible rotational spasm.
+    // Suppress the CSS rotateY transition for this snap — currentRotation is
+    // never wrapped mod 360 (every look-left/right/rotateToWall just adds or
+    // subtracts 60° from it, unbounded across a session), so this snap back
+    // to a small canonical value can be a large raw jump even though it's
+    // visually a no-op or small turn. Without suppression the CSS transition
+    // would animate that raw delta — the "Eternal Return" multi-spin bug
+    // (Known Issue #3): a reflow BEFORE the transform write locks in
+    // transition:none, but the transform write and the transition:'' restore
+    // right after it are two more style writes with no reflow between them —
+    // the browser can coalesce those into one recalculation, so by the time
+    // it checks "did this change while a transition was active" the
+    // transition is already back on, and the jump animates after all. Fixed
+    // 2026-07-20 by forcing a second reflow between the transform write and
+    // restoring the transition, so the instant value is committed on its own
+    // before the transition returns.
     if (prismContainer) {
         prismContainer.style.transition = 'none';
         void prismContainer.offsetHeight;
     }
     updatePrismTransform();
-    if (prismContainer) prismContainer.style.transition = '';
+    if (prismContainer) {
+        void prismContainer.offsetHeight;
+        prismContainer.style.transition = '';
+    }
     afterRotation();
     setFacingTag();
     resetShrineSearch();

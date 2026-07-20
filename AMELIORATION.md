@@ -220,9 +220,13 @@ the top of a session).
   things WORSE — at full tilt it swings the rear rim/wall-top geometry (never
   designed to be seen) into view overhead as huge bare planes. Reverted same
   day. CLAUDE.md Known Issue #1 rewritten as NON-ISSUE with the details.
-- **Tame the Eternal Return spin** — Known Issue #3's 360–720° whirl. Called
-  "feature not bug" so far, but a single graceful 180° would read as intentional
-  rather than glitchy.
+- ~~**Tame the Eternal Return spin**~~ — **DONE 2026-07-20, M-confirmed.** Was a
+  real bug, not a feature: `currentRotation` drifts unbounded (never wrapped
+  mod 360) across a session, and `leaveShrineHeavens()`'s instant-snap-back
+  was missing a forced reflow between the transform write and re-enabling the
+  transition, letting the browser coalesce the two and animate the raw drift
+  as a multi-turn spin. Fixed with a second reflow. Full root-cause writeup
+  moved to CLAUDE.md's Resolved section (was Known Issue #3).
 - ~~**Text materialisation**~~ — **DONE 2026-07-14**, both directions: on open,
   paragraphs bloom in staggered (0.42s rise+fade each, ~80ms stagger, capped at
   8 slots — nth-child rules after `frameFadeIn` in prism.css); on close (any
