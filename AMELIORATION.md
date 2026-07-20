@@ -10,32 +10,40 @@ CLAUDE.md remains the master reference for how the site works.
 
 ---
 
-## 🔴 TOP PRIORITY: tab-return piecemeal rebuild STILL OCCURRING (curtain fix insufficient)
+## 🟡 AWAITING M's CONFIRMATION: tab-return piecemeal rebuild, round 3 (2026-07-20)
 
 **Reported by M 2026-07-14 night, despite the two-round tab-return curtain fix
-(see CLAUDE.md Resolved — now reopened).** When a chamber tab is neglected for
+(see CLAUDE.md Resolved — was reopened).** When a chamber tab is neglected for
 a while (other tabs used), returning to it shows the page rebuilding
 piecemeal: **notably the background wall images take ~half a second to paint**
 after the rest. M's acceptance criterion: the page should appear **all at
 once**, even at the cost of a longer all-black (or black-shimmer) hold.
 
-Leads, in credibility order:
-1. **The `.wall-bg` layers are CSS `background-image`s, not `<img>` elements**
-   — and M specifically names "background wall images" as the late-poppers.
-   The return-curtain only re-`decode()`s `.chamber img` ELEMENTS; the big
-   moiré wall backgrounds are never warmed. Fix candidates: on return, also
-   `new Image(src).decode()` every distinct `.wall-bg`/chamber background URL
-   (warms the shared image cache) before lifting; and/or hold longer.
-2. **`RETURN_CURTAIN_MIN_MS = 600` may simply be too short** on M's hardware —
-   the GPU re-raster of the big composited 3D layers can exceed it. Raising
-   the floor (900–1200ms) is cheap; better: lift only after N consecutive
-   fast rAF frames (re-raster settled heuristic), still capped.
-3. **Verify the handler even fires for his pattern** — `RETURN_MIN_HIDDEN_MS`
-   (10s) gate, bfcache restores, and whether Chrome fired `visibilitychange`
-   at all. Temporary logging / a visible debug beacon would settle it.
-The handler lives near the end of prism.js (after the load-time curtain);
-1.5s race cap. Test recipe: open chamber → background the tab ≥ a few minutes
-of active use elsewhere → return; M's eye is the ground truth.
+**Lead #1 was checked and is false.** `.wall-bg` is an `<img>` (`WallPanel.astro`
+line 21), not a CSS `background-image` — nested under `.chamber`, so it was
+already covered by the existing `document.querySelectorAll('.chamber img')`
+sweep. Nothing to fix there.
+
+**Round 3 fix (applied, not yet M-confirmed)**, targeting lead #2: the flat
+`RETURN_CURTAIN_MIN_MS` hold has no way to know whether the compositor has
+actually finished re-rasterising the big transformed 3D wall layers — it's
+just a guess, and 600ms can be fine on one machine and short on another. In
+`public/scripts/prism.js`, same block (search `ROUND 3`):
+- Floor raised 600ms → 900ms (cheap insurance either way).
+- Replaced the flat wait *after* the floor with an adaptive settle check:
+  sample `requestAnimationFrame` deltas, require 4 consecutive frames ≤20ms
+  (heavy re-raster shows up as slow/dropped frames) before trusting the scene
+  is ready — capped at 1400ms on top of the floor so a slow device still
+  can't hold the room hostage indefinitely. Worst case ≈2.3s hold, which
+  matches M's stated preference for a longer hold over a ragged reveal.
+
+Lead #3 (verify the handler fires at all for his pattern — bfcache restores,
+whether `visibilitychange` fires) is still unverified; only M's hardware can
+settle it. **Test recipe unchanged**: open a chamber → background the tab for
+several minutes of active use elsewhere → return; M's eye is ground truth.
+If round 3 doesn't fix it, the settle heuristic itself (not just its
+constants) is the next thing to question — rAF timing during a GPU-bound
+re-raster may not degrade as cleanly as assumed.
 
 ---
 

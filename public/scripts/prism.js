@@ -6878,9 +6878,26 @@ if (prismContainer) prismContainer.style.transition = 'none';
 // curtain now ALSO holds a minimum visible time (RETURN_CURTAIN_MIN_MS) —
 // long enough for re-raster to finish under cover, short enough to read as a
 // deliberate re-entry beat rather than a wait.
+//
+// ROUND 3 (2026-07-20): M still saw walls pop in after the round-2 fix landed.
+// Checked AMELIORATION.md's lead #1 (unwarmed CSS background-image on
+// .wall-bg) against the actual markup — false premise: .wall-bg is an <img>
+// (WallPanel.astro), nested under .chamber, already covered by the
+// querySelectorAll('.chamber img') sweep below. So the remaining credible
+// lead is #2: a flat 600ms guess for "GPU re-raster is probably done by now"
+// has no way to know it's actually done — there's no JS-visible signal for
+// compositor work finishing, and 600ms is exactly the kind of number that's
+// fine on this machine and short on M's. Replaced the flat wait with an
+// adaptive settle check: after the (now longer) floor, sample rAF frame
+// timing and require a run of comfortably-fast frames — heavy re-raster
+// shows up as slow/dropped frames — before trusting the scene is ready,
+// capped so a slow device still can't hold the room hostage indefinitely.
 {
     const RETURN_MIN_HIDDEN_MS = 10000;
-    const RETURN_CURTAIN_MIN_MS = 600;   // covers compositor re-raster/upload
+    const RETURN_CURTAIN_MIN_MS = 900;    // floor: covers compositor re-raster/upload
+    const SETTLE_FRAMES = 4;              // consecutive fast frames required
+    const SETTLE_FRAME_MS = 20;           // "fast" == ~50fps or better
+    const SETTLE_CAP_MS = 1400;           // hard stop on the settle wait itself
     let _hiddenAt = 0;
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
@@ -6901,21 +6918,35 @@ if (prismContainer) prismContainer.style.transition = 'none';
         document.querySelectorAll('.chamber img').forEach(img => {
             if (img.decode) proms.push(img.decode().catch(() => {}));
         });
+        function lift() {
+            c.style.opacity = '0';
+            c.addEventListener('transitionend', () => c.remove(), { once: true });
+            setTimeout(() => c.remove(), 600);   // safety net
+        }
         Promise.race([
             Promise.all(proms),
             new Promise(r => setTimeout(r, 1500)),   // never hold the room hostage
         ]).then(() => {
-            // Hold until the minimum curtain time has elapsed (raster cover),
-            // then two rAFs so the rebuilt frame is composited beneath the
-            // curtain before it lifts.
-            const wait = Math.max(0, RETURN_CURTAIN_MIN_MS - (performance.now() - shownAt));
+            // Hold until the minimum floor has elapsed, then watch frame
+            // timing until it settles (or the settle cap runs out) before
+            // the final two-rAF compose-then-lift.
+            const floorWait = Math.max(0, RETURN_CURTAIN_MIN_MS - (performance.now() - shownAt));
             setTimeout(() => {
-                requestAnimationFrame(() => requestAnimationFrame(() => {
-                    c.style.opacity = '0';
-                    c.addEventListener('transitionend', () => c.remove(), { once: true });
-                    setTimeout(() => c.remove(), 600);   // safety net
-                }));
-            }, wait);
+                const settleStart = performance.now();
+                let fastRun = 0;
+                let lastT = settleStart;
+                function checkSettled(now) {
+                    const dt = now - lastT;
+                    lastT = now;
+                    fastRun = dt <= SETTLE_FRAME_MS ? fastRun + 1 : 0;
+                    if (fastRun >= SETTLE_FRAMES || now - settleStart > SETTLE_CAP_MS) {
+                        requestAnimationFrame(() => requestAnimationFrame(lift));
+                    } else {
+                        requestAnimationFrame(checkSettled);
+                    }
+                }
+                requestAnimationFrame(checkSettled);
+            }, floorWait);
         });
     });
 }
