@@ -3356,6 +3356,22 @@ import OrientationGate from '../components/OrientationGate.astro';
             }, duration * 1000 + 50);
         }
 
+        // Defensive kill-switch (added 2026-07-20) — same reasoning as the
+        // matching handler in prism.js. The only teardown path above is
+        // fadeOutImmersiveSoundscape(), fired from the camera_move phase
+        // transition; anything that hides this page some other way (browser
+        // back/forward, an imperfectly-silenced bfcache freeze) leaves
+        // _imAudioCtx running with nothing left to stop it. pagehide is
+        // bfcache-safe (unlike beforeunload/unload) and fires in both cases.
+        window.addEventListener('pagehide', () => {
+            clearTimeout(_imArpId);
+            if (_imAudioCtx && _imAudioCtx.state !== 'closed') {
+                try { _imAudioCtx.close(); } catch (e) {}
+            }
+            _imAudioCtx = null;
+            _imDroneNodes = null;
+        });
+
         // Auto-start after 1.5s, with user-gesture fallback for autoplay policy
         setTimeout(() => {
             initImmersiveSoundscape();

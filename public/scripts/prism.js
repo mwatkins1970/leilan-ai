@@ -1620,6 +1620,30 @@ function fadeOutDrone(duration) {
     }
 }
 
+// Defensive kill-switch (added 2026-07-20): the only audio teardown path
+// above is enterArchway() -> fadeOutDrone(), tied to a specific door click.
+// Anything that hides/discards this page WITHOUT going through that click —
+// browser back/forward, a bfcache freeze that doesn't fully silence a
+// setTimeout-driven scheduler — leaves _audioCtx running with nothing left
+// to stop it, so it can keep generating audio that bleeds into whatever
+// page comes next (reported by M 2026-07-20: OVS Chapel's ambience still
+// audible, superimposed on the immersive rising tone, two navigations
+// later). pagehide fires on every case unload does, plus bfcache freezes,
+// and — unlike beforeunload/unload — doesn't disqualify the page from
+// bfcache itself. Hard-close rather than fade: the page is already gone by
+// the time a user would hear it, so there's nothing to make smooth.
+window.addEventListener('pagehide', () => {
+    if (_droneNodes?.textureTimers) {
+        _droneNodes.textureTimers.forEach(id => clearTimeout(id));
+        _droneNodes.textureTimers.length = 0;
+    }
+    if (_audioCtx && _audioCtx.state !== 'closed') {
+        try { _audioCtx.close(); } catch (e) {}
+    }
+    _audioCtx = null;
+    _droneNodes = null;
+});
+
 function enterArchway(wallNum) {
     if (archwayAnimating || isRotating) return;
     closeCinematicReader();
