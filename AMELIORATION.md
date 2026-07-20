@@ -1,6 +1,6 @@
 # AMELIORATION.md — aesthetic upgrade roadmap + open technical threads
 
-*Created 2026-07-13 (Fable 5 session); last updated 2026-07-14. Audience: the next Claude instance working on this repo.*
+*Created 2026-07-13 (Fable 5 session); last updated 2026-07-20. Audience: the next Claude instance working on this repo.*
 
 **How to use this file:** at the start of a session, offer the user (Matthew, "M")
 whatever remains on this list and ask what he wants to work on — he picks, you don't.
@@ -39,28 +39,19 @@ of active use elsewhere → return; M's eye is the ground truth.
 
 ---
 
-## 🔊 NEW BUG: audio static crackle every few seconds
+## ✅ RESOLVED (M-confirmed 2026-07-20): audio static crackle every few seconds
 
-**Reported by M 2026-07-14 night.** An intermittent static crackle cuts
-through the chamber soundscape every few seconds — **aperiodic**, not on a
-regular beat. Confirmed to be the site, not his laptop: turning the site's
-own volume slider down removes it while all other system audio stays clean.
-(Not yet known whether it's chamber-specific or global; ask M which chambers
-he had open.)
-
-Hypotheses to check (READ `AUDIO.md` IN FULL FIRST, per its own warning):
-- **Sum clipping**: the aperiodic every-few-seconds cadence matches the event
-  engine's density — simultaneous event voices + bed may transiently exceed
-  1.0 and hard-clip. Check headroom at/above `masterGain`; a
-  `DynamicsCompressorNode` (or lower master levels) would both diagnose and
-  fix — crackle scaling with the user volume slider is consistent with
-  clipping upstream of `userVol`.
-- **Un-ramped gain steps**: any `gain.value =` / `setValueAtTime` jumps at
-  event onsets/offsets click; audit for missing `linearRamp`/`setTargetAtTime`.
-- **Source restarts without envelope** (pooled/reused nodes starting at a
-  non-zero-crossing).
-- Main-thread jank starving the render quantum is *possible* (the sky rAF got
-  busier this fortnight) but WebAudio runs on its own thread — lower priority.
+**Reported by M 2026-07-14 night; fixed and confirmed 2026-07-20.** Root cause
+was sum clipping — the event engine's `master` bus (droplet clusters, shimmer
+bursts, bell/wash accents, bed, reverb return) had no `DynamicsCompressorNode`
+anywhere in the chain, so simultaneous voices could transiently exceed 1.0 and
+clip at the browser's device-output stage, downstream of `userVol` (which is
+why the site's own volume slider removed it but system volume didn't — first
+hypothesis in the list below, confirmed). Fix: a fast, high-ratio compressor
+inserted between `master` and `fade` in `_initEventEngine` (`prism.js` ~line
+6118). Full incident writeup, headroom math and the exact params are in
+`AUDIO.md` → Part 7: Incident Log. M confirmed clean on OVS Chapel (the
+densest/highest-gain chamber) via the Cloudflare tunnel.
 
 ---
 

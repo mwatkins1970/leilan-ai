@@ -2,7 +2,7 @@
 
 # Generative Audio System — Complete Technical Reference
 
-*Last updated: 2026-05-27.*
+*Last updated: 2026-07-20.*
 
 This document is written for future Claude Code instances working on the Leilan.ai audio system. Read it in full before making any audio changes. It covers every audio subsystem on the site: the Three.js immersive soundscape, the CSS prism chamber audio engine, video-audio interaction, and the per-chamber sound design with all current parameter values.
 
@@ -741,3 +741,21 @@ A small mute-toggle + slider fixed top-centre, rendered on the immersive page an
 - **On init**, each chain sets `userVol.gain.value = window.__leilanVolume ?? 1`, so a setting chosen before audio started is honoured.
 - **Persistence.** `localStorage` keys `leilan_vol` (0–1, default 0.8) and `leilan_muted` (`'1'`/`'0'`). The setting carries across the immersive page and every chamber.
 - **UX.** Dragging the slider up from a muted state auto-unmutes. A `pointerdown` `stopPropagation` on the widget stops slider/button interaction from reaching the 3D scene (camera drag, candle lighting).
+
+---
+
+# Part 7: Incident Log
+
+## Static crackle from unlimited signal summation (fixed 2026-07-20)
+
+**Symptom** (reported by M, 2026-07-14 night): an aperiodic static crackle cut through the chamber soundscape every few seconds — not on a regular beat. Confirmed site-side rather than a system issue: turning the site's own volume slider down removed it while system audio elsewhere stayed clean.
+
+**Root cause**: the event-engine signal chain (`master → fade → userVol → destination`, built in `_initEventEngine`, `public/scripts/prism.js` ~line 6098) had no `DynamicsCompressorNode` anywhere. Every simultaneous voice — droplet clusters, shimmer bursts, bell/wash accents, the continuous bed, and the reverb return — sums additively into `master`. Web Audio carries that sum as unclamped float with no internal clipping; the only clip point is the browser's device-output conversion, which sits *downstream* of `userVol`.
+
+Headroom math confirms this is easy to trigger. OVS Chapel, for example, allows droplet gains up to 0.95 with a 15% `clusterProbability` of firing 3–6 at once, plus shimmer clusters of up to 11 pings at 0.16 each (≈1.76 alone) — comfortably exceeding 1.0 before the output stage clamps it. Every chamber carries some version of this exposure; Scriptorium's `masterGain` is boosted to 2.00 precisely *because* its individual events are quiet, which makes over-lapping events proportionally worse, not better.
+
+This also explains the volume-slider behaviour precisely: `userVol` is the one gain stage that sits *before* the actual clip point, so scaling it down there prevents the clip from ever being baked into the signal. System/hardware volume only attenuates the output *after* the browser has already clipped it, so it can't undo the distortion — only make it quieter.
+
+**Fix**: a `DynamicsCompressorNode` inserted between `master` and `fade` in `_initEventEngine` (`public/scripts/prism.js` ~line 6118): threshold −3dB, knee 6dB, ratio 20:1, attack 3ms, release 150ms. Fast and high-ratio so it only engages on genuine transient peaks — normal sparse listening passes through essentially untouched, so no chamber's sound design character should have audibly changed, just the clipping. M confirmed the crackle gone on OVS Chapel (the densest/highest-gain chamber, most likely culprit) via the Cloudflare tunnel.
+
+**If this ever recurs**: check the limiter is still in the chain and its threshold hasn't drifted upward. If one specific chamber still clips while others are clean, prefer lowering that chamber's `masterGain` or its peak event gains over tightening the global limiter further — keeps the other six chambers' dynamics untouched.

@@ -6117,7 +6117,25 @@ function _initEventEngine(prismId) {
 
     const master = ctx.createGain();
     master.gain.value = cfg.masterGain;
-    master.connect(fade);
+
+    // Safety limiter — droplet clusters, shimmer bursts, bell/wash accents and
+    // the reverb return all sum into `master` and can transiently exceed 1.0
+    // in the graph (Web Audio carries float freely; nothing clips here). The
+    // browser's device-output conversion downstream of userVol does clip
+    // though, and that's the aperiodic static "crackle" reported 2026-07-14 —
+    // consistent with it disappearing when the site's own volume slider (which
+    // sits after this point) is turned down, since that's the only stage that
+    // can reduce the peak below the clip point before it's baked into the
+    // signal. Fast, high-ratio, low-threshold: catches transient sum spikes
+    // only — normal sparse listening passes through essentially untouched.
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -3;
+    limiter.knee.value = 6;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.003;
+    limiter.release.value = 0.15;
+    master.connect(limiter);
+    limiter.connect(fade);
 
     // ---- Shared chamber reverb bus ---------------------------------------
     const conv = ctx.createConvolver();
