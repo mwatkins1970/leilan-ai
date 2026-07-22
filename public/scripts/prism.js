@@ -1346,6 +1346,7 @@ function lookRight() {
     shrinePos = newShrinePos;
     currentRotation += 60;
     animateSkyRotation(-1/6);
+    bumpStarLayerRotation(-1/6);
     updatePrismTransform();
     afterRotation();
     updateRimCapCulling(oldShrinePos); // union-cull while the rotation runs
@@ -1363,6 +1364,7 @@ function lookLeft() {
     shrinePos = newShrinePos;
     currentRotation -= 60;
     animateSkyRotation(1/6);
+    bumpStarLayerRotation(1/6);
     updatePrismTransform();
     afterRotation();
     updateRimCapCulling(oldShrinePos); // union-cull while the rotation runs
@@ -1389,11 +1391,13 @@ function rotateToWall(targetWall) {
         shrinePos = targetShrinePos;
         currentRotation += rightSteps * 60;
         animateSkyRotation(-rightSteps / 6);
+        bumpStarLayerRotation(-rightSteps / 6);
     } else {
         refreshAlongPath(oldShrinePos, targetShrinePos, +1);
         shrinePos = targetShrinePos;
         currentRotation -= leftSteps * 60;
         animateSkyRotation(leftSteps / 6);
+        bumpStarLayerRotation(leftSteps / 6);
     }
 
     updatePrismTransform();
@@ -2291,6 +2295,17 @@ function drawMotes(t, dt) {
     ctx.globalAlpha = 1;
 }
 
+// Declared ahead of resizeSkyCanvas (below), which calls into the star-layer
+// functions defined further down — those functions close over these `let`
+// bindings, and referencing a `let` before its OWN declaration line has run
+// throws (temporal dead zone), even from inside a guard clause. The function
+// declarations themselves are hoisted and safe to call early; only the plain
+// variable declarations need to be this far up.
+const STAR_LAYER_TILES = 3; // lap-copies: one either side of the resting middle tile
+let starLayerCanvas = null, starLayerCtx = null;
+let _starLayerOffset = 0;     // unbounded "laps" counter — same units/increments as _skyRotTarget
+let _starLayerVisible = null; // tri-state (null/false/true) so the first drawSky frame always syncs
+
 let skyW = 0, skyH = 0;
 function resizeSkyCanvas() {
     const rect = skyCanvas.parentElement.getBoundingClientRect();
@@ -2300,9 +2315,139 @@ function resizeSkyCanvas() {
     skyCanvas.width = skyW * dpr;
     skyCanvas.height = skyH * dpr;
     skyCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layoutStarLayerCanvas();
+    if (starLayerCanvas) paintStarLayerTiles(performance.now());
 }
 resizeSkyCanvas();
 window.addEventListener('resize', resizeSkyCanvas);
+
+// --- Compositor-driven star/moon layer (2026-07-22, sky-judder fix, night
+// mode only) ---
+// The chamber walls rotate via a CSS transition on .prism-container — pure
+// GPU compositor work, immune to main-thread jank. The stars/moon, by
+// contrast, have always been redrawn by drawSky's own JS every frame, with
+// their rotation offset tweened by a separate hand-synced JS clock
+// (tickSkyRotation). Two different clocks on two different threads: any
+// main-thread hiccup desyncs them, which is the residual judder three
+// rounds of timing/perf fixes (see AMELIORATION.md) couldn't cure — the
+// structural fix is to put the stars on the SAME compositor mechanism as
+// the walls, not to keep tuning the JS clock.
+//
+// This is that fix, scoped to night-mode ROTATION only (M's "small step"
+// request, 2026-07-22): a separate wide canvas, pre-painted with 3 side-by-
+// side lap-copies of the starfield + moon (twinkle repaints the pixels in
+// place at the old throttle; it never needs to move mid-tile). Its CSS
+// transform uses the *exact same* transition curve/duration as
+// .prism-container, driven by the same bumpStarLayerRotation(delta) call at
+// every site that calls animateSkyRotation(delta) — so the browser
+// interpolates both in lockstep on the compositor thread with zero JS
+// involved during the animation itself.
+//
+// Heavens-tilt (the horoscope / candle shrine full-sky view, which also
+// pans the sky during its tilt) and the separate isSkyView entry mode are
+// UNCHANGED — they keep using the original per-frame JS-drawn stars in
+// drawSky below, which is left otherwise intact. Rotation can't happen
+// while either is active (shrineHeavensLocked), so the two never need to
+// animate at once; drawSky's useStarLayer check just swaps which layer is
+// visible. Day mode is untouched — this only ever activates at night,
+// outside heavens-tilt/sky-view. (STAR_LAYER_TILES/starLayerCanvas/
+// starLayerCtx/_starLayerOffset/_starLayerVisible are declared up by
+// resizeSkyCanvas, above — see the comment there.)
+
+function createStarLayerCanvas() {
+    const cv = document.createElement('canvas');
+    cv.id = 'star-layer-canvas';
+    cv.setAttribute('aria-hidden', 'true');
+    skyCanvas.parentElement.appendChild(cv);
+    starLayerCanvas = cv;
+    starLayerCtx = cv.getContext('2d');
+    // Rebase by exactly one lap once we've drifted past half a tile — the
+    // tiles repeat every lap, so this is invisible, and it keeps the raw
+    // offset (and its derived translateX) from growing unbounded while
+    // leaving comfortable margin before the next step needs the 3rd tile.
+    cv.addEventListener('transitionend', (e) => {
+        if (e.propertyName !== 'transform') return;
+        if (Math.abs(_starLayerOffset) >= 0.5) {
+            _starLayerOffset -= Math.sign(_starLayerOffset);
+            setStarLayerTransform(false);
+        }
+    });
+}
+
+function layoutStarLayerCanvas() {
+    if (!starLayerCanvas || !skyW || !skyH) return;
+    const dpr = Math.min(window.devicePixelRatio, 2);
+    starLayerCanvas.style.width = (STAR_LAYER_TILES * skyW) + 'px';
+    starLayerCanvas.style.height = skyH + 'px';
+    starLayerCanvas.width = Math.round(STAR_LAYER_TILES * skyW * dpr);
+    starLayerCanvas.height = Math.round(skyH * dpr);
+    starLayerCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    setStarLayerTransform(false);
+}
+
+// Paint all 3 lap-copies of the starfield + moon at the current twinkle phase.
+function paintStarLayerTiles(t) {
+    if (!starLayerCtx || !skyW || !skyH) return;
+    const ctx = starLayerCtx;
+    ctx.clearRect(0, 0, STAR_LAYER_TILES * skyW, skyH);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const r = Math.max(15, Math.min(skyW, skyH) * 0.034);
+    const sprite = moonSprite(r, moonAge01());
+    const side = sprite.width / _moonSpriteDpr;
+    for (let tile = 0; tile < STAR_LAYER_TILES; tile++) {
+        const baseX = tile * skyW;
+        skyStars.forEach(s => {
+            const twinkle = 0.5 + 0.5 * Math.sin(t * 0.001 * s.speed + s.phase);
+            const drawAlpha = 0.45 + 0.55 * twinkle;
+            ctx.font = s.font;
+            ctx.fillStyle = s.colPre + drawAlpha.toFixed(3) + ')';
+            const drawX = baseX + ((s.x % 1.0 + 1.0) % 1.0) * skyW;
+            const drawY = ((s.y % 1.0 + 1.0) % 1.0) * skyH;
+            ctx.fillText(s.sym, drawX, drawY);
+        });
+        const mx = baseX + ((0.62 % 1.0 + 1.0) % 1.0) * skyW;
+        const my = ((0.075 % 1.0 + 1.0) % 1.0) * skyH;
+        ctx.drawImage(sprite, mx - side / 2, my - side / 2, side, side);
+    }
+}
+
+// Position the canvas so the MIDDLE tile (index 1) rests under the viewport
+// at offset 0, shifted by the animated rotation amount: translateX =
+// skyW * (_starLayerOffset - 1) — the "-1" shifts left by exactly one tile
+// so the middle copy is the resting one, matching skyRotationOffset's own
+// sign/units (see the derivation in the 2026-07-22 session notes: screen_x =
+// canvas_x + offset*skyW for a star painted at its fixed canvas_x).
+function setStarLayerTransform(animate) {
+    if (!starLayerCanvas || !skyW) return;
+    const px = skyW * (_starLayerOffset - 1);
+    if (animate) {
+        starLayerCanvas.style.transform = `translateX(${px.toFixed(2)}px)`;
+        return;
+    }
+    // Instant snap — the exact two-reflow technique the Eternal Return spin
+    // fix uses in leaveShrineHeavens(): a reflow BEFORE the transform write
+    // locks in transition:none, and a second reflow AFTER it (before
+    // transition:'' is restored) stops the browser coalescing the re-enable
+    // into the same recalculation, which would otherwise animate this
+    // "instant" jump using the real transition.
+    starLayerCanvas.style.transition = 'none';
+    void starLayerCanvas.offsetHeight;
+    starLayerCanvas.style.transform = `translateX(${px.toFixed(2)}px)`;
+    void starLayerCanvas.offsetHeight;
+    starLayerCanvas.style.transition = '';
+}
+
+// Call alongside every animateSkyRotation(delta) — same delta, same call
+// sites (lookRight/lookLeft/rotateToWall) — to drive this layer's CSS
+// transition in lockstep with the wall's own rotateY transition.
+function bumpStarLayerRotation(delta) {
+    _starLayerOffset += delta;
+    setStarLayerTransform(true);
+}
+
+createStarLayerCanvas();
+layoutStarLayerCanvas();
 
 // --- Serpentine shader for borders (ported from immersive.astro GLSL) ---
 function serpWarp(px, py, t) {
@@ -2408,6 +2553,25 @@ function drawSky(t) {
     _lastSkyDrawT = t;
     const w = skyW, h = skyH;
 
+    // Compositor star layer: active whenever we're at night, in normal
+    // chamber view (not heavens-tilt, not the separate full-sky isSkyView
+    // entry mode) — see the 2026-07-22 block above resizeSkyCanvas. Checked
+    // every frame rather than at each state-change call site so it's
+    // self-correcting regardless of how isNight/heavens/isSkyView changed.
+    const useStarLayer = isNight && !isShrineHeavensMode && !isShrineHeavensTransitioning && !isSkyView;
+    if (useStarLayer !== _starLayerVisible) {
+        _starLayerVisible = useStarLayer;
+        if (starLayerCanvas) {
+            if (useStarLayer) {
+                setStarLayerTransform(false); // snap to current rotation before revealing
+                paintStarLayerTiles(t);
+            }
+            starLayerCanvas.style.opacity = useStarLayer ? '1' : '0';
+        }
+    } else if (useStarLayer && !skyMoving && skyFrame % 3 === 0) {
+        paintStarLayerTiles(t); // twinkle refresh; suspended during rotation like the old grain/serp work
+    }
+
     if (isNight) {
         skyCtx.fillStyle = '#000000';
         skyCtx.fillRect(0, 0, w, h);
@@ -2427,26 +2591,31 @@ function drawSky(t) {
             }
         }
 
-        skyCtx.textAlign = 'center';
-        skyCtx.textBaseline = 'middle';
-        skyStars.forEach(s => {
-            // Fixed firmament: stars hold their positions permanently and only
-            // twinkle — brightness breathes between 45% and 100%, never vanishing.
-            const twinkle = 0.5 + 0.5 * Math.sin(t * 0.001 * s.speed + s.phase);
-            const drawAlpha = 0.45 + 0.55 * twinkle;
-            skyCtx.font = s.font;
-            skyCtx.fillStyle = s.colPre + drawAlpha.toFixed(3) + ')';
-            const drawX = ((s.x + skyRotationOffset) % 1.0 + 1.0) % 1.0 * w;
-            const drawY = ((s.y + skyTiltOffset) % 1.0 + 1.0) % 1.0 * h;
-            skyCtx.fillText(s.sym, drawX, drawY);
-        });
+        // Stars + moon: only drawn here (JS-repainted, main-thread) when the
+        // compositor star layer isn't covering this view — i.e. during
+        // heavens-tilt / isSkyView, both of which this canvas still handles
+        // exactly as before. Normal chamber-view rotation is handled by the
+        // compositor layer instead (see useStarLayer above).
+        if (!useStarLayer) {
+            skyCtx.textAlign = 'center';
+            skyCtx.textBaseline = 'middle';
+            skyStars.forEach(s => {
+                // Fixed firmament: stars hold their positions permanently and only
+                // twinkle — brightness breathes between 45% and 100%, never vanishing.
+                const twinkle = 0.5 + 0.5 * Math.sin(t * 0.001 * s.speed + s.phase);
+                const drawAlpha = 0.45 + 0.55 * twinkle;
+                skyCtx.font = s.font;
+                skyCtx.fillStyle = s.colPre + drawAlpha.toFixed(3) + ')';
+                const drawX = ((s.x + skyRotationOffset) % 1.0 + 1.0) % 1.0 * w;
+                const drawY = ((s.y + skyTiltOffset) % 1.0 + 1.0) % 1.0 * h;
+                skyCtx.fillText(s.sym, drawX, drawY);
+            });
 
-        // Moon — real current phase; wraps with chamber rotation like the stars.
-        // Rest position (0.62, 0.075) floats it in the deep sky pocket above the
-        // facing wall, inside the band visible over the ceiling wedges in normal
-        // chamber view (the roofline rises toward the sides); heavens-tilt shifts
-        // it down with the rest of the firmament, rotation slides it around.
-        {
+            // Moon — real current phase; wraps with chamber rotation like the stars.
+            // Rest position (0.62, 0.075) floats it in the deep sky pocket above the
+            // facing wall, inside the band visible over the ceiling wedges in normal
+            // chamber view (the roofline rises toward the sides); heavens-tilt shifts
+            // it down with the rest of the firmament, rotation slides it around.
             const mx = ((0.62 + skyRotationOffset) % 1.0 + 1.0) % 1.0 * w;
             const my = ((0.075 + skyTiltOffset) % 1.0 + 1.0) % 1.0 * h;
             const r = Math.max(15, Math.min(w, h) * 0.034);

@@ -121,13 +121,14 @@ last deliberate `main` push.
 
 ---
 
-## 🔧 OPEN BUG: sky motion latency during chamber rotation / heavens-tilt
+## 🟡 AWAITING M's CONFIRMATION: sky motion latency, round 4 — night rotation (2026-07-22)
 
 **Symptom:** when the chamber rotates (left/right arrows) or tilts back
 (shrine/horoscope heavens), the night-sky canvas (stars/moon) moves in the right
 direction but **slightly jerkily and with a perceived delay** relative to the walls.
-The walls glide; the sky stutters behind them. M finds it off-putting; two rounds of
-fixes have improved but not cured it.
+The walls glide; the sky stutters behind them. M finds it off-putting; three rounds of
+fixes had improved but not cured it (see below) — round 4 is the structural fix,
+scoped down to a first slice per M's "small steps" request.
 
 ### Architecture (why this happens at all)
 
@@ -181,22 +182,67 @@ addressed and the stutter survives — which points at the *architecture itself*
 (canvas repaint can never be frame-locked to a compositor transition from the main
 thread). The structural proposal below is the remaining credible fix.
 
-### Proposals remaining, in recommended order
+### Round 4 (2026-07-22): the structural fix, night-mode rotation only
 
-1. **Structural (best result): move the sky onto the compositor too.** Render the
-   firmament (stars + moon) ONCE to a canvas ~2× viewport width; perform
-   rotation/tilt as a CSS `transform: translate(...)` on the canvas *element*, with
-   the **same** transition curve the walls use (rotation) and direct transform writes
-   from the same tilt rAF. Then walls and sky are both compositor-animated with one
-   curve — pixel-locked, immune to main-thread jank. Twinkle = repaint the canvas
-   in place (positions static, cheap, doesn't touch the transform). Keep meteors on a
-   separate small static overlay canvas so they stay screen-space. Wrap-around:
-   draw the star field with duplicated edge content (or 2 tiles) and snap the
-   translate back by one tile-width between animations, while idle.
-2. **Alternative structural: one clock for everything.** Drop the CSS transition for
-   wall rotation and drive the container transform AND `skyRotationOffset` from a
-   single rAF (the tilt already works this way). Guarantees zero divergence but makes
-   the walls main-thread-hostage too. Only if (1) proves awkward.
+**Implemented, build-verified and Playwright-verified, not yet M-confirmed on
+real hardware** (this bug lives in main-thread-jank territory that headless
+Chromium in a Codespace can't reproduce the way M's actual device does — his
+eye on the tunnel is still the ground truth, same as every other round).
+
+Per M's "small steps" request, this slice covers **only** night-mode wall
+ROTATION (not tilt, not heavens-tilt, not day-mode clouds) — the case that's
+architecturally the worst offender (a real CSS-transition-driven compositor
+animation for the walls vs. a JS-clock-tweened canvas repaint for the sky;
+tilt, by contrast, already drives both walls and sky from the same rAF, so
+it's less structurally broken even if some jank remains there too).
+
+**What changed** (`public/scripts/prism.js`, search `2026-07-22` /
+`star-layer`): a new `#star-layer-canvas`, 3× viewport width, pre-painted
+with 3 side-by-side lap-copies of the starfield + moon. Its CSS `transform`
+uses the *exact same* `transition: transform 0.8s cubic-bezier(0.25, 0.46,
+0.45, 0.94)` as `.prism-container`, driven by a new `bumpStarLayerRotation
+(delta)` called at the same three sites as `animateSkyRotation`
+(`lookRight`/`lookLeft`/`rotateToWall`) — so the browser interpolates both
+in lockstep on the compositor thread, with zero JS involved during the
+0.8s animation itself. Twinkle still repaints the tile pixels in place at
+the old throttle (suspended during motion, like the grain/serp work
+already was) since repainting doesn't require moving anything mid-tile.
+The offset counter is unbounded like `currentRotation` (Known Issue #3's
+old failure mode) but self-rebases by exactly one lap on `transitionend`
+once it drifts past half a tile, using the *same* two-reflow instant-snap
+technique as the Eternal Return fix — verified over 15+ consecutive
+rotations with no drift, no out-of-range reveals, no errors.
+
+Heavens-tilt and the separate `isSkyView` full-sky entry mode are
+**unchanged** — they still use the original per-frame JS-drawn stars
+(rotation can't happen while either is active, so the two layers never
+need to animate at once; `drawSky`'s `useStarLayer` check just swaps which
+one is visible, verified working in both directions). Day mode is
+untouched — the new layer only ever activates at night in normal chamber
+view.
+
+**Verification done this session:** headless Playwright — no console/page
+errors across day mode, 15+ night rotations, and a full heavens-tilt
+enter/leave cycle on the main chamber; screenshots confirm stars + moon
+visibly pan with the walls at rest and mid-rotation, no gaps or artifacts.
+**Not yet checked:** whether this actually *reads as smoother* on M's
+hardware — that's the whole point of the fix and headless Chromium can't
+judge it.
+
+### Proposals remaining (tilt + day mode), in recommended order
+
+1. **Extend the round-4 approach to tilt.** Same idea, but the star-layer
+   canvas would need vertical tile duplication too (tilt pans up to 0.7 of
+   the viewport height and, unlike rotation, isn't wrapped/unbounded — it
+   always returns to 0 — so no rebase logic needed, just enough vertical
+   canvas to cover the excursion without redrawing).
+2. **Extend to day-mode clouds**, if rotation jank is still perceptible
+   there once M's confirmed the night-mode slice.
+3. **Alternative structural (if the above prove awkward): one clock for
+   everything.** Drop the CSS transition for wall rotation and drive the
+   container transform AND `skyRotationOffset` from a single rAF (tilt
+   already works this way). Guarantees zero divergence but makes the walls
+   main-thread-hostage too.
 
 **Verification tip:** `playwright` + headless chromium are already installed in this
 Codespace (`npm i --no-save playwright`, so not in package.json; re-install after a
