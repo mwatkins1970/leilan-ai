@@ -1,6 +1,6 @@
 # Leilan.ai — Claude Code Master Reference
 
-*Last refreshed: 2026-07-14.*
+*Last refreshed: 2026-07-23.*
 
 ## What This Site Is
 
@@ -20,7 +20,7 @@ This repo's `.md` files and what each is for:
 - **`AUDIO.md`** — complete technical reference for the generative audio system (immersive soundscape + the 7-chamber event engine). Read in full before any audio change.
 - **`BANDWIDTH.md`** — bandwidth-optimisation & launch-resilience plan (Netlify free-tier budget, asset weights, lazy-loading).
 - **`VIDEO_BUTTONS.md`** — per-wall `▶ video` button mechanics + the R2-hosted, click-to-load playback overlay (fullscreen, portrait). See also the *Video System* section here.
-- **`AMELIORATION.md`** — the aesthetic-polish roadmap + open technical threads (currently: the sky-motion-latency bug, with analysis and ranked fix proposals). **At session start, offer the user what remains on it and let him pick**; update it as items complete.
+- **`AMELIORATION.md`** — the aesthetic-polish roadmap + open technical threads (currently: two items awaiting M's confirmation — a tab-return curtain fix and the sky-motion-latency structural fix, the latter only partially scoped so far). **At session start, offer the user what remains on it and let him pick**; update it as items complete.
 
 *Removed 2026-06-27:* `SEO.md` and `SEO_build.md` (both superseded by the built layer + the *Field-Note Layer (SEO)* section below, which now carries the launch checklist) and `SITE_OVERVIEW.md` (folded into this file).
 
@@ -65,7 +65,8 @@ leilan-ai/
 │   │   ├── transmission/[slug].astro         # Dynamic markdown transmission pages
 │   │   ├── lesswrong-solidgoldmagikarp.astro # Interstitial → SolidGoldMagikarp LW post
 │   │   ├── lesswrong-petertodd-phenomenon.astro    # Interstitial → 'petertodd phenomenon' LW post
-│   │   └── lesswrong-petertodd-last-stand.astro    # Interstitial → 'petertodd's last stand' LW post
+│   │   ├── lesswrong-petertodd-last-stand.astro    # Interstitial → 'petertodd's last stand' LW post
+│   │   └── 404.astro                         # Themed not-found page (see below)
 │   ├── components/
 │   │   ├── WallPanel.astro                   # One wall face of a prism chamber
 │   │   ├── VolumeControl.astro               # Global mute+volume slider (top-centre; immersive + prism pages)
@@ -340,6 +341,10 @@ Wall-text links into these are at:
 - `mythopoeic-archive-apparition.html`, `ovs-chapel-origins.html`, `research-lab-petertodd.html`, `research-lab-rescue.html` → petertodd-phenomenon
 - `mythopoeic-archive-ufo.html` → petertodd-last-stand
 
+### Themed 404 page
+
+`src/pages/404.astro` — "You have wandered beyond the temple walls…": black background with the sanctuary firmament (same `mulberry32` seed as the chambers, generated at build time), the pulsing OVS vermillion star (mirrors the chapel wall star — keep the two in sync if either changes), a Cormorant italic line, and emerald paths back to `/` and `/field-notes/`. A soft radial "clearing" (`main::before`) keeps stars from sitting behind the text. Self-contained, `noindex`, honours `prefers-reduced-motion`. Netlify serves `dist/404.html` automatically for any unmatched route; it is deliberately not in the sitemap.
+
 ---
 
 ## WALL_DIRECTIONS (immersive.astro, line 237)
@@ -439,11 +444,11 @@ The original `mythopoeic-archive-ufo.html` link to *petertodd's Last Stand* incl
 ### 7. Video content still being delivered
 Two of ~13 planned wall videos are wired (Research Lab GPT-3, Mythos Crossbones); the rest arrive from aelf over time. Not a bug — see the *Video System* section for how to add each one. `VIDEO_BUTTONS.md` covers the per-wall button mechanics.
 
-### 8. Sky motion latency during rotation / heavens-tilt
-The star canvas moves slightly jerkily/behind the walls during chamber rotations and tilts (compositor-thread CSS transform vs main-thread canvas repaint). Three rounds of fixes have improved it (exact bezier sync, full-rate redraw, real dt; then `transitionstart` clock-sync, sprite-cached moon/clouds, grain-loop + serp-strip suspension while moving) — residual jank still remains. **Full analysis + what's been tried in `AMELIORATION.md`**; the remaining credible fix is structural: move the sky onto a compositor-animated transform.
+### 8. Sky motion latency during rotation / heavens-tilt — PARTIALLY ADDRESSED 2026-07-22
+The star canvas moved jerkily/behind the walls during chamber rotations and tilts (compositor-thread CSS transform vs main-thread canvas repaint). Three rounds of timing/perf fixes narrowed it down to an architectural cause without curing it; round 4 (2026-07-22) is the structural fix — a compositor-driven star/moon layer — but scoped to **night-mode rotation only**; tilt and day-mode clouds still use the original per-frame JS-drawn approach. M reports the rotation case noticeably smoother (2026-07-23) but hasn't yet done a full site test. **Full analysis, all four rounds, and the remaining tilt/day-mode extension are in `AMELIORATION.md`.**
 
-### 9. Tab-return piecemeal rebuild — REOPENED 2026-07-14 night
-The two-round return-curtain fix (see Resolved below) is **not sufficient**: M still sees walls paint ~½s late on returning to a long-neglected tab. Leading suspect: the curtain re-decodes only `.chamber img` elements, but the late-popping wall backgrounds are CSS `background-image` layers (`.wall-bg`) it never warms. Full leads + acceptance criterion in `AMELIORATION.md` (top priority there, along with a new audio-crackle bug).
+### 9. Tab-return piecemeal rebuild — round 3 applied 2026-07-20, awaiting confirmation
+The two-round return-curtain fix (see Resolved below) was **not sufficient**: M still saw walls paint ~½s late on returning to a long-neglected tab. Investigation ruled out the leading suspect (`.wall-bg` was assumed to be an unwarmed CSS `background-image`; it's actually an `<img>`, already covered by the existing re-decode sweep). Round 3 instead replaced the curtain's flat minimum hold with an adaptive settle check (wait for rAF frame timing to stabilise, capped). **Full leads, the fix, and the test recipe are in `AMELIORATION.md`** — not yet confirmed on M's hardware.
 
 ### Resolved
 - **Horoscope "Eternal Return" multi-spin (was Known Issue #3, fixed 2026-07-20, M-confirmed)**: returning from the horoscope heavens-tilt via the "eternal return" button caused a fast 360–720° spin before the chamber re-righted itself. **Root cause**: `currentRotation` (the chamber's `rotateY`) is never wrapped mod 360 — every `lookLeft`/`lookRight`/`rotateToWall` just adds/subtracts 60° from it, unbounded across a session. `leaveShrineHeavens()` snaps it back to a small canonical value and tries to do so instantly by disabling the CSS transition around the write (`transition:none` → forced reflow → transform write → `transition:''`). But there was no forced reflow *between* the transform write and re-enabling the transition, so the browser could coalesce those two trailing style writes into one recalculation — by the time it checked whether the property changed while a transition was active, the transition was already back on, so it animated the raw numeric jump from the drifted value to the small one: a multi-turn spin that happened to land correctly. **Fix**: a second `void prismContainer.offsetHeight` forced reflow immediately after the transform write, in `leaveShrineHeavens()` (`prism.js`). If it recurs, suspect the same coalescing pattern anywhere else `transition:none` is paired with a transform write.
@@ -499,7 +504,7 @@ So the default cadence is: many free commits → periodic free `git push origin 
 - **Still outstanding for launch** (not domain-related): the SEO go-live tasks in the *Field-Note Layer (SEO)* launch checklist — Search Console / Bing verification, sitemap submission, request-indexing, backlink seeding — plus confirming `http→https` and `www→apex` canonicalisation on the live domain.
 - Push credentials are now configured for `mwatkins1970` directly (this Codespace was previously authed as `feralchill` — that's been changed)
 - See `DESIGN_SYSTEM.md` for visual tokens and the *Documentation Map* (top of this file) for the rest of the `.md` set (`SITE_OVERVIEW.md` has been folded into this file)
-- Local `main` HEAD (2026-07-14 night, mirrored to remote `wip`): "Rim ghost fix, night pillar static, landing margins + session handoff" — contains everything from the 2026-07-14 sessions: tab-return curtain (since REOPENED — see Known Issue #9), static-fuzz pillarbox (both modes), text materialisation/frame melt, archway-ring fixes, the rim ghost-wedge fix (backface CSS + cap culling — see Resolved), landing corner-margin fix, doc refresh. What's live on leilan.ai is whatever was last *deliberately* pushed to `main` (check the Netlify dashboard rather than assuming). The list below is retained as a per-session changelog.
+- Local `main` HEAD (2026-07-23, mirrored to remote `wip`): "Sky-jank round 4: move night-mode star/moon rotation onto the compositor" — contains everything since the 2026-07-14 night session: the SEO trailing-slash link fixes, the audio static-crackle fix + its `pagehide` bleed-across-pages safety net (both in `AUDIO.md` Part 7), the Eternal Return multi-spin fix (was Known Issue #3, now in Resolved), the tab-return curtain round 3 (adaptive settle wait — awaiting M's confirmation, see `AMELIORATION.md`), and the sky-motion round 4 structural fix (night-mode rotation only — M reports it smoother, fuller test pending, see `AMELIORATION.md`). What's live on leilan.ai is whatever was last *deliberately* pushed to `main` (check the Netlify dashboard rather than assuming). The list below is retained as a per-session changelog.
 - Recent work history (much now committed; see commit log above):
   - Three LessWrong interstitial pages (`src/pages/lesswrong-*.astro`)
   - `chamberBgAlt` field added to `PrismConfig`; four MOIRE chambers now alternate base / alt images around their six walls
@@ -511,4 +516,6 @@ So the default cadence is: many free commits → periodic free `git push origin 
   - **2026-06-27 session**: `▶ video` button now renders only on walls with a `videoSrc` (Crossbones only) — disabled placeholder buttons removed from every other word wall; reinstatement code documented in `VIDEO_BUTTONS.md`. These `.md` files refreshed to reflect commit `9887166`.
   - **2026-07-13 session** (commits `9f0104e`, `0a032a7`, `3acb59d`): chamber sky & ritual layer — celestial time, fixed firmament, real-phase moon, shooting stars, candle persistence, curtain shimmer, sky/wall motion sync rounds 1–2; landing corner-image fixes; `AMELIORATION.md` created as the polish-workstream handoff.
   - **2026-07-14 session** (commit `aa8fa18` + uncommitted follow-ups): sky-jank round 3 (transitionstart clock-sync, sprite-cached moon/clouds, grain/serp suspension — improved, not cured; structural fix still open in `AMELIORATION.md`); heavens-tilt eye-point pivot tried & reverted, Known Issue #1 rewritten as NON-ISSUE; candle glow; persisted-candle cap; dust motes; illuminated initials (3 chambers); landing "day/night" wording + `landing_UR.webp` glyph surgery; tab-return curtain (see Resolved).
+  - **2026-07-20 session** (commits `347b393`–`08d2f8a`): SEO audit fixes (internal links missing trailing slash to `/archive`, `/data`); audio static-crackle fix (limiter on the event-engine master bus — see `AUDIO.md` Part 7); Eternal Return multi-spin fix (was Known Issue #3, now Resolved); tab-return curtain round 3 (adaptive settle wait, awaiting M's confirmation — see `AMELIORATION.md`).
+  - **2026-07-22/23 session** (commits `63f9e2e`–`daaa4cd`): `pagehide` safety net on both audio systems to stop chamber audio bleeding across pages after an unusual navigation path (see `AUDIO.md` Part 7); sky-jank round 4 — the structural fix, scoped to night-mode wall rotation only (compositor-driven star/moon layer; M reports it smoother via the tunnel, fuller test pending — see `AMELIORATION.md`); this doc's own redundancy pass (AMELIORATION.md trimmed of everything already covered here; themed 404 page added to the Project Structure list above, having been undocumented until now).
   - **Note**: a 642 MB `leilan-ai-2026-05-27.zip` backup sits in the repo root (gitignored). Heaviest live assets pending a launch-time compression pass: `wall-border.png` (5.6 MB), `wall-bg.jpg` (2.5 MB).
