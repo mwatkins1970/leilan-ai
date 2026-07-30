@@ -106,6 +106,46 @@ done — leave this section here (don't move to Resolved) until he confirms.
 
 ---
 
+## 🔨 IN PROGRESS: immersive hex-world sky parity (started 2026-07-23)
+
+**The ask:** M likes it, wants it attempted. The chamber sky (`prism.js`) has a
+fixed/seeded firmament (stars hold position, never respawn), a real-phase
+moon, and shooting stars. `immersive.astro`'s sky — the hex-grid dive/transit
+page — has none of that: its stars are unseeded and *respawn* at random
+positions on a life-cycle, no moon, no meteors.
+
+**Why this isn't a straight copy-paste** (checked directly against the code
+before planning this): immersive's sky canvas is genuinely different
+architecture, not just an unported version of the same thing —
+- It's **2× viewport height**, positioned to translate with the camera pitch
+  during the dive/tilt (`resizeSkyCanvas`, `updateSky`, `updateSkyTransform`
+  in immersive.astro). The chamber sky canvas is a plain 1× W×H.
+- Its stars **respawn** at a new random position when their life-cycle ends
+  (`lifeT`/`lifeDur`, ~52 stars, no seed) — the opposite of the chamber's
+  "fixed firmament, twinkle only" design.
+- **No moon, no meteor code exists there at all** — these would be new
+  builds adapted to the taller/translating canvas, not ports.
+- Day mode uses simple flat-colour bands + radial-gradient "clouds," a
+  different technique from the chamber's sprite-cached day clouds.
+
+**Plan — small steps, same as the sky-rotation work:**
+1. **First slice: seeded, non-respawning stars.** Swap immersive's ~52
+   random-respawn stars for a `_mulberry32`-seeded fixed field (reuse the
+   chamber's seed/approach where it fits the taller 2×-viewport canvas and
+   its dive-transform math), twinkle-only, no blink-out/respawn. Smallest,
+   most self-contained piece; everything else can sit on top of it.
+2. **Then the moon**, adapted to the 2×-tall canvas and the horizon/pitch
+   transform — real phase (`moonAge01`/`drawMoon`, reused from prism.js),
+   correct rest position for this canvas's geometry.
+3. **Then meteors**, screen-space same as the chamber, timing/spawn-band
+   adapted to the dive's vertical range.
+
+Each slice gets M's look before moving to the next, matching how the
+sky-rotation compositor fix went. Not yet started in code as of this
+writing — next session picks up at step 1.
+
+---
+
 ## Parked ideas
 
 - **Comet ZTF cameo** — built for the chamber night sky, then cut for
@@ -113,16 +153,25 @@ done — leave this section here (don't move to Resolved) until he confirms.
   meteor). Could return someday as a *fixed* (non-moving) apparition on
   rare nights. Code isn't in the tree; would be rebuilt from scratch if
   revisited.
-- **Immersive hex-world sky parity** — the moon/meteors/fixed-firmament
-  work only ever landed in the chamber sky (`prism.js`); `immersive.astro`
-  has its own separate, simpler sky. Porting the chamber's sky richness
-  there is an available follow-up, not requested yet.
-- **Illuminated initials in the portrait/fullscreen reader** — currently
-  only on in-chamber wall texts; the reader clones text outside the wall
-  panel so the CSS rule doesn't reach it. Same for field-note drop caps.
-- **Immersive 3D candles not yet persisted** — chamber shrine candles
-  persist lit state across visits (see CLAUDE.md); the separate Three.js
-  candles in `/immersive` don't yet.
+- **Illuminated initials on field-note pages** — the chamber/reader drop
+  caps (see CLAUDE.md, Chamber Sky & Ritual Layer) rely on
+  `.chamber[data-prism-id]` CSS scoping; the field-note SEO pages are a
+  separate layout with no chamber wrapper, so they don't have this at all.
+  Would need its own styling + a chamber→colour mapping. Not requested.
+
+**Corrections, 2026-07-23 (both were stale documentation, not real open
+items — checked directly against the code, nothing to build):**
+- ~~Immersive 3D candles not yet persisted~~ — there ARE no 3D candles in
+  `/immersive`; that whole feature (candles, freelook camera, transmission
+  search) was documented in CLAUDE.md's immersive.astro section map but
+  never actually exists in the file. M confirmed he's happy with the
+  candles as they are (the real ones, in the CSS chamber shrine) and
+  doesn't want this pursued. CLAUDE.md's stale claims removed.
+- ~~Illuminated initials in the portrait/fullscreen reader~~ — tested
+  directly (Playwright, portrait viewport, screenshot): it already works.
+  `#wall-portrait-reader` turns out to be nested inside
+  `.chamber[data-prism-id]`, so the existing CSS selector already reaches
+  the cloned text. Nothing was ever broken here.
 
 ---
 

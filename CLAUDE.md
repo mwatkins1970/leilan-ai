@@ -122,7 +122,7 @@ See `DESIGN_SYSTEM.md` for full token list.
 ## The Full User Journey
 
 1. **Landing page** (`/`): Large circular portrait. Click → portrait fades → typewriter sequence begins.
-2. **Immersive** (`/immersive`): Three.js hex grid draws in radially. Prism region highlights and rises. Camera descends into the rising chamber. User is in `freelook` mode — can look around, light candles, search transmissions.
+2. **Immersive** (`/immersive`): Three.js hex grid draws in radially. Prism region highlights and rises. Camera descends into the rising chamber on a scripted cinematic path — this page is a transit animation only, not an interactive space (no camera-drag look-around, no candles, no search live here) — then navigates to the destination CSS prism chamber, where all of that interactivity actually lives (step 4).
 3. **Navigate**: Click an archway → `window.location.href` to `/immersive?from=N&dest=/prism/XXX`. Immersive plays a second chamber rising at the correct adjacent position, then navigates to the prism page.
 4. **CSS Prism Chamber** (`/prism/[id]`): 6-walled CSS 3D hexagonal room. User sees 3 walls at a time (left, facing, right). Click left/right edges to rotate. Wall content: images, word panels with scrollable text, candle shrine + search, OVS star, poetry passages.
 5. **Return**: Door archway on a wall navigates back to `/immersive?from=N&dest=/prism/main?wall=M` which plays the main chamber rising then returns to the central chamber at the correct facing wall.
@@ -153,9 +153,9 @@ The file has grown considerably since the original map; line numbers below are a
 | ~1150–1360 | **`createPrismWalls()`** | 6 geometry sections: A=outer walls, B=corner inner, C=edge body, D=rim (beige), E=shelf tris (beige), F=cap (beige) |
 | ~1367–1640 | **`createRimOutlines()`** | Thick quad ribbons tracing Section D rim |
 | ~1646–1815 | **`createCapBorders()`** | Bright white outer+inner perimeter lines on cap top surface |
-| ~1817–2270 | **Prism state machine** | `updatePrismPhase()` (1817): waiting→highlight→rising→idle→camera_move→freelook |
-| ~2274–2430 | **`animate()`** | Main rAF loop: freelook camera, candle flames, sky update, hex draw-in, prism triggers |
-| ~2435–2600 | **`resetAnimation()`** | Full cleanup for return visits: removes wallMesh, capMesh, capBorders, rimOutlines, candles, etc. |
+| ~1817–2270 | **Prism state machine** | `updatePrismPhase()` (1817): waiting→highlight→rising→idle→camera_move→navigates away |
+| ~2274–2430 | **`animate()`** | Main rAF loop: scripted camera path, sky update, hex draw-in, prism triggers |
+| ~2435–2600 | **`resetAnimation()`** | Full cleanup for return visits: removes wallMesh, capMesh, capBorders, rimOutlines, etc. |
 | ~2600–2882 | Input + init | Keyboard (Space=pause), mouse drag/click, touch, resize; `isReturn` logic; `animate()` call |
 
 ### Prism State Machine
@@ -168,7 +168,8 @@ waiting (2s after grid reaches prism region)
         → camera_move (12s cinematic)
             s > 0.45: TARDIS scale 1→5× + FOV 60→70°
             Roof dissolve: cap hexes shrink from center outward
-          → freelook (candles interactive, search UI active)
+          → navigates to the destination CSS prism chamber page (window.location.href) —
+            that page, not this one, is where candle-lighting/search/interactivity live
 ```
 
 ### Key Architecture Details
@@ -179,7 +180,6 @@ waiting (2s after grid reaches prism region)
 - **`capBorders`**: Two LineSegments rings (outer + inner perimeter) at cap height. Pure white, full opacity. Rise with prism during `rising` phase.
 - **`rimOutlines`**: `THREE.Mesh` with quad ribbons (`rimOutlineMat` = `MeshBasicMaterial`). `renderOrder=3` (above capMesh at 2). Vertical ribbons W=0.045 half-width; horizontal flat XZ quads HW=0.04 at rimY level connecting crenellation bases.
 - **`groundGlow`**: Cream-coloured hex fill mesh inside prism — opacity permanently 0 (was causing grey interior appearance from bird's-eye camera). Still created and tracked but never rendered.
-- **Candles**: 1 InstancedMesh for bodies + 1 for billboard flame billboards (SDF shader). 4 pooled PointLights. Per-instance `aLitState`/`aFlickerOffset` attributes.
 - **Wall serpentine**: Overlay mesh (Section A quads only) with triplanar shader. Created at highlight→rising. Scales with TARDIS during camera_move.
 - **TARDIS_SCALE = 5.0**: Prism interior scales 5× during descent (s > 0.45).
 - **Search**: `loadArchiveData()` fetches `/archive` HTML, parses `[data-search]` cards into keyword index. Results shown projected onto wall via CSS homography.
@@ -416,10 +416,10 @@ Client-side liveness features in the chamber pages (all in `public/scripts/prism
 - **Fixed firmament** — night-sky stars come from a seeded PRNG (`_mulberry32(0x1E11A2)`): the same constellation every visit and every chamber. No blink-out/respawn; brightness twinkles 45–100%.
 - **Real-phase moon** — `moonAge01()` (synodic month vs the 2000-01-06 new-moon epoch) + `drawMoon()`: halo, earthshine, maria, correct waxing/waning geometry; opaque disc (occludes stars); rest position (0.62, 0.075) in the sky pocket above the facing wall; wraps with rotation/tilt like the stars.
 - **Shooting stars** — one per ~16–44s at night, spawned in the top 3–13% on shallow trajectories so they show in the thin normal-view sky band, not just heavens-tilt. (A Comet ZTF cameo was built then cut for realism — see `AMELIORATION.md`.)
-- **Candle persistence** — shrine candles the visitor lit relight on every return (`localStorage.shrineLitCandles`, restored in `initShrine`, recorded in the shrine click handler), **capped to the 5 most recent** (`PERSISTED_RELIT_MAX`) so a heavy user's shrine doesn't arrive ablaze. Ambient random ~18% still reshuffle per visit. Immersive 3D candles not yet persisted.
+- **Candle persistence** — shrine candles the visitor lit relight on every return (`localStorage.shrineLitCandles`, restored in `initShrine`, recorded in the shrine click handler), **capped to the 5 most recent** (`PERSISTED_RELIT_MAX`) so a heavy user's shrine doesn't arrive ablaze. Ambient random ~18% still reshuffle per visit.
 - **Candle glow** (2026-07-14) — each lit shrine candle casts a warm light-pool up the wall: `::before` radial gradient on `.shrine-candle`, shown by `.lit`, per-candle breathing rhythm via `--glow-dur`/`--glow-delay` (set in `initShrine`). Pure CSS; deliberately no blend modes inside the preserve-3d tree.
 - **Dust motes** (2026-07-14) — 1–2px pinpricks with Brownian drift + occasional sharp glints, on a screen-space overlay canvas (`#mote-canvas`, z-index 2, appended to `<body>` so chamber transforms don't scale it), drawn from the drawSky rAF; they pan with the sky offsets so they rotate/tilt with the chamber. Skipped under `prefers-reduced-motion` and in the ASCII gallery. Knobs in `initMotes`/`drawMotes` (prism.js).
-- **Illuminated initials** (2026-07-14) — per-chamber `::first-letter` drop caps on all word-wall texts (Mythos gold IM Fell English, OVS deep-purple Marcellus, Research ice-blue Space Mono), one shared + three colour rules in prism.css. Wall-text HTML untouched (shared with field notes). Not yet in the portrait reader.
+- **Illuminated initials** (2026-07-14) — per-chamber `::first-letter` drop caps on all word-wall texts (Mythos gold IM Fell English, OVS deep-purple Marcellus, Research ice-blue Space Mono), one shared + three colour rules in prism.css. Wall-text HTML untouched (shared with field notes). Confirmed working in the portrait/fullscreen reader too (2026-07-23) — `#wall-portrait-reader` is nested inside `.chamber[data-prism-id]`, so the existing selector already reaches the cloned text; no fix was needed. Field-note pages (a separate layout, no chamber wrapper) still don't have it — that one's real, if ever wanted.
 - **Tab-return curtain** (2026-07-14) — see Resolved: prevents walls "rebuilding" over sky when returning to a long-backgrounded tab.
 - **Curtain shimmer** — the scene-curtain (`prism.css`) breathes an emerald glow + shimmer sweep while assets decode; honours `prefers-reduced-motion`.
 - **Sky/wall motion sync** — rotation easing uses an exact `cubic-bezier(0.25,0.46,0.45,0.94)` evaluator (`_rotBezier`); the sky renders full-rate during rotations *and* tilts (`skyMoving`); meteor/cloud speeds use real delta-time. **Residual jerkiness remains — see Known Issue #8 and `AMELIORATION.md`.**
@@ -477,7 +477,6 @@ The two-round return-curtain fix (see Resolved below) was **not sufficient**: M 
 - Curly double quotes around article titles in citation-style headings
 - Project notation for GPT-3 glitch tokens: `‘&nbsp;tokenname'` (curly open quote, non-breaking space, name, straight close apostrophe)
 - Semantic search = future refinement; current is keyword (title + body)
-- Glow effects on candles = future refinement
 - Border frames on text windows = future (space reserved)
 - Do not add emojis or unnecessary comments
 - Responses should be concise; do not summarise at the end of responses
