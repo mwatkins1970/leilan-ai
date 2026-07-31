@@ -322,6 +322,9 @@ export const prisms: Record<string, PrismConfig> = {
                 archway: true,
                 destination: '/prism/main?wall=2',
                 bg: '/images/wall-bg.jpg',
+                // No corner brackets on this wall (M's call, 2026-07-23), for
+                // consistency with the other chambers' door/logo walls.
+                bgOverlay: null,
                 content: { type: 'ovs-star' },
             },
             // Wall 5 — "Handbook"

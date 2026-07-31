@@ -3576,7 +3576,11 @@ body.wall-portrait-reading .vol-ctl { display: none !important; }
 .chamber[data-prism-id="research-lab"] .wall-panel[data-wall="1"] .wall-word-img { top: 19.73vh; height: 29.42vh; }
 .chamber[data-prism-id="research-lab"] .wall-panel[data-wall="2"] .wall-word-img { top: 32.94vh; height: 16.21vh; }
 .chamber[data-prism-id="research-lab"] .wall-panel[data-wall="3"] .wall-word-img { top: 29.97vh; height: 19.18vh; }
-.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="4"] .wall-word-img { top: 31.84vh; height: 17.31vh; }
+/* Nudged up from 31.84vh (2026-07-23): with the corner brackets now on this
+   wall, the word+arrow cluster (baked into one combined PNG) needed to sit
+   centred between the bracket hubs (~5vh/78vh top, ~58.5vh/78vh bottom on a
+   1280x800 reference) rather than low in the frame. */
+.chamber[data-prism-id="research-lab"] .wall-panel[data-wall="4"] .wall-word-img { top: 16.1vh; height: 17.31vh; }
 .chamber[data-prism-id="research-lab"] .wall-panel[data-wall="5"] .wall-word-img { top: 29.97vh; height: 19.18vh; }
 .chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="1"] .wall-word-img { top: 23.57vh; height: 27.53vh; }
 .chamber[data-prism-id="ovs-chapel"] .wall-panel[data-wall="2"] .wall-word-img { top: 30.85vh; height: 20.24vh; }
