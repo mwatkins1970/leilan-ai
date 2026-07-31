@@ -49,6 +49,10 @@ export interface WallConfig {
     videoSrc?: string;
     /** If true, suppress the video button entirely on this wall's text popup */
     hideVideo?: boolean;
+    /** Per-wall override for the chamber's corner-bracket overlay: a different
+     *  image path, or `null` to suppress the overlay entirely on this wall.
+     *  Omit to inherit the chamber's chamberBgOverlay unchanged. */
+    bgOverlay?: string | null;
 }
 
 export interface PrismConfig {
@@ -240,6 +244,14 @@ export const prisms: Record<string, PrismConfig> = {
                 archway: true,
                 destination: '/prism/main?wall=5',
                 bg: '/images/wall-bg.jpg',
+                // This wall's text frame is shorter than the other walls' (room
+                // left for the archway below), so the bottom two brackets are
+                // repositioned to sit at the frame's actual corners instead of
+                // the true wall-bottom corners (M's call, 2026-07-23). Measured
+                // directly off the rendered frame: bottom edge ~63.6% of wall
+                // height at a 1280x800 viewport — see corner-brackets-source/
+                // for the base art if this ever needs re-measuring/regenerating.
+                bgOverlay: '/images/RESEARCH_background_new_wall4.webp',
                 content: {
                     type: 'word-panel',
                     label: 'rescue',
@@ -392,7 +404,9 @@ export const prisms: Record<string, PrismConfig> = {
         title: '𝔖𝔠𝔯𝔦𝔭𝔱𝔬𝔯𝔦𝔲𝔪',
         chamberBg: '/images/MOIRE_background.webp',
         chamberBgAlt: '/images/MOIRE_background_alt.webp',
-        chamberBgOverlay: '/images/SCRIPTORIUM_background_new.webp',
+        // No corner-bracket overlay here (M's call, 2026-07-23): the wall text on
+        // every Scriptorium wall sits directly on the wall, not in a popup frame,
+        // so the brackets read as fiddly/unnecessary ornamentation on this chamber.
         wallBorder: false,
         walls: [
             // Wall 1 — facing on entry — shares the wall with the ASCII orb,
@@ -502,6 +516,9 @@ export const prisms: Record<string, PrismConfig> = {
                 archway: true,
                 destination: '/prism/main?wall=3',
                 bg: '/images/wall-bg.jpg',
+                // No corner brackets on this wall (M's call, 2026-07-23) — they
+                // don't suit the horoscope image + door composition.
+                bgOverlay: null,
                 content: { type: 'image', src: '/images/horoscope_basic.webp', style: 'width:40%; top:20%' },
                 heavensTilt: {
                     title: '',

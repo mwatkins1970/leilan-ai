@@ -166,7 +166,7 @@ const masksJson = JSON.stringify(masks);
                             wall={wallNum}
                             archway={wall.archway}
                             bg={wallChamberBg ?? wall.bg}
-                            bgOverlay={prism.chamberBgOverlay}
+                            bgOverlay={wall.bgOverlay !== undefined ? wall.bgOverlay : prism.chamberBgOverlay}
                             showBorder={prism.wallBorder ?? true}
                             bgFit={wallChamberBg ? 'cover' : 'contain'}
                         >
