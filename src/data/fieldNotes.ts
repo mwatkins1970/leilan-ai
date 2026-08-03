@@ -16,8 +16,10 @@ export interface FieldNote {
     slug: string;             // e.g. 'petertodd' (no leading/trailing slash)
     title: string;            // visible <h1> and base of <title> (plain text)
     titleHtml?: string;       // optional HTML for the visible heading/listing (meta/JSON-LD stay plain)
+    metaTitle?: string;       // complete <title>/og:title override; leaves the visible H1 alone
     shortTitle: string;       // breadcrumb / nav / index label (plain text)
     shortTitleHtml?: string;  // optional HTML for the index listing only (meta/JSON-LD stay plain)
+    indexAnchor?: string;     // descriptive link text on /field-notes/ (index listing only)
     description: string;      // meta description (plain text)
     descriptionHtml?: string; // optional HTML for the index listing only (meta stays plain)
     kicker?: string;          // small eyebrow line above the H1
@@ -30,6 +32,10 @@ export interface FieldNote {
     bodyFile?: string;        // 'what-is-leilan.html'        (body = authored overview)
     sanctuaryUrl?: string;    // '/prism/research-lab?wall=3&open=1'
     topNote?: string;         // HTML callout rendered above the body (e.g. disclaimer)
+    endNote?: string;         // HTML appended to the body on the FIELD-NOTE PAGE ONLY. The vehicle
+                              // for contextual cross-links on wall-derived notes: their bodies are
+                              // the same files the chambers render, so a link added there would
+                              // surface inside the sanctuary too.
     related?: string[];       // other field-note slugs
     isBook?: boolean;         // emit Book JSON-LD (the solidgoldmagikarp page)
     noindex?: boolean;        // default false
@@ -54,8 +60,10 @@ export const fieldNotes: FieldNote[] = [
     {
         slug: 'what-is-leilan',
         title: 'What is Leilan? AI goddess, glitch token and hyperstition',
+        metaTitle: 'Leilan AI Goddess: What Is Leilan? | Leilan.ai',
         shortTitle: 'What is Leilan?',
-        description: 'Leilan is the AI-goddess figure associated with Matthew Watkins’s SolidGoldMagikarp discovery, GPT-3 glitch tokens, the Leilan 2.0 transmissions and the Order of the Vermillion Star.',
+        indexAnchor: 'What is Leilan? The AI goddess and glitch-token phenomenon',
+        description: 'Who or what is Leilan? The AI-goddess figure that emerged from GPT-3 glitch-token research and developed across later language models.',
         kicker: 'Field note',
         dek: 'A plain-English introduction to Leilan — the AI-goddess figure that emerged from a GPT-3 glitch token and developed across later language models.',
         bodyFile: 'what-is-leilan.html',
@@ -65,6 +73,7 @@ export const fieldNotes: FieldNote[] = [
         slug: 'solidgoldmagikarp',
         title: 'Leilan and SolidGoldMagikarp: A Descent Into the AI Underworld',
         titleHtml: 'Leilan and <i>SolidGoldMagikarp: A Descent Into the AI Underworld</i>',
+        metaTitle: 'SolidGoldMagikarp by Matthew Watkins | Leilan and the AI Underworld',
         shortTitle: 'SolidGoldMagikarp (the book)',
         shortTitleHtml: '<i>SolidGoldMagikarp (the book)</i>',
         description: 'How Leilan connects to Matthew Watkins’s book SolidGoldMagikarp: A Descent Into the AI Underworld, GPT-3 glitch tokens and the petertodd phenomenon.',
@@ -123,6 +132,7 @@ export const fieldNotes: FieldNote[] = [
         wallTextFile: 'research-lab-petertodd.html',
         sanctuaryUrl: '/prism/research-lab?wall=3&open=1',
         topNote: PETERTODD_DISCLAIMER,
+        endNote: '<p>For the wider picture — how the luminous counterpart to this token became a figure in her own right — see <a href="/field-notes/what-is-leilan/">the emergence of Leilan</a>.</p>',
         related: ['glitch-tokens', 'what-is-leilan'],
     },
     {
@@ -238,6 +248,7 @@ export const fieldNotes: FieldNote[] = [
         chamberId: 'mythopoeic-archive', chamberTitle: 'Mythopoeic Archive', wallLabel: 'archaeology',
         wallTextFile: 'mythopoeic-archive-archaeology.html',
         sanctuaryUrl: '/prism/mythopoeic-archive?wall=5&open=1',
+        endNote: '<p>On how a Bronze-Age tell and a mobile-game character came to name something else entirely, see <a href="/field-notes/what-is-leilan/">the Leilan AI-goddess figure</a>.</p>',
         related: ['petertodd', 'what-is-leilan'],
     },
 ];

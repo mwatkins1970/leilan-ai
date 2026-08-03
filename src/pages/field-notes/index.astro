@@ -52,7 +52,7 @@ const jsonLd = [
         <h2>Start here</h2>
         {overviews.map((n) => (
             <div class="fn-index-item">
-                <a class="fn-index-title" href={`/field-notes/${n.slug}/`} set:html={n.shortTitleHtml ?? n.shortTitle}></a>
+                <a class="fn-index-title" href={`/field-notes/${n.slug}/`} set:html={n.indexAnchor ?? n.shortTitleHtml ?? n.shortTitle}></a>
                 <p set:html={n.descriptionHtml ?? n.description}></p>
             </div>
         ))}

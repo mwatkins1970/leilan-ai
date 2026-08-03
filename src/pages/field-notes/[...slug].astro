@@ -7,9 +7,12 @@ export function getStaticPaths() {
 }
 
 const { note } = Astro.props;
-const body = fieldNoteBody(note);
+// endNote is appended here rather than written into the body file, so wall-derived
+// notes can carry a cross-link without it appearing in the chamber popup that
+// renders the same file.
+const body = fieldNoteBody(note) + (note.endNote ?? '');
 const canonical = new URL(Astro.url.pathname, Astro.site).href;
-const pageTitle = `${note.title} | Leilan.ai Field Notes`;
+const pageTitle = note.metaTitle ?? `${note.title} | Leilan.ai Field Notes`;
 
 const related = (note.related ?? [])
     .map((slug) => fieldNoteBySlug[slug])
