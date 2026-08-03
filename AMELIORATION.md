@@ -131,9 +131,7 @@ architecture, not just an unported version of the same thing —
 **Plan — small steps, same as the sky-rotation work:**
 1. ~~**First slice: seeded, non-respawning stars.**~~ **DONE 2026-08-03,
    awaiting M's look** — see below.
-2. **Then the moon**, adapted to the 2×-tall canvas and the horizon/pitch
-   transform — real phase (`moonAge01`/`drawMoon`, reused from prism.js),
-   correct rest position for this canvas's geometry.
+2. ~~**Then the moon**~~ **DONE 2026-08-03, awaiting M's look** — see below.
 3. **Then meteors**, screen-space same as the chamber, timing/spawn-band
    adapted to the dive's vertical range.
 
@@ -169,6 +167,32 @@ texture mapped onto the *outer* prism walls — still uses random respawn. It
 tiles across 3D geometry so it can't correspond to anything star-for-star,
 and at wall-render size the stars read as faint texture rather than a
 firmament. Worth doing only if M notices them twinkling out.
+
+### Slice 2 done (2026-08-03): the moon
+
+`moonAge01`, `drawMoon` and the `moonSprite` cache ported verbatim from
+`prism.js` into `immersive.astro`, drawn in the night branch of `updateSky`
+after the stars (its opaque backing disc occludes them, as designed).
+
+Placement fell out of slice 1 for free. The shared-star mapping preserves
+on-screen position *exactly* — a chamber star at viewport-y `y_c` is drawn at
+canvas-y `(1/3 + y_c·2/3)·1.5h = 0.5h + y_c·h`, and the canvas top sits at
+viewport-y `−0.5h`, so it lands back at `y_c·h`. The moon therefore just
+reuses the chamber's own rest position `(0.62, 0.075)` plus the `skyTop`
+offset, and shows in the same place on both pages — no jump when the dive
+hands over to the prism page (fresh chamber loads start at
+`skyRotationOffset = 0`, so the horizontal position agrees too).
+
+**Verified**: rendered at 1:1 and inspected — today's real phase (age 0.671,
+73.8% waning gibbous) draws with the lit limb on the left, maria and halo
+present, stars correctly occluded; measured centre (794, 60) matches the
+intended (0.62w, 0.075h) exactly. Full dive run, no console/page errors; day
+mode confirmed moonless.
+
+**Cosmetic note for M:** at 1280×800 the halo's left edge just grazes the
+volume control at top-centre. It's very faint and the position is the
+principled one (matching the chambers), so it's left as is — say the word and
+it can be nudged right/down.
 
 ---
 
