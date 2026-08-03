@@ -129,11 +129,8 @@ architecture, not just an unported version of the same thing —
   different technique from the chamber's sprite-cached day clouds.
 
 **Plan — small steps, same as the sky-rotation work:**
-1. **First slice: seeded, non-respawning stars.** Swap immersive's ~52
-   random-respawn stars for a `_mulberry32`-seeded fixed field (reuse the
-   chamber's seed/approach where it fits the taller 2×-viewport canvas and
-   its dive-transform math), twinkle-only, no blink-out/respawn. Smallest,
-   most self-contained piece; everything else can sit on top of it.
+1. ~~**First slice: seeded, non-respawning stars.**~~ **DONE 2026-08-03,
+   awaiting M's look** — see below.
 2. **Then the moon**, adapted to the 2×-tall canvas and the horizon/pitch
    transform — real phase (`moonAge01`/`drawMoon`, reused from prism.js),
    correct rest position for this canvas's geometry.
@@ -141,8 +138,37 @@ architecture, not just an unported version of the same thing —
    adapted to the dive's vertical range.
 
 Each slice gets M's look before moving to the next, matching how the
-sky-rotation compositor fix went. Not yet started in code as of this
-writing — next session picks up at step 1.
+sky-rotation compositor fix went.
+
+### Slice 1 done (2026-08-03): the immersive sky is now *the same firmament*
+
+Not merely "also seeded" — literally the same constellation as the chambers.
+`starSymbols` and the night palette turned out to be identical tables in
+identical order in both files, so generating the first 45 + 35 stars with the
+same `_mulberry32(0x1E11A2)` stream, same draw order and same parameter
+ranges as `prism.js` makes star *i* here the same star as star *i* there.
+
+Geometry: immersive draws stars at canvas-y `s.y * 1.5h`, and its canvas sits
+at `top: -0.5h` (verified live: 1600px canvas at top −400 in an 800px
+viewport), so the chamber's viewport corresponds to `s.y ∈ [1/3, 1]`. Shared
+stars are therefore placed at `1/3 + y_chamber · 2/3`; the strip above (only
+seen mid-dive) gets 23 + 17 extra stars from the same stream at matching
+per-area density, preserving the previous 68 + 52 totals. Lifecycle
+respawn is gone: brightness now breathes 45–100% exactly as in the chamber,
+and font/rgba strings are precomputed per star as `prism.js` does.
+
+**Verified**: star-for-star equality with `prism.js`'s generator checked
+numerically (0 mismatches across all 80 shared stars, all seven fields);
+Playwright run through a full dive — no console/page errors, canvas geometry
+identical across loads, and the starfield pixel-identical between separate
+page loads (best vertical alignment offset 0px, residual diff 0.49/255 =
+twinkle only). Day mode untouched.
+
+**Not touched, deliberately:** `wallSkyStars` — the separate 4096×2048 star
+texture mapped onto the *outer* prism walls — still uses random respawn. It
+tiles across 3D geometry so it can't correspond to anything star-for-star,
+and at wall-render size the stars read as faint texture rather than a
+firmament. Worth doing only if M notices them twinkling out.
 
 ---
 
