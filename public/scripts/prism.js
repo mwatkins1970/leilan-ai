@@ -6969,6 +6969,34 @@ setTimeout(() => {
     }
 }, 1500);
 
+// --- Curtain diagnostics (2026-08-03) --------------------------------------
+// Turn on with   localStorage.curtainDebug = '1'   then reload. It persists
+// across reloads deliberately: a reload is one of the cases under investigation,
+// so a URL flag would be lost exactly when it's needed. Inert and free when off.
+//
+// Why this exists: "the page reassembled piecemeal" can come from EITHER of two
+// unrelated code paths below — the load curtain or the tab-return curtain — and
+// they have different failure modes and different fixes. Only the tab-return one
+// was hardened in rounds 2/3. The log says which actually ran, so a sighting can
+// be attributed instead of guessed at. The `navigation type` line is the key
+// discriminator: `reload` or `navigate` means the LOAD path ran and the
+// tab-return handler never fired at all.
+const _cDebug = (() => { try { return localStorage.curtainDebug === '1'; } catch (e) { return false; } })();
+const _cT0 = performance.now();
+function _cLog(...a) {
+    if (!_cDebug) return;
+    console.log('%c[curtain +' + Math.round(performance.now() - _cT0) + 'ms]', 'color:#5eefa2', ...a);
+}
+if (_cDebug) {
+    const _nav = performance.getEntriesByType('navigation')[0];
+    _cLog('page load — navigation type:', _nav ? _nav.type : 'unknown',
+          '| transferSize:', _nav ? _nav.transferSize : '?',
+          '(0 or tiny = served from cache, i.e. a WARM-CACHE load —',
+          'the case where the load curtain has no download time covering GPU raster)');
+    window.addEventListener('pageshow', (e) => _cLog('pageshow — persisted (bfcache restore):', e.persisted));
+    window.addEventListener('visibilitychange', () => _cLog('visibility →', document.visibilityState));
+}
+
 // --- Reveal scene: opaque curtain hides everything while assets paint ---
 // The scene renders normally behind a black curtain div (z-index:9999).
 // Once all images, backgrounds, and fonts are loaded we wait two extra rAFs
@@ -7016,9 +7044,16 @@ if (prismContainer) prismContainer.style.transition = 'none';
     }
 
     // Safety timeout — never stay blank longer than 5s
-    const timeout = new Promise(r => setTimeout(r, 5000));
+    let _timedOut = false;
+    const timeout = new Promise(r => setTimeout(() => { _timedOut = true; r(); }, 5000));
+    const _waitStart = performance.now();
+    _cLog('LOAD curtain: waiting on', promises.length, 'assets (images + backgrounds + fonts)');
 
     function liftCurtain() {
+        _cLog('LOAD curtain: assets ready after', Math.round(performance.now() - _waitStart) + 'ms',
+              _timedOut ? '(SAFETY TIMEOUT won — assets were NOT all ready)' : '',
+              '— lifting after 2 rAFs, with no minimum hold and no settle check',
+              '(unlike the tab-return curtain: see the round-2/3 notes below)');
         // Two rAFs: first ensures the browser has painted all loaded assets,
         // second ensures that paint is fully composited to the screen buffer.
         requestAnimationFrame(() => {
@@ -7092,10 +7127,18 @@ if (prismContainer) prismContainer.style.transition = 'none';
             _hiddenAt = performance.now();
             return;
         }
-        if (!_hiddenAt || performance.now() - _hiddenAt < RETURN_MIN_HIDDEN_MS) return;
+        if (!_hiddenAt || performance.now() - _hiddenAt < RETURN_MIN_HIDDEN_MS) {
+            _cLog('RETURN curtain: SKIPPED —',
+                  !_hiddenAt ? 'no recorded hide (tab was never hidden, or the page reloaded while away)'
+                             : 'hidden only ' + Math.round(performance.now() - _hiddenAt) + 'ms, under the '
+                               + RETURN_MIN_HIDDEN_MS + 'ms threshold');
+            return;
+        }
+        const _hiddenFor = performance.now() - _hiddenAt;
         _hiddenAt = 0;
         if (document.getElementById('return-curtain')) return;
         const shownAt = performance.now();
+        _cLog('RETURN curtain: shown — tab was hidden for', Math.round(_hiddenFor / 1000) + 's');
         const c = document.createElement('div');
         c.className = 'scene-curtain';
         c.id = 'return-curtain';
@@ -7107,14 +7150,19 @@ if (prismContainer) prismContainer.style.transition = 'none';
             if (img.decode) proms.push(img.decode().catch(() => {}));
         });
         function lift() {
+            _cLog('RETURN curtain: lifting after a total hold of',
+                  Math.round(performance.now() - shownAt) + 'ms');
             c.style.opacity = '0';
             c.addEventListener('transitionend', () => c.remove(), { once: true });
             setTimeout(() => c.remove(), 600);   // safety net
         }
+        _cLog('RETURN curtain: re-decoding', proms.length, 'chamber images');
         Promise.race([
             Promise.all(proms),
             new Promise(r => setTimeout(r, 1500)),   // never hold the room hostage
         ]).then(() => {
+            _cLog('RETURN curtain: decodes settled at',
+                  Math.round(performance.now() - shownAt) + 'ms (floor is ' + RETURN_CURTAIN_MIN_MS + 'ms)');
             // Hold until the minimum floor has elapsed, then watch frame
             // timing until it settles (or the settle cap runs out) before
             // the final two-rAF compose-then-lift.
@@ -7128,6 +7176,10 @@ if (prismContainer) prismContainer.style.transition = 'none';
                     lastT = now;
                     fastRun = dt <= SETTLE_FRAME_MS ? fastRun + 1 : 0;
                     if (fastRun >= SETTLE_FRAMES || now - settleStart > SETTLE_CAP_MS) {
+                        _cLog('RETURN curtain: frames settled after',
+                              Math.round(now - settleStart) + 'ms',
+                              fastRun >= SETTLE_FRAMES ? '(got ' + SETTLE_FRAMES + ' fast frames)'
+                                                       : '(SETTLE CAP HIT — frames never settled)');
                         requestAnimationFrame(() => requestAnimationFrame(lift));
                     } else {
                         requestAnimationFrame(checkSettled);

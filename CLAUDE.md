@@ -20,11 +20,14 @@ This repo's `.md` files and what each is for:
 - **`AUDIO.md`** — complete technical reference for the generative audio system (immersive soundscape + the 7-chamber event engine). Read in full before any audio change.
 - **`BANDWIDTH.md`** — bandwidth-optimisation & launch-resilience plan (Netlify free-tier budget, asset weights, lazy-loading).
 - **`VIDEO_BUTTONS.md`** — per-wall `▶ video` button mechanics + the R2-hosted, click-to-load playback overlay (fullscreen, portrait). See also the *Video System* section here.
+- **`SEO_NEXT_STEPS.md`** — the remaining *off-page* SEO work, written **for M to do by hand** (Search Console re-indexing, Bing Webmaster Tools, backlink seeding with anchor-text guidance). Claude can't do any of it — it all needs logins. The on-page layer is done and documented in the *Field-Note Layer (SEO)* section below.
 - **`AMELIORATION.md`** — the aesthetic-polish roadmap + open technical threads (currently: two items awaiting M's confirmation — a tab-return curtain fix and the sky-motion-latency structural fix, the latter only partially scoped so far). **At session start, offer the user what remains on it and let him pick**; update it as items complete.
 
 *Removed 2026-06-27:* `SEO.md` and `SEO_build.md` (both superseded by the built layer + the *Field-Note Layer (SEO)* section below, which now carries the launch checklist) and `SITE_OVERVIEW.md` (folded into this file).
 
-**Pending hand-drawn assets (aelf):** candle-shrine image (`/images/candleshrine.png` placeholder); the metallic corner-brackets in the side-chamber `*_background_new.png` overlays; the gpt3-library `_c4` pre-coloured moiré pair (that chamber is still on the shared jade-tinted moiré). Update the CSS filters / `chamberBg` paths in `prisms.ts` + `prism.css` as each lands.
+**Chamber art — signed off by M, 2026-08-03.** He is happy with **all** the chamber walls as they stand, and with the current candle shrine (`/images/candleshrine.webp`, GPT-made — *not* a placeholder; M: "the existing one is better than a 'placeholder', looks really quite good"). aelf *may* eventually replace the shrine, but he isn't holding his breath. The corner brackets landed in commits `c11d57d`–`6286bb2` (Sol's round 2, with per-wall overrides). The gpt3-library `_c4` pre-coloured moiré pair was never delivered and, on this sign-off, is **no longer awaited** — the Scriptorium stays on the shared moiré + jade CSS tint. *(If aelf does deliver either asset later, update the `chamberBg` paths in `prisms.ts` and drop the corresponding `.wall-bg` CSS filter to `none` in `prism.css`, as was done for `_c1`/`_c2`/`_c3`.)*
+
+**Still genuinely pending from aelf:** the remaining ~11 wall videos (see *Video System*).
 
 ---
 

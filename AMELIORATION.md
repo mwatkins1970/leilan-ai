@@ -38,13 +38,71 @@ just a guess, and 600ms can be fine on one machine and short on another. In
   can't hold the room hostage indefinitely. Worst case ≈2.3s hold, which
   matches M's stated preference for a longer hold over a ragged reveal.
 
-Lead #3 (verify the handler fires at all for his pattern — bfcache restores,
-whether `visibilitychange` fires) is still unverified; only M's hardware can
-settle it. **Test recipe unchanged**: open a chamber → background the tab for
-several minutes of active use elsewhere → return; M's eye is ground truth.
-If round 3 doesn't fix it, the settle heuristic itself (not just its
-constants) is the next thing to question — rAF timing during a GPU-bound
-re-raster may not degrade as cleanly as assumed.
+**M's status report, 2026-08-03:** "it seems ok, but every now and again I
+return to an old tab and see the piecemeal re-assembly, but that's often
+after there's been a git push or something. I need a better way to test
+this."
+
+### Diagnostic mode (built 2026-08-03) — use this before touching anything
+
+In the browser console: `localStorage.curtainDebug = '1'` then reload. It
+persists across reloads on purpose (a reload is one of the cases under
+investigation, so a URL flag would be lost exactly when needed), and is inert
+and free when off. `delete localStorage.curtainDebug` to stop.
+
+It logs which curtain path actually ran and what it waited on. **The
+`navigation type` line is the discriminator**: `reload` or `navigate` means
+the page *loaded* and the tab-return handler never fired at all — a different
+code path with a different failure mode, and the one round 3 did **not**
+touch.
+
+### Strong hypothesis from M's "after a git push" clue
+
+That clue probably means the tab **reloaded** rather than merely
+unhid — a Vite HMR full-reload on the dev/tunnel preview, or his own refresh.
+If so he has been looking at the **load** curtain, not the tab-return curtain,
+and rounds 2/3 could never have fixed it.
+
+And the load curtain still has the exact weakness round 1 was killed for: it
+lifts as soon as `decode()` resolves plus two rAFs, with **no minimum hold and
+no settle check**. The stated justification was that "fresh downloads give
+raster ample cover" — but on a warm-cache reload there is no download to give
+cover. Measured with the new diagnostic on `/prism/main`:
+
+| load | navigation type | asset wait before lift |
+|---|---|---|
+| cold | `navigate` | 570ms |
+| warm-cache reload | `reload` | **272ms** |
+
+Less than half the cover, on a real machine with a warm disk cache probably
+less again — while the GPU still has the same wall layers to rasterise.
+
+### Test recipe
+
+1. `localStorage.curtainDebug = '1'`, reload, open the console.
+2. **Warm-cache reload case** (deterministic, try this first): let a chamber
+   fully settle, then hit reload. Watch for `navigation type: reload` and a
+   short asset wait. This is the case that can be reproduced on demand.
+3. **True tab-return case**: leave the tab for >10s
+   (`RETURN_MIN_HIDDEN_MS`) of real use elsewhere, then come back. Look for
+   `RETURN curtain: shown`. If instead you see a fresh `page load` line, the
+   tab reloaded and you are in case 2.
+4. Report which lines appeared alongside what you saw.
+
+**Not yet verified:** the tab-return branch could not be exercised headlessly
+— Playwright's `bringToFront()` doesn't reliably drive `visibilitychange` in
+headless Chromium, so those log lines are untested in practice. The load-path
+lines are confirmed working. M's hardware remains ground truth.
+
+### The obvious fix, NOT applied — needs M's call
+
+Give the load curtain the same floor + adaptive settle the tab-return curtain
+got in rounds 2/3. Deliberately not done, because a flat floor would slow
+**every** first visit for every visitor to fix a case that only bites on
+reload. The targeted version — apply the floor/settle only when the load was
+warm-cache (`navigation type === 'reload'`, or a small `transferSize`) — costs
+first-time visitors nothing. That's the one to build if the diagnostic
+confirms the hypothesis.
 
 ---
 
