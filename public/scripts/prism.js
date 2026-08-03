@@ -2159,7 +2159,11 @@ function moonSprite(r, age) {
 const _meteors = [];
 let _nextMeteorAtMs = 0;
 
-let skyFrame = 0;
+// -1 so the FIRST drawSky call paints (then every 3rd as before). Nothing here is
+// user-visible today — the scene-curtain holds far longer than three frames — but
+// it makes "the sky is never blank once the room is shown" true by construction
+// rather than by accident, matching the same fix in immersive.astro.
+let skyFrame = -1;
 let skyTiltOffset = 0; // normalized 0–1 vertical shift applied to star y-positions during tilt
 let skyRotationOffset = 0; // normalized 0–1 horizontal shift applied to star/cloud x-positions during rotation
 let _skyRotTarget = 0; // target value for animated sky rotation

@@ -214,6 +214,37 @@ left/right directions. At the shipped constants a full dive produced 4
 meteors at 12.7s / 36.1s / 51.0s / 64.4s (headless runs slower than real
 hardware, so expect ~3), no page errors.
 
+### Follow-up (2026-08-03): the moon popped in a beat after the page
+
+M reported the moon arriving a split second late on `/immersive`, and asked
+for "everything appears at once" as a general rule for page transitions.
+
+**Cause, measured not guessed:** `updateSky` is throttled to every 3rd call
+(`skyFrame % 3`), and `skyFrame` started at 0 — so the first *two* calls
+returned without drawing and the sky canvas stayed empty until the third
+animation frame. Those opening frames are the most expensive in the page's
+life (WebGL init + shader compile), so instrumentation showed **first paint
+at 248ms but first sky draw at 2312ms** on a cold headless load. The stars
+are too faint for anyone to notice arriving late; a big bright moon is not.
+
+**Fix** (`immersive.astro`): `skyFrame` starts at −1 so the first call draws
+(cadence otherwise unchanged), plus one synchronous `updateSky()` at the end
+of init, before the sequence starts. The wall-sky texture is deliberately
+*not* warmed there — a 4096×2048 fill that nothing shows until the prism
+rises ~40s in has no business on the first-paint path. `startImmersive()`
+re-seeds `_nextMeteorAtMs`, since the init paint would otherwise set the
+meteor clock from page load, which on the gated re-entry path can be long
+before the sequence actually begins.
+
+**Verified**: across three runs the first sky draw now precedes the first
+`composer.render()` by 51–122ms, so nothing visible can arrive before the
+sky; both pages screenshot correctly, no errors.
+
+The same `skyFrame = 0` pattern in `prism.js` got the same one-line change.
+Nothing there is user-visible today (the scene-curtain holds far longer than
+three frames), but it makes "the sky is never blank once the room is shown"
+true by construction rather than by accident.
+
 ---
 
 **All three slices are code-complete and await M's eye on the tunnel.** Once

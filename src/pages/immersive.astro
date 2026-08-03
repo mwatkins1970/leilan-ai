@@ -1115,7 +1115,14 @@ import OrientationGate from '../components/OrientationGate.astro';
         resizeSkyCanvas();
         window.addEventListener('resize', resizeSkyCanvas);
 
-        let skyFrame = 0;
+        // Starts at -1 so the FIRST call draws (then every 3rd as before). The sky
+        // is painted once synchronously at init, before the first animation frame —
+        // see the call at the end of this script. Previously the %3 throttle skipped
+        // the first two calls, and since the opening frames are the page's most
+        // expensive (WebGL init + shader compile) the canvas stayed empty well after
+        // the page was visible; the stars are too faint to notice arriving late, but
+        // the moon visibly popped in.
+        let skyFrame = -1;
         function updateSky(t) {
             skyFrame++;
             if (skyFrame % 3 !== 0) return;
@@ -3561,6 +3568,10 @@ import OrientationGate from '../components/OrientationGate.astro';
             // Reset the clock so the first frame's delta is ~0 — the sequence
             // begins from the start rather than jumping by the hold duration.
             lastRealTime = Date.now() * 0.001;
+            // Re-seed the meteor clock: the init-time sky paint below sets it from
+            // whenever the page loaded, which on the gated path can be long before
+            // the sequence actually begins.
+            _nextMeteorAtMs = 0;
             const gate = document.getElementById('reentry-gate');
             if (gate) gate.classList.add('hidden');
             animate();
@@ -3568,6 +3579,13 @@ import OrientationGate from '../components/OrientationGate.astro';
             // and the document-level gesture unlock listeners (which the gate
             // click bubbles to), so audio timing on the normal flow is unchanged.
         }
+
+        // Paint the sky once, synchronously, before anything else starts — so the
+        // stars and moon are in the browser's FIRST paint rather than arriving a
+        // beat later on the third animation frame. The wall-sky texture is
+        // deliberately not warmed here: it's a 4096×2048 fill that nothing shows
+        // until the prism rises, ~40s in, so it has no business on this path.
+        updateSky(Date.now() * 0.001);
 
         if (window.__immersiveHold) {
             const gate = document.getElementById('reentry-gate');
