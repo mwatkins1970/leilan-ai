@@ -147,7 +147,7 @@ The file has grown considerably since the original map; line numbers below are a
 | ~248–276 | Constants + state | `PRISM_CENTER_ROW=14` (250), `PRISM_RISE_HEIGHT=3.0`, `TARDIS_SCALE=5.0` (257) |
 | ~277–292 | Wall UI state, DOM refs, hex glow colors | `glowOuter: 0xD4C8A0`, `glowInner: 0xE8DCC0` |
 | ~293–660 | **Floor + wall serpentine shaders** | GLSL — hex-tiled plasma, 5-color phase cycle (pink→purple→blue→green→gold), black snake trails; triplanar wall overlay |
-| ~660–770 | Sky (2D canvas) | Film grain + twinkling ASCII stars |
+| ~660–770 | Sky (2D canvas) | Film grain + the fixed firmament (seeded ASCII stars, shared star-for-star with the chambers), real-phase moon, shooting stars — see `AMELIORATION.md` |
 | ~772–980 | Sky update loop, resize, hex math | `updateSky(t)` (772), `offsetToCube()`, `hexDistance()`, `getRegionHexes()` |
 | ~983–1140 | Wall sky shader | `wallSkyVertex` (983), `wallSkyFragment` (997) |
 | ~1150–1360 | **`createPrismWalls()`** | 6 geometry sections: A=outer walls, B=corner inner, C=edge body, D=rim (beige), E=shelf tris (beige), F=cap (beige) |

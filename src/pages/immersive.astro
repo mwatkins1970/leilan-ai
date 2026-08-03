@@ -1094,6 +1094,16 @@ import OrientationGate from '../components/OrientationGate.astro';
             return _moonSprite;
         }
 
+        // --- Shooting stars (2026-08-03) — same look and physics as the
+        // chamber sky's, but the spawn band and cadence are adapted to this
+        // page: there's a whole open sky here rather than the chambers' thin
+        // sliver above the ceiling wedges, so meteors spawn across the upper
+        // ~45% of the viewport instead of the top 3–13%; and since the dive
+        // only lasts ~50s (against a chamber visit of any length) the cadence
+        // is tightened so a visitor reliably catches two or three.
+        const _meteors = [];
+        let _nextMeteorAtMs = 0;
+
         function resizeSkyCanvas() {
             const dpr = Math.min(window.devicePixelRatio, 2);
             // Canvas is 2× viewport-tall so it has room to translate up/down
@@ -1169,6 +1179,45 @@ import OrientationGate from '../components/OrientationGate.astro';
                 const moonSide = moonSp.width / _moonSpriteDpr;
                 skyCtx.drawImage(moonSp, 0.62 * w - moonSide / 2,
                                  skyTop + 0.075 * h - moonSide / 2, moonSide, moonSide);
+
+                // Shooting stars. Positions are canvas-space, so they pan with
+                // the sky during the dive exactly as the stars and moon do.
+                if (!_nextMeteorAtMs) _nextMeteorAtMs = tMs + 5000 + Math.random() * 9000;
+                if (tMs >= _nextMeteorAtMs) {
+                    const dir = Math.random() < 0.5 ? 1 : -1;
+                    const ang = 0.25 + Math.random() * 0.35;                // radians below horizontal
+                    const speed = (0.55 + Math.random() * 0.5) * Math.max(w, 480);
+                    _meteors.push({
+                        x: (0.1 + Math.random() * 0.8) * w,
+                        y: skyTop + (0.03 + Math.random() * 0.42) * h,
+                        vx: Math.cos(ang) * speed * dir,
+                        vy: Math.sin(ang) * speed * 0.5,
+                        life: 0,
+                        dur: 0.7 + Math.random() * 0.5,
+                        len: 70 + Math.random() * 90,
+                    });
+                    _nextMeteorAtMs = tMs + 12000 + Math.random() * 14000;
+                }
+                for (let i = _meteors.length - 1; i >= 0; i--) {
+                    const m = _meteors[i];
+                    m.life += dt;
+                    if (m.life >= m.dur) { _meteors.splice(i, 1); continue; }
+                    m.x += m.vx * dt; m.y += m.vy * dt;
+                    const mp = m.life / m.dur;
+                    const env = Math.min(mp / 0.15, 1) * Math.min((1 - mp) / 0.3, 1);
+                    const sp = Math.hypot(m.vx, m.vy);
+                    const tailX = m.x - (m.vx / sp) * m.len, tailY = m.y - (m.vy / sp) * m.len;
+                    const mg = skyCtx.createLinearGradient(m.x, m.y, tailX, tailY);
+                    mg.addColorStop(0, `rgba(255,252,240,${(0.85 * env).toFixed(3)})`);
+                    mg.addColorStop(0.25, `rgba(210,220,255,${(0.35 * env).toFixed(3)})`);
+                    mg.addColorStop(1, 'rgba(210,220,255,0)');
+                    skyCtx.strokeStyle = mg;
+                    skyCtx.lineWidth = 1.6;
+                    skyCtx.lineCap = 'round';
+                    skyCtx.beginPath(); skyCtx.moveTo(m.x, m.y); skyCtx.lineTo(tailX, tailY); skyCtx.stroke();
+                    skyCtx.fillStyle = `rgba(255,255,250,${(0.9 * env).toFixed(3)})`;
+                    skyCtx.beginPath(); skyCtx.arc(m.x, m.y, 1.4, 0, Math.PI * 2); skyCtx.fill();
+                }
             } else {
                 // Solid zenith colour above the gradient — fills the band that
                 // comes into view above the viewport when the canvas

@@ -132,8 +132,7 @@ architecture, not just an unported version of the same thing —
 1. ~~**First slice: seeded, non-respawning stars.**~~ **DONE 2026-08-03,
    awaiting M's look** — see below.
 2. ~~**Then the moon**~~ **DONE 2026-08-03, awaiting M's look** — see below.
-3. **Then meteors**, screen-space same as the chamber, timing/spawn-band
-   adapted to the dive's vertical range.
+3. ~~**Then meteors**~~ **DONE 2026-08-03, awaiting M's look** — see below.
 
 Each slice gets M's look before moving to the next, matching how the
 sky-rotation compositor fix went.
@@ -193,6 +192,34 @@ mode confirmed moonless.
 volume control at top-centre. It's very faint and the position is the
 principled one (matching the chambers), so it's left as is — say the word and
 it can be nudged right/down.
+
+### Slice 3 done (2026-08-03): shooting stars
+
+Same look and physics as the chamber's (identical gradient/envelope/head
+code), with two deliberate adaptations:
+- **Spawn band widened.** The chambers use the top 3–13% of the viewport
+  because only a sliver of sky shows above the ceiling wedges; here there's a
+  whole open sky, so meteors spawn across `skyTop + (0.03…0.45)·h` — the
+  upper ~45% of the frame, safely above the horizon at every point in the
+  dive. Positions are canvas-space, so meteors pan with the stars and moon.
+- **Cadence tightened.** The chamber's first-at-8–28s / then-16–44s suits a
+  visit of any length; the dive only lasts ~50s, so it's first at 5–14s then
+  every 12–26s.
+
+**Verified**: with the timing constants rewritten in-flight by the test
+harness (Playwright request interception — source untouched) every spawn
+logged `y` inside the intended 424–760px band at 1280×800, and 1:1
+screenshots show correct tapered streaks with bright heads and mixed
+left/right directions. At the shipped constants a full dive produced 4
+meteors at 12.7s / 36.1s / 51.0s / 64.4s (headless runs slower than real
+hardware, so expect ~3), no page errors.
+
+---
+
+**All three slices are code-complete and await M's eye on the tunnel.** Once
+he's happy, this whole section should collapse into a short *Immersive sky*
+entry in CLAUDE.md (the section map's sky row is already updated) and move to
+*Resolved*.
 
 ---
 
