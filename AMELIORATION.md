@@ -254,6 +254,45 @@ entry in CLAUDE.md (the section map's sky row is already updated) and move to
 
 ---
 
+## 🔷 OPEN, M's standing request (raised 2026-08-03): geometric-motion polish
+
+**M's words:** the rotation and heavens-tilt-back mechanisms "aren't bad at
+all", but "if I were a pro game developer, I'd be trying to make this stuff
+as smooth as possible" — there's "still a touch of clunkiness to iron out in
+the various geometrical motions." Not a bug report; a standing quality bar.
+No deadline, and nothing here is blocking.
+
+Note this is **distinct from** the sky-motion work above, which was about the
+*star canvas* keeping pace with the walls. This is about how the wall motion
+itself *feels*. Threads worth pulling, roughly in order of likely payoff:
+
+1. **Rotation easing.** Wall rotation is a single 0.8s CSS
+   `cubic-bezier(0.25,0.46,0.45,0.94)` per 60° step. Rapid successive clicks
+   restart rather than blend, so a fast triple-turn reads as three discrete
+   lurches instead of one continuous sweep. Worth investigating: queueing
+   with velocity carry-over, or a shorter step duration when a turn is
+   already in flight.
+2. **Tilt.** Heavens-tilt is driven per-frame from JS (`startLookUpAnim`),
+   not a CSS transition — so unlike rotation it's main-thread-hostage and
+   will stutter under any load. This is the most likely home of the
+   "tiltback" clunkiness M feels. Check its easing function and whether it
+   uses real delta-time or assumes a fixed frame interval.
+3. **The two together.** Rotation (compositor) and tilt (main thread) use
+   different mechanisms, so they can't currently be blended — which is why
+   the transitions between them feel like gear changes.
+4. **Sky-layer extension** (carried over from the round-4 list above):
+   extending the compositor star layer to tilt would help here too, and
+   items 2 and 4 probably want doing as one piece of work rather than twice.
+
+**Before building anything here, get M to demonstrate or describe exactly
+which motion feels worst** — "geometrical motions" covers rotation, tilt,
+tilt-back, the archway dive and the immersive camera path, and the fix for
+each is different. Prior form on this file (Known Issue #1, the two retired
+Known Issues) is that acting on a general description without pinning the
+symptom wastes a session or makes things worse.
+
+---
+
 ## Parked ideas
 
 - **Comet ZTF cameo** — built for the chamber night sky, then cut for
