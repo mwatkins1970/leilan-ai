@@ -21,6 +21,7 @@ This repo's `.md` files and what each is for:
 - **`BANDWIDTH.md`** — bandwidth-optimisation & launch-resilience plan (Netlify free-tier budget, asset weights, lazy-loading).
 - **`VIDEO_BUTTONS.md`** — per-wall `▶ video` button mechanics + the R2-hosted, click-to-load playback overlay (fullscreen, portrait). See also the *Video System* section here.
 - **`SEO_NEXT_STEPS.md`** — the remaining *off-page* SEO work, written **for M to do by hand** (Search Console re-indexing, Bing Webmaster Tools, backlink seeding with anchor-text guidance). Claude can't do any of it — it all needs logins. The on-page layer is done and documented in the *Field-Note Layer (SEO)* section below.
+- **`MOTION.md`** — how the chamber's rotation and heavens-tilt *feel*, why they read as slightly clunky, and the six-slice plan to fix it (investigated 2026-08-07, nothing implemented yet). Read before touching easing curves, `startLookUpAnim`, or the rotation input guards.
 - **`AMELIORATION.md`** — the aesthetic-polish roadmap + open technical threads (currently: two items awaiting M's confirmation — a tab-return curtain fix and the sky-motion-latency structural fix, the latter only partially scoped so far). **At session start, offer the user what remains on it and let him pick**; update it as items complete.
 
 *Removed 2026-06-27:* `SEO.md` and `SEO_build.md` (both superseded by the built layer + the *Field-Note Layer (SEO)* section below, which now carries the launch checklist) and `SITE_OVERVIEW.md` (folded into this file).

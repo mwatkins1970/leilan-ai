@@ -38,6 +38,14 @@ just a guess, and 600ms can be fine on one machine and short on another. In
   can't hold the room hostage indefinitely. Worst case ≈2.3s hold, which
   matches M's stated preference for a longer hold over a ragged reveal.
 
+**M's status report, 2026-08-07:** still not sure — "I think it MIGHT still be
+happening, but I got a bit confused with various git pushes, so it MIGHT also
+be fixed." That uncertainty is itself consistent with the hypothesis below (a
+git push on the dev preview triggers a *reload*, which is the load-curtain
+path, not the tab-return one). **Next step is unchanged: run the diagnostic
+below and report which lines appear.** Don't build the fix until the
+`navigation type` line says which curtain is actually at fault.
+
 **M's status report, 2026-08-03:** "it seems ok, but every now and again I
 return to an old tab and see the piecemeal re-assembly, but that's often
 after there's been a git push or something. I need a better way to test
@@ -313,6 +321,13 @@ entry in CLAUDE.md (the section map's sky row is already updated) and move to
 ---
 
 ## 🔷 OPEN, M's standing request (raised 2026-08-03): geometric-motion polish
+
+> **➡️ Investigated and planned 2026-08-07 — see [`MOTION.md`](./MOTION.md).**
+> That file supersedes the sketch below: it has the measurements (rapid clicks
+> are *discarded*, not blended — 1 of 4 registers; the tilt runs at ~27 fps;
+> the easing curve has a 17:1 start-to-end velocity ratio), the four places the
+> rotation curve is duplicated, and a six-slice plan. Read it before touching
+> any of this. The list below is kept only as the original framing.
 
 **M's words:** the rotation and heavens-tilt-back mechanisms "aren't bad at
 all", but "if I were a pro game developer, I'd be trying to make this stuff
