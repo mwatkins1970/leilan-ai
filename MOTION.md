@@ -404,9 +404,16 @@ Offered alongside this investigation; M picked three of four. Not started.
    slightly further than the moon and the far field during a rotation. Almost
    free now that the layer exists: a second canvas with a shorter transition
    distance and the same curve.
-3. **Moonlight in the chamber.** `moonAge01()` already computes the real phase;
-   let it actually light the room — walls a touch brighter and cooler near
-   full, near-dark at new.
+3. ~~**Moonlight in the chamber.**~~ **BUILT 2026-08-07, awaiting M's eye.**
+   Permanent writeup in CLAUDE.md → *Chamber Sky & Ritual Layer* → Moonlight.
+   One finding worth carrying forward: an **additive wall wash alone cannot
+   carry this feature**. Measured, it lifts the Research Lab's moiré by 11/255
+   at the wall top and does *nothing whatever* in the Central Chamber or the
+   OVS Chapel, whose art already sits at 210–240 luminance with no headroom
+   left. The component that actually makes a full-moon night look like one is
+   the **star wash** — subtractive, and on the shared sky, so it reads in every
+   chamber. Any future "light the room" idea should be tested against a pale
+   chamber before being called done.
 
 Declined for now: coupling rotation and tilt to the audio engine (a stone-grind
 swell under the turn, a rising tone on the tilt).

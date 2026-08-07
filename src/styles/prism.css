@@ -23,6 +23,24 @@ html { overscroll-behavior: none; }
     --rot-dur: 800ms;
     --rot-ease: cubic-bezier(0.4, 0, 0.2, 1);
     --rot-ease-continue: cubic-bezier(0.22, 0.32, 0.25, 1);
+
+    /* --- Moonlight (2026-08-07) ---
+       How much light tonight's real moon throws into the chamber. Set by
+       prism.js from moonAge01() — the same synodic-phase calculation that
+       already draws the moon on the wall — shaped by a power curve so a
+       half-moon is genuinely dim and only the days around full read as bright.
+       0 at new moon, 1 at full. Night only; day mode leaves it at 0.
+
+       STRICTLY ADDITIVE, and it must stay that way: 0 reproduces the chamber
+       exactly as aelf's art was signed off on (2026-08-03), and the moon can
+       only ever ADD silver. No night is ever darker than the site was before
+       this existed, so a launch-week screenshot can't come out muddy.
+
+       --moonlight-max is the peak alpha added at the very top of a wall at
+       full moon. It is the one number to turn if the effect wants to be
+       stronger or subtler. */
+    --moonlight: 0;
+    --moonlight-max: 0.13;
 }
 
 body {
@@ -260,20 +278,34 @@ body.day-mode .chamber-pillarbox {
         drop-shadow(-1px -1px 1px rgba(120,100,140,0.12));
 }
 
-/* Overhead-light gloss overlay — lighter top, slightly darker bottom */
+/* Overhead-light gloss overlay — lighter top, slightly darker bottom.
+   Carries a second, upper layer: the moonlight wash. It enters from above,
+   through the chamber's open roof, so it is strongest along the wall top and
+   gone by mid-height — and it is faintly blue, the way moonlight reads to a
+   dark-adapted eye. At --moonlight: 0 (new moon, or day mode) every stop is
+   fully transparent and this layer does not exist. Deliberately no blend mode:
+   see the candle-glow note — nothing inside the preserve-3d tree uses them. */
 .wall-panel::before {
     content: '';
     position: absolute;
     inset: 0;
     z-index: 1;
     pointer-events: none;
-    background: linear-gradient(
-        180deg,
-        rgba(255,255,255,0.13) 0%,
-        rgba(255,255,255,0.04) 38%,
-        rgba(0,0,0,0.0)        60%,
-        rgba(0,0,0,0.09)       100%
-    );
+    background:
+        linear-gradient(
+            180deg,
+            rgba(202,219,255, calc(var(--moonlight) * var(--moonlight-max)))         0%,
+            rgba(202,219,255, calc(var(--moonlight) * var(--moonlight-max) * 0.44)) 26%,
+            rgba(190,208,255, calc(var(--moonlight) * var(--moonlight-max) * 0.12)) 58%,
+            rgba(190,208,255, 0)                                                    82%
+        ),
+        linear-gradient(
+            180deg,
+            rgba(255,255,255,0.13) 0%,
+            rgba(255,255,255,0.04) 38%,
+            rgba(0,0,0,0.0)        60%,
+            rgba(0,0,0,0.09)       100%
+        );
 }
 
 /* Serpentine-animated border on all wall panels (uniform, 1px on all sides)

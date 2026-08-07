@@ -2114,6 +2114,7 @@ if (toggleBtn && toggleIcon) {
         sessionStorage.setItem('skyMode', isNight ? 'night' : 'day');
         updateToggleIcon();
         syncDayModeClass();
+        updateMoonlight(); // the moon stops lighting the room when the sun is up
     });
 }
 
@@ -2219,6 +2220,12 @@ skyStars.forEach(s => {
     s.font = `400 ${s.size}px "IBM Plex Mono", monospace`;
     const [cr, cg, cb] = nightPalette[s.palIdx];
     s.colPre = `rgba(${cr},${cg},${cb},`;
+    // How much this star washes out per unit of moonlight (see updateMoonlight).
+    // A bright moon drowns the faint stars and leaves the bright ones — the
+    // thing anyone who has actually looked up notices first. Size stands in for
+    // magnitude: the 5–9px stars nearly vanish at full moon, the 12–24px ones
+    // only dim. Precomputed here with the rest of the per-star constants.
+    s.moonWashK = 0.90 - 0.65 * Math.min(1, Math.max(0, (s.size - 5) / 19));
 });
 
 // --- Real lunar phase: the night-sky moon shows the moon's ACTUAL current
@@ -2227,9 +2234,53 @@ skyStars.forEach(s => {
 // onto the synodic month; 0 = new, 0.5 = full.
 const _SYNODIC_DAYS = 29.530588853;
 function moonAge01() {
+    // Preview override, for judging the moonlight at phases that aren't
+    // tonight's: localStorage.moonPhase = '0.5' (full) / '0' (new), then
+    // reload. delete localStorage.moonPhase to go back to the real sky.
+    // Drives the drawn moon AND the chamber lighting, so the two always agree.
+    const forced = parseFloat(localStorage.getItem('moonPhase'));
+    if (!isNaN(forced)) return ((forced % 1) + 1) % 1;
     const days = (Date.now() - Date.UTC(2000, 0, 6, 18, 14)) / 86400000;
     return ((days / _SYNODIC_DAYS) % 1 + 1) % 1;
 }
+
+// --- Moonlight in the chamber (2026-08-07) -------------------------------
+// The chamber already knew the true lunar phase; it only ever used it to draw
+// the moon. Now the moon actually lights the room: near full the walls take a
+// faint cool lift, near new there is only candlelight and the dark. Nobody is
+// told. Someone who visits twice a fortnight apart feels the temple was
+// different, and the ones who work out why get a good moment.
+//
+// The eye's response to moonlight is steeply non-linear — a half moon is far
+// less than half as bright as a full one (the illuminated fraction falls off,
+// and the opposition surge brightens the last few days sharply). MOONLIGHT_GAMMA
+// reproduces that: a quarter-lit moon lands at ~5% of full, a half moon at
+// ~22%, so only the nights either side of full read as genuinely lit.
+//
+// One CSS custom property, set once per page load and on the day/night toggle.
+// No per-frame cost. See prism.css :root for --moonlight / --moonlight-max.
+// (The ASCII gallery is unaffected without special-casing: it replaces
+// .wall-panel::before wholesale for its edge glow, so the wash has nowhere to
+// land — right, for a chamber lit by phosphor rather than sky.)
+// It has two expressions, because one alone doesn't carry every chamber. The
+// wall wash is additive white-blue, so it only reads where the walls are dark:
+// measured, it lifts the Research Lab's moiré by 11/255 at the top of the wall
+// but does nothing at all in the Central Chamber or the OVS Chapel, whose art
+// already sits at 210–240 luminance with no headroom left. The star wash works
+// everywhere, because the sky is shared and it is *subtractive* — so it is the
+// component that actually makes a full-moon night look like one.
+const MOONLIGHT_GAMMA = 2.2;
+let _moonlight = 0;
+function updateMoonlight() {
+    const ill = (1 - Math.cos(moonAge01() * Math.PI * 2)) / 2; // 0 new → 1 full
+    _moonlight = isNight ? Math.pow(ill, MOONLIGHT_GAMMA) : 0;
+    document.documentElement.style.setProperty('--moonlight', _moonlight.toFixed(4));
+    // No explicit star-layer repaint here — this runs during script evaluation,
+    // before starLayerCtx is even declared (TDZ), and it isn't needed: the only
+    // thing that changes _moonlight after load is the day/night toggle, which
+    // flips useStarLayer, and drawSky repaints the layer on that flip anyway.
+}
+updateMoonlight();
 
 // Draw a phased moon. The lit shape is built as the waxing form (lit limb on
 // the right: right semicircle + terminator half-ellipse whose x-radius is
@@ -2563,7 +2614,7 @@ function paintStarLayerTiles(t) {
         const baseX = tile * skyW;
         skyStars.forEach(s => {
             const twinkle = 0.5 + 0.5 * Math.sin(t * 0.001 * s.speed + s.phase);
-            const drawAlpha = 0.45 + 0.55 * twinkle;
+            const drawAlpha = (0.45 + 0.55 * twinkle) * (1 - s.moonWashK * _moonlight);
             ctx.font = s.font;
             ctx.fillStyle = s.colPre + drawAlpha.toFixed(3) + ')';
             const drawX = baseX + ((s.x % 1.0 + 1.0) % 1.0) * skyW;
@@ -2781,7 +2832,7 @@ function drawSky(t) {
                 // Fixed firmament: stars hold their positions permanently and only
                 // twinkle — brightness breathes between 45% and 100%, never vanishing.
                 const twinkle = 0.5 + 0.5 * Math.sin(t * 0.001 * s.speed + s.phase);
-                const drawAlpha = 0.45 + 0.55 * twinkle;
+                const drawAlpha = (0.45 + 0.55 * twinkle) * (1 - s.moonWashK * _moonlight);
                 skyCtx.font = s.font;
                 skyCtx.fillStyle = s.colPre + drawAlpha.toFixed(3) + ')';
                 const drawX = ((s.x + skyRotationOffset) % 1.0 + 1.0) % 1.0 * w;
