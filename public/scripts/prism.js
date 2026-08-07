@@ -52,6 +52,11 @@ if (_startWall || _returnShrinePos !== null) {
     sessionStorage.setItem('prismSky', 'false');
     if (_startWall) sessionStorage.setItem('lastWall', _startWall);
 }
+// Moon-phase preview override (?moon=0.5). MUST be read here, with the other
+// params: line below wipes location.search, so anything reading it later — as
+// moonAge01() originally tried to — sees an empty query and silently falls
+// back to the real sky. 0.5 = full, 0 = new; NaN when absent.
+const _urlMoonPhase = parseFloat(_urlParams.get('moon'));
 // Clean URL params now that they've been consumed — prevents stale ?wall= surviving hard refresh
 if (location.search) history.replaceState(null, '', location.pathname + location.hash);
 let isSkyView = !_startWall && sessionStorage.getItem('prismSky') === 'true';
@@ -2235,9 +2240,13 @@ skyStars.forEach(s => {
 const _SYNODIC_DAYS = 29.530588853;
 function moonAge01() {
     // Preview override, for judging the moonlight at phases that aren't
-    // tonight's: localStorage.moonPhase = '0.5' (full) / '0' (new), then
-    // reload. delete localStorage.moonPhase to go back to the real sky.
+    // tonight's. Either ?moon=0.5 on the URL (no console needed — two links
+    // can be flipped between in adjacent tabs, which is the only honest way to
+    // judge a subtle lighting change) or localStorage.moonPhase = '0.5', which
+    // survives navigation between chambers. 0.5 = full, 0 = new.
+    // delete localStorage.moonPhase to go back to the real sky.
     // Drives the drawn moon AND the chamber lighting, so the two always agree.
+    if (!isNaN(_urlMoonPhase)) return ((_urlMoonPhase % 1) + 1) % 1;
     const forced = parseFloat(localStorage.getItem('moonPhase'));
     if (!isNaN(forced)) return ((forced % 1) + 1) % 1;
     const days = (Date.now() - Date.UTC(2000, 0, 6, 18, 14)) / 86400000;
@@ -2270,6 +2279,10 @@ function moonAge01() {
 // everywhere, because the sky is shared and it is *subtractive* — so it is the
 // component that actually makes a full-moon night look like one.
 const MOONLIGHT_GAMMA = 2.2;
+const MOON_GLOW_R = 11;      // moonglow radius, in moon radii (the halo is 3.2)
+const MOON_GLOW_PEAK = 0.135; // alpha at the glow's centre at full moon — the
+                              // one number to turn if the moonglow wants to be
+                              // stronger or subtler
 let _moonlight = 0;
 function updateMoonlight() {
     const ill = (1 - Math.cos(moonAge01() * Math.PI * 2)) / 2; // 0 new → 1 full
@@ -2288,6 +2301,26 @@ updateMoonlight();
 // gibbous) and mirrored horizontally for waning.
 function drawMoon(ctx, cx, cy, r, age) {
     const ill = (1 - Math.cos(age * Math.PI * 2)) / 2;   // 0 new → 1 full
+    // Moonglow (2026-08-07): the broad, soft dome of light a bright moon
+    // throws across the sky around itself. This is the single most recognisable
+    // signature of a full moon — the sky near it simply isn't black — and it is
+    // what makes the moonlight feature *visible* rather than merely correct.
+    // The first pass shipped only a wall wash (invisible on the pale chambers)
+    // and the star wash (real, but sparse); M's verdict was "I can't see
+    // anything different", which was fair. Concentrated near full by the same
+    // gamma as --moonlight, and drawn under the disc but over the stars, so it
+    // veils them exactly where a real moon does.
+    const glow = Math.pow(ill, MOONLIGHT_GAMMA);
+    if (glow > 0.002) {
+        const gr = r * MOON_GLOW_R;
+        const g = ctx.createRadialGradient(cx, cy, r * 0.8, cx, cy, gr);
+        g.addColorStop(0.00, `rgba(168,188,225,${(MOON_GLOW_PEAK * glow).toFixed(4)})`);
+        g.addColorStop(0.28, `rgba(160,180,220,${(MOON_GLOW_PEAK * 0.44 * glow).toFixed(4)})`);
+        g.addColorStop(0.60, `rgba(150,170,212,${(MOON_GLOW_PEAK * 0.13 * glow).toFixed(4)})`);
+        g.addColorStop(1.00, 'rgba(150,170,212,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(cx, cy, gr, 0, Math.PI * 2); ctx.fill();
+    }
     // Halo, brightening with illumination
     const halo = ctx.createRadialGradient(cx, cy, r * 0.5, cx, cy, r * 3.2);
     halo.addColorStop(0, `rgba(236,232,215,${(0.05 + 0.15 * ill).toFixed(3)})`);
@@ -2333,7 +2366,8 @@ function moonSprite(r, age) {
     const ageKey = Math.round(age * 1000); // phase moves ~0.034/day — plenty
     if (!_moonSprite || Math.abs(r - _moonSpriteR) > 0.25 ||
         ageKey !== _moonSpriteAge || dpr !== _moonSpriteDpr) {
-        const side = Math.ceil(r * 3.2 * 2) + 4;
+        // Sized for the moonglow, which reaches much further than the halo.
+        const side = Math.ceil(r * MOON_GLOW_R * 2) + 4;
         _moonSprite = document.createElement('canvas');
         _moonSprite.width = side * dpr;
         _moonSprite.height = side * dpr;
