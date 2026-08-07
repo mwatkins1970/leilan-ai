@@ -322,47 +322,42 @@ entry in CLAUDE.md (the section map's sky row is already updated) and move to
 
 ## 🔷 OPEN, M's standing request (raised 2026-08-03): geometric-motion polish
 
-> **➡️ Investigated and planned 2026-08-07 — see [`MOTION.md`](./MOTION.md).**
-> That file supersedes the sketch below: it has the measurements (rapid clicks
-> are *discarded*, not blended — 1 of 4 registers; the tilt runs at ~27 fps;
-> the easing curve has a 17:1 start-to-end velocity ratio), the four places the
-> rotation curve is duplicated, and a six-slice plan. Read it before touching
-> any of this. The list below is kept only as the original framing.
+> **➡️ Investigated, planned and half-built 2026-08-07 — see
+> [`MOTION.md`](./MOTION.md), which now owns this thread entirely.**
+>
+> The **rotation** side (slices A–D) is **built and awaits M's eye**: mid-turn
+> clicks now re-target the turn in flight instead of being discarded (measured
+> 1-of-4 → 4-of-4 registered), an ease-in-out curve replaces the ease-out that
+> left rest at 1.84× average velocity, duration scales with distance travelled,
+> and the settle frame no longer carries every deferred job at once.
+>
+> The **heavens-tilt** side (slices E–F) is **not built**. It's still per-frame
+> JS on the main thread — measured at ~27fps across a 4200ms tilt — and the
+> tilt back runs 2.1× faster than the tilt up for the same 90°. That is the
+> most likely home of the "tiltback" clunkiness M named, and it's what comes
+> next here. It wants doing as one piece of work with item 4 below (extending
+> the compositor star layer to tilt), not twice.
 
 **M's words:** the rotation and heavens-tilt-back mechanisms "aren't bad at
 all", but "if I were a pro game developer, I'd be trying to make this stuff
 as smooth as possible" — there's "still a touch of clunkiness to iron out in
 the various geometrical motions." Not a bug report; a standing quality bar.
-No deadline, and nothing here is blocking.
+Re-raised 2026-08-07 with the book three weeks out.
 
 Note this is **distinct from** the sky-motion work above, which was about the
 *star canvas* keeping pace with the walls. This is about how the wall motion
-itself *feels*. Threads worth pulling, roughly in order of likely payoff:
+itself *feels*.
 
-1. **Rotation easing.** Wall rotation is a single 0.8s CSS
-   `cubic-bezier(0.25,0.46,0.45,0.94)` per 60° step. Rapid successive clicks
-   restart rather than blend, so a fast triple-turn reads as three discrete
-   lurches instead of one continuous sweep. Worth investigating: queueing
-   with velocity carry-over, or a shorter step duration when a turn is
-   already in flight.
-2. **Tilt.** Heavens-tilt is driven per-frame from JS (`startLookUpAnim`),
-   not a CSS transition — so unlike rotation it's main-thread-hostage and
-   will stutter under any load. This is the most likely home of the
-   "tiltback" clunkiness M feels. Check its easing function and whether it
-   uses real delta-time or assumes a fixed frame interval.
-3. **The two together.** Rotation (compositor) and tilt (main thread) use
-   different mechanisms, so they can't currently be blended — which is why
-   the transitions between them feel like gear changes.
+The original framing is superseded by `MOTION.md` and not repeated here, with
+one item still live and not yet owned by that file:
+
 4. **Sky-layer extension** (carried over from the round-4 list above):
-   extending the compositor star layer to tilt would help here too, and
-   items 2 and 4 probably want doing as one piece of work rather than twice.
+   extending the compositor star layer to tilt. Do it together with slice E.
 
-**Before building anything here, get M to demonstrate or describe exactly
-which motion feels worst** — "geometrical motions" covers rotation, tilt,
-tilt-back, the archway dive and the immersive camera path, and the fix for
-each is different. Prior form on this file (Known Issue #1, the two retired
-Known Issues) is that acting on a general description without pinning the
-symptom wastes a session or makes things worse.
+The old warning on this section — *don't act on a general description without
+pinning the symptom first*, the lesson of Known Issue #1 — was honoured by
+measuring before building; `MOTION.md`'s findings section is that measurement,
+and it stands as the model for the tilt work too.
 
 ---
 

@@ -1,6 +1,30 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { overscroll-behavior: none; }
 
+/* --- Chamber-rotation timing tokens (2026-08-07, see MOTION.md) ---
+   The single source of truth for how the chamber turns. Three consumers must
+   agree exactly or the sky visibly desyncs from the walls: .prism-container
+   (the walls), #star-layer-canvas (the compositor star/moon layer at night),
+   and _rotBezier()/BASE_ROT_MS in prism.js (the JS-drawn sky, which still
+   handles day mode). prism.js reads these values at init via getComputedStyle
+   rather than hard-coding them, so tuning happens here and nowhere else.
+
+   --rot-ease starts a turn from rest: an ease-IN-out, so the room accelerates
+   like something with mass. (Until 2026-08-07 this was easeOutQuad,
+   cubic-bezier(0.25,0.46,0.45,0.94), which leaves rest at 1.84x average
+   velocity instantly and finishes at 0.11x — a 17:1 ratio that read as a
+   lurch followed by a drift.)
+
+   --rot-ease-continue is used only when a turn is RE-TARGETED mid-flight
+   (the visitor clicked again while the room was already moving). The room is
+   already at speed, so this curve starts with matching velocity (~1.45x) and
+   eases out — the turn extends instead of stopping and starting. */
+:root {
+    --rot-dur: 800ms;
+    --rot-ease: cubic-bezier(0.4, 0, 0.2, 1);
+    --rot-ease-continue: cubic-bezier(0.22, 0.32, 0.25, 1);
+}
+
 body {
     background: #000;
     overflow: hidden;
@@ -131,7 +155,7 @@ body.day-mode .chamber-pillarbox {
     height: 100%;
     opacity: 0;
     pointer-events: none;
-    transition: transform 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition: transform var(--rot-dur) var(--rot-ease);
     will-change: transform;
 }
 
@@ -178,7 +202,7 @@ body.day-mode .chamber-pillarbox {
     left: 50%;
     top: 0;
     transform-style: preserve-3d;
-    transition: transform 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition: transform var(--rot-dur) var(--rot-ease);
 }
 
 /* --- Wall panel base --- */

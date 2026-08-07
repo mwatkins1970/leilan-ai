@@ -235,6 +235,9 @@ type WallContent =
 - gpt3-library → still on shared `MOIRE_background.jpeg` / `_alt` with the jade CSS tint (awaiting its `_c4` pair)
 
 ### Wall Numbering & Rotation (prism.js)
+
+**Rotation engine (rebuilt 2026-08-07 — full rationale and measurements in `MOTION.md`).** `lookLeft`/`lookRight`/`rotateToWall` are thin callers of one core, `turnBy(dir, steps)`. A click arriving mid-turn **re-targets the turn in flight** (new transform + new duration/timing-function in one style change ⇒ the browser starts a fresh transition from the current computed value, no jump) rather than being discarded as it used to be; `ROT_MAX_PENDING_STEPS = 4` guards against mashing, and a `dur + 400ms` watchdog clears `isRotating` if `transitionend` never arrives. Duration scales as `BASE_ROT_MS * steps ** 0.6`, floored at 120ms. **All rotation timing comes from CSS tokens on `:root` in `prism.css` — `--rot-dur`, `--rot-ease`, `--rot-ease-continue`** — read once by JS via `getComputedStyle` and mirrored onto `.prism-container`, `#star-layer-canvas` and `_rotBezier()`; tune the curve there and nowhere else. Arrival work is split: `settleRotation()` keeps only `setFacingTag()` on the settle frame (hit-testing depends on it) and defers culling/aleph/tip one rAF, while the suspended grain / star-twinkle / serpentine repaints resume at staggered frames.
+
 Single state variable `shrinePos` ∈ {0..5} = where wall 1 (shrine/entry-facing wall) currently sits.
 - Positions 0–5: 0=hidden-left, 1=left-visible, 2=center/facing, 3=right-visible, 4=hidden-right, 5=behind
 - Wall N's position = `(shrinePos + N - 1) % 6`

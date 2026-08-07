@@ -1,10 +1,18 @@
 # MOTION.md — the feel of the geometrical motions
 
-*Created 2026-08-07. Audience: the next Claude instance, and M.
+*Created 2026-08-07; slices A–D implemented the same day. Audience: the next Claude instance, and M.
 Scope: how the chamber's two big movements — **wall rotation** (left/right) and
 **heavens-tilt** (up to the sky and back) — actually feel, and what to change to
 make them feel better. This is the investigation + plan for the standing item
-"geometric-motion polish" in `AMELIORATION.md`. Nothing here is implemented yet.*
+"geometric-motion polish" in `AMELIORATION.md`.*
+
+> ## Status
+>
+> **Slices A–D are built (2026-08-07) and await M's eye on the tunnel** — see
+> *What shipped* at the bottom for the after-measurements. The findings below
+> are kept as written, because they are the evidence the work rests on.
+> **Slices E and F (the heavens-tilt) are NOT built** — the tilt is still
+> per-frame JS on the main thread, exactly as finding 5 describes.
 
 > **Not to be confused with** the sky-motion work (`AMELIORATION.md`, round 4).
 > That was about the *star canvas* keeping pace with the walls, and is
@@ -215,10 +223,10 @@ big one and should not start until A–D are settled and confirmed good.
 
 | # | Slice | Touches | Risk |
 |---|---|---|---|
-| **A** | **Queue rotation input.** Keep a `pendingRotationSteps` counter; on `transitionend`, if pending, immediately fire the next step. Cap at ~4 so a mashed button can't spin the room forever. | `lookLeft`/`lookRight`/`rotateToWall`/`transitionend` | low |
-| **B** | **Easing + duration as tokens.** `--rot-dur` / `--rot-ease` on `.wall-area`; CSS reads them, JS reads them once via `getComputedStyle`; `_rotBezier` derives its control points from the same string. Then try the three candidate curves. | `prism.css`, `_rotBezier`, `SKY_ROT_DURATION` | low, but **all four sites must move together** |
-| **C** | **Constant angular velocity** for multi-step turns (`steps ** 0.6`), inline duration on both animated layers. | `rotateToWall` | low |
-| **D** | **De-thud the landing.** Defer culling/aleph/twinkle one rAF past `transitionend`; verify the star-layer rebase isn't firing every rotation. Also finding 7's single-tile idle repaint. | `transitionend`, `drawSky`, `paintStarLayerTiles` | low |
+| ~~**A**~~ | ~~**Queue rotation input.**~~ **DONE** — built as mid-flight *re-targeting* rather than a step queue; see *What shipped*. | `lookLeft`/`lookRight`/`rotateToWall`/`transitionend` | low |
+| ~~**B**~~ | ~~**Easing + duration as tokens.**~~ **DONE** — `--rot-dur` / `--rot-ease` / `--rot-ease-continue` on `:root`. | `prism.css`, `_rotBezier`, `SKY_ROT_DURATION` | low, but **all four sites must move together** |
+| ~~**C**~~ | ~~**Constant angular velocity**~~ **DONE** — `steps ** 0.6`, not literally constant; see *What shipped*. | `rotateToWall` | low |
+| ~~**D**~~ | ~~**De-thud the landing.**~~ **DONE**, plus finding 7. | `transitionend`, `drawSky`, `paintStarLayerTiles` | low |
 | **E** | **Tilt onto the compositor.** Always emit `rotateX(0deg)` (finding 8), then convert `startLookUpAnim` from rAF to a CSS `transition` on `.prism-container`, with completion via `transitionend`; extend the star layer vertically (tilt pans up to 0.7 h, always returns to 0, so no rebase logic — just enough canvas) and give it a matching vertical transition. Drops `drawSky`'s full-rate tilt path entirely. | `startLookUpAnim`, both heavens entry/exit paths, star layer, `skyTiltOffset` consumers | **high** — this is the load-bearing one |
 | **F** | **Tilt timing/symmetry.** Once E lands and the tilt is cheap, revisit 4200/2000 and the `easeInOutCubic` curve. Probably down → ~3000–3400 ms. Pure taste; M picks. | two constants | trivial |
 
@@ -268,3 +276,131 @@ both the shrine candle **and** the Mythos horoscope wall (`enterHeavensTilt`);
 confirm the Eternal Return still doesn't multi-spin; day mode as well as night;
 `prefers-reduced-motion`; and the archway dive still works after a tilt (the
 `updateArchwayOverlay` call in `leaveShrineHeavens`'s completion).
+
+---
+
+## What shipped (2026-08-07) — slices A–D
+
+### The rotation engine was rebuilt, not patched
+
+`lookLeft` / `lookRight` / `rotateToWall` are now thin callers of one core,
+`turnBy(dir, steps)` ([prism.js](public/scripts/prism.js), search
+`Rotation engine`). The `isRotating` early-return is gone from all three.
+
+**A click during a turn re-targets the turn in flight** rather than being
+queued as a discrete step. Writing a new transform *plus* a new
+duration/timing-function in a single style change makes the browser start a
+fresh transition from the current computed value — no jump — and because the
+continuation curve (`--rot-ease-continue`) starts at roughly the velocity the
+room already has, the turn extends instead of stopping and restarting. A step
+queue was considered and rejected: it would stop dead every 60°, trading one
+clunk for another. Clicking the *other* way mid-turn reverses through the same
+path, which is also what you'd want.
+
+Mash guard: `ROT_MAX_PENDING_STEPS = 4`. Beyond four steps still in flight,
+further clicks are ignored — the room shouldn't keep spinning long after the
+visitor stopped asking.
+
+A watchdog (`dur + 400ms`) clears `isRotating` if `transitionend` never
+arrives — a coalesced no-op style change or a backgrounded tab would otherwise
+lock the chamber. It explicitly never touches the archway dive's own use of
+`isRotating`.
+
+### Measured, before → after
+
+| | before | after |
+|---|---|---|
+| 4 clicks 60 ms apart | — | **4 of 4 steps** |
+| 4 clicks 100 ms apart | **1 of 4** | **4 of 4** |
+| 4 clicks 250 ms apart | **1 of 4** | **4 of 4** |
+| 4 clicks 500 ms apart | 2 of 4 | **4 of 4** |
+| 4 clicks 900 ms apart | 3 of 4 | **4 of 4** |
+| 10 clicks 40 ms apart | — | 4 of 10 (mash guard) |
+| 1-step vs 3-step angular velocity | 3.0× apart | **1.55× apart** |
+| idle sky work per 3 s | 121 ms (`drawSky`), 75 ms of it star tiles | **46 ms / 20 ms** |
+
+*(Counting steps needs the unbounded `currentRotation`, not the rendered
+matrix — 4 steps is 240°, which wraps to −120° and reads as "2 steps" if you
+normalise the yaw. An intermediate verification run was wrong for exactly that
+reason.)*
+
+### On "constant angular velocity"
+
+Duration scales as `BASE_ROT_MS * steps ** 0.6`, floored at 120 ms — *not*
+linear. Linear would make a 3-step minimap jump take 2.4 s, which is tedious;
+`** 0.6` narrows the 1-step/3-step velocity gap from 3.0× to 1.55× while
+keeping a long jump brisk. `ROT_STEP_EXP` is one constant if M wants it flatter
+(1.0 = literally constant velocity) or sharper.
+
+### The landing
+
+`settleRotation()` keeps only `setFacingTag()` on the settle frame — click
+hit-testing depends on it and on `.wall-panel[data-facing]`'s
+`transform-style: flat`. Rim-cap culling, aleph chars and the archway tip move
+to the next rAF (and bail if another turn has already begun). Separately, the
+repaints suspended for the duration of a turn now come back on *different*
+frames — grain at +1, star twinkle at +3, serpentine strip at +6 — instead of
+all landing on the settle frame together.
+
+`updateRimCapCulling` now takes an array of every `shrinePos` the motion passes
+through, not just the start. For 1- and 2-step turns this is provably identical
+to the old endpoint union; for 3-step turns both cull essentially everything
+(a wall can't be visible at four positions out of six), so it's a no-op in
+practice — but it states the intent correctly and stays correct as
+re-targeting accumulates positions.
+
+### Star twinkle cadence
+
+`STAR_TWINKLE_EVERY = 9` (was every 3rd frame). The compositor star layer is
+three lap-copies wide, so one refresh redraws 3 × 80 stars and 3 moon sprites.
+Each star's brightness cycle has a period of **8–31 seconds** (`speed`
+0.2–0.8 against `t * 0.001`), so ~7 fps renders it perfectly smoothly. All
+three tiles are always painted in the same pass at the same phase, so the
+one-lap rebase at `transitionend` can never produce a brightness pop.
+
+### Regression-tested (Playwright, no console or page errors anywhere)
+
+All six walls via `rotateToWall` in both directions; arrow turns; reversal
+mid-turn (returns to exactly the starting rotation); a minimap jump
+interrupting an arrow turn; day mode; portrait + `prefers-reduced-motion` in
+the Research Lab; the ASCII gallery; the 835×319 wide/short viewport that
+produced the original ghost rim wedges (cull counts behave: 7 at rest, 9 mid
+single turn, 11 mid 3-step, back to 7 on settle); the shrine-candle heavens
+tilt *and* the Mythos horoscope heavens tilt, each with a full enter/leave
+cycle, Eternal Return landing back at yaw 0 with no multi-spin, and a rotation
+afterwards.
+
+### Left for M's eye
+
+The curve itself. `--rot-ease` is now `cubic-bezier(0.4, 0, 0.2, 1)` — a real
+ease-in-out, replacing the ease-out that left rest at 1.84× average velocity.
+It is one line in `prism.css` (`:root`) and everything else follows
+automatically, so trying `cubic-bezier(0.45, 0.05, 0.25, 1)` (heavier) or a
+different `--rot-dur` costs nothing. Same for `--rot-ease-continue`, whose
+initial slope (~1.45) is a considered guess at the velocity a re-targeted turn
+inherits, not a measured match.
+
+
+---
+
+## Creative flourishes M green-lit (2026-08-07) — build after the tilt work
+
+Offered alongside this investigation; M picked three of four. Not started.
+
+1. **The air responds to the motion.** Dust motes take a velocity impulse
+   against the turn, and candle flames bend as the chamber moves — the room's
+   air noticing that the room moved. Both systems already exist (`initMotes`/
+   `drawMotes`, and the `candleFlicker`/`candleGlowBreath` CSS), and the mote
+   canvas is already screen-space, so this is cheap. It also does real work for
+   *this* file's problem: motion the eye can read against a moving reference
+   feels smoother than motion against a static one.
+2. **Sky parallax.** Split the compositor star layer in two — near stars pan
+   slightly further than the moon and the far field during a rotation. Almost
+   free now that the layer exists: a second canvas with a shorter transition
+   distance and the same curve.
+3. **Moonlight in the chamber.** `moonAge01()` already computes the real phase;
+   let it actually light the room — walls a touch brighter and cooler near
+   full, near-dark at new.
+
+Declined for now: coupling rotation and tilt to the audio engine (a stone-grind
+swell under the turn, a rising tone on the tilt).

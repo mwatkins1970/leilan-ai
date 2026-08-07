@@ -295,10 +295,13 @@ function isWallVisible(wallNum, w = shrinePos) {
 // everything is un-culled while a heavens tilt runs (the ceiling ring needs
 // all six). An earlier pass that hid whole rim sections left that ring
 // gap-toothed; caps-only + tilt gating is the surviving approach.
-function updateRimCapCulling(unionWithShrinePos = null) {
+// unionWith: a shrinePos, or (2026-08-07) an ARRAY of every shrinePos the
+// current motion passes through. A multi-step turn used to union only its two
+// endpoints, so a wall visible only midway could ghost during the sweep.
+function updateRimCapCulling(unionWith = null) {
     if (document.body.classList.contains('shrine-heavens-active')) return;
-    const hidden = n => !isWallVisible(n)
-        || (unionWithShrinePos !== null && !isWallVisible(n, unionWithShrinePos));
+    const union = unionWith === null ? [] : (Array.isArray(unionWith) ? unionWith : [unionWith]);
+    const hidden = n => !isWallVisible(n) || union.some(w => !isWallVisible(n, w));
     document.querySelectorAll('.rim-section[data-rim-wall]').forEach(el => {
         el.classList.toggle('rim-caps-culled', hidden(parseInt(el.dataset.rimWall, 10)));
     });
@@ -1334,40 +1337,157 @@ function updatePointerEvents() {
     }
 }
 
-function lookRight() {
-    if (isRotating || archwayAnimating || shrineHeavensLocked()) return;
-    closeCinematicReader();
-    hideArchwayTip();
-    clearFacingTag();
-    isRotating = true;
-    const oldShrinePos = shrinePos;
-    const newShrinePos = mod6(shrinePos - 1); // user looks right; content moves left
-    refreshIncoming(oldShrinePos, newShrinePos);
-    shrinePos = newShrinePos;
-    currentRotation += 60;
-    animateSkyRotation(-1/6);
-    bumpStarLayerRotation(-1/6);
-    updatePrismTransform();
-    afterRotation();
-    updateRimCapCulling(oldShrinePos); // union-cull while the rotation runs
+// --- Rotation engine (rebuilt 2026-08-07 — see MOTION.md) -------------------
+//
+// What changed and why. The old lookLeft/lookRight/rotateToWall each opened
+// with `if (isRotating) return;` and there was no queue behind it, so every
+// click arriving during the 800ms glide was DISCARDED. Measured: four clicks
+// 100ms apart produced ONE 60-degree turn; four clicks 250ms apart also one;
+// even at 900ms apart one was still lost, because transitionend lands a beat
+// after the nominal duration. The room didn't read as "input rejected", it
+// read as sticky — the single biggest contributor to M's "clunky".
+//
+// The fix is not a queue of discrete steps (that would stop and restart at
+// every 60 degrees, trading one clunk for another) but RE-TARGETING: a click
+// arriving mid-turn extends the turn in flight. Writing a new transform plus a
+// new duration/timing-function in one style change makes the browser start a
+// fresh transition FROM THE CURRENT COMPUTED VALUE — no jump, and because the
+// continuation curve starts at roughly the velocity the room already has
+// (--rot-ease-continue), the turn simply keeps going. Clicking the other way
+// mid-turn reverses through the same path, which is also what you'd want.
+//
+// Duration now scales with the distance still to travel (steps ** 0.6), so a
+// far-wall minimap jump no longer sweeps 180 degrees at triple the angular
+// velocity of a 60-degree nudge — the room has one consistent sense of how
+// fast it turns. All timing comes from the CSS tokens in prism.css (:root),
+// mirrored onto the compositor star layer and the JS-drawn sky, so the three
+// can never drift apart.
+
+const ROT_STEP_EXP = 0.6;          // duration = BASE_ROT_MS * steps ** this
+const ROT_MAX_PENDING_STEPS = 4;   // mash guard: never let more than this stay in flight
+
+function _cssToken(name, fallback) {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+}
+function _parseBezier(str) {
+    const m = /cubic-bezier\(([^)]+)\)/.exec(str);
+    if (!m) return null;
+    const n = m[1].split(',').map(s => parseFloat(s));
+    return n.length === 4 && n.every(x => !isNaN(x)) ? n : null;
 }
 
-function lookLeft() {
-    if (isRotating || archwayAnimating || shrineHeavensLocked()) return;
-    closeCinematicReader();
+const ROT_EASE = _cssToken('--rot-ease', 'cubic-bezier(0.4, 0, 0.2, 1)');
+const ROT_EASE_CONTINUE = _cssToken('--rot-ease-continue', 'cubic-bezier(0.22, 0.32, 0.25, 1)');
+const BASE_ROT_MS = parseFloat(_cssToken('--rot-dur', '800ms')) || 800;
+
+// The timing of the leg currently in flight. _rotEaseP feeds _rotBezier (the
+// JS-drawn sky's copy of the walls' curve) and _rotDurMs its clock.
+let _rotEaseP = _parseBezier(ROT_EASE) || [0.4, 0, 0.2, 1];
+let _rotDurMs = BASE_ROT_MS;
+let _rotFromDeg = 0;               // rotateY the current leg started from
+let _rotToDeg = 0;                 // rotateY it is heading to
+let _rotUnionPositions = null;     // every shrinePos the current CONTINUOUS motion passes through
+let _rotWatchdog = null;
+
+// Write a leg's duration + curve to every layer that must move in lockstep:
+// the walls, the compositor star layer, and (via _rotEaseP/_rotDurMs) the
+// JS-drawn sky used in day mode.
+function setRotationTiming(durMs, easeStr) {
+    _rotDurMs = durMs;
+    _rotEaseP = _parseBezier(easeStr) || _rotEaseP;
+    const d = durMs + 'ms';
+    if (prismContainer) {
+        prismContainer.style.transitionDuration = d;
+        prismContainer.style.transitionTimingFunction = easeStr;
+    }
+    if (starLayerCanvas) {
+        starLayerCanvas.style.transitionDuration = d;
+        starLayerCanvas.style.transitionTimingFunction = easeStr;
+    }
+}
+
+// Where the walls visually are right now. Modelled from the leg's own clock
+// rather than read back from the DOM: currentRotation is unbounded (never
+// wrapped mod 360), so decomposing it out of the live matrix would lose the
+// winding, and a getComputedStyle read here would force a layout on exactly
+// the frame we're trying to keep cheap. _skyRotWaiting means the browser
+// hasn't committed the transition yet, so nothing has moved.
+function _liveRotation() {
+    if (!isRotating) return currentRotation;
+    if (_skyRotWaiting) return _rotFromDeg;
+    const p = Math.min((performance.now() - _skyRotT0) / _rotDurMs, 1);
+    return _rotFromDeg + (_rotToDeg - _rotFromDeg) * _rotBezier(p);
+}
+
+// dir: +1 = look left (shrinePos increments, rotateY decreases)
+//      -1 = look right (shrinePos decrements, rotateY increases)
+function turnBy(dir, steps) {
+    if (steps <= 0 || archwayAnimating || shrineHeavensLocked()) return;
+
+    const continuing = isRotating;
+    const liveDeg = continuing ? _liveRotation() : currentRotation;
+    const newTarget = currentRotation - dir * steps * 60;
+    // Mash guard — beyond this the room would keep spinning long after the
+    // visitor stopped asking it to.
+    if (continuing && Math.abs(newTarget - liveDeg) > ROT_MAX_PENDING_STEPS * 60 + 1) return;
+
     hideArchwayTip();
     clearFacingTag();
-    isRotating = true;
+
     const oldShrinePos = shrinePos;
-    const newShrinePos = mod6(shrinePos + 1); // user looks left; content moves right
-    refreshIncoming(oldShrinePos, newShrinePos);
+    const newShrinePos = mod6(shrinePos + dir * steps);
+    refreshAlongPath(oldShrinePos, newShrinePos, dir);
     shrinePos = newShrinePos;
-    currentRotation -= 60;
-    animateSkyRotation(1/6);
-    bumpStarLayerRotation(1/6);
+    currentRotation = newTarget;
+
+    // Constant angular velocity: the leg's duration follows the distance left
+    // to travel, not the number of clicks.
+    // Floored: an immediate reversal has almost no distance left to travel, and
+    // a 12ms transition would read as a snap (and, at exactly zero, wouldn't
+    // fire transitionend at all — the watchdog's other reason for existing).
+    const travelSteps = Math.max(Math.abs(newTarget - liveDeg) / 60, 0.001);
+    const dur = Math.max(120, Math.round(BASE_ROT_MS * Math.pow(travelSteps, ROT_STEP_EXP)));
+    setRotationTiming(dur, continuing ? ROT_EASE_CONTINUE : ROT_EASE);
+
+    if (!continuing || !_rotUnionPositions) _rotUnionPositions = [oldShrinePos];
+    for (let i = 0, w = oldShrinePos; i < steps; i++) {
+        w = mod6(w + dir);
+        _rotUnionPositions.push(w);
+    }
+    _rotFromDeg = liveDeg;
+    _rotToDeg = newTarget;
+    isRotating = true;
+
+    animateSkyRotation(dir * steps / 6);
+    bumpStarLayerRotation(dir * steps / 6);
     updatePrismTransform();
     afterRotation();
-    updateRimCapCulling(oldShrinePos); // union-cull while the rotation runs
+    // Union-cull across everything the motion passes through, so no rim cap
+    // ghosts mid-sweep on a multi-step turn.
+    updateRimCapCulling(_rotUnionPositions);
+
+    // Insurance: if the transition never starts (a coalesced no-op style
+    // change, a backgrounded tab), transitionend never fires and the room
+    // would lock. Never touch the archway dive's own use of isRotating.
+    if (_rotWatchdog !== null) clearTimeout(_rotWatchdog);
+    _rotWatchdog = window.setTimeout(() => {
+        _rotWatchdog = null;
+        if (isRotating && !archwayAnimating) settleRotation();
+    }, dur + 400);
+}
+
+// The reader is closed only on an arrow/keyboard look, matching the previous
+// behaviour — a minimap jump (rotateToWall) deliberately leaves it alone.
+function lookRight() {
+    if (archwayAnimating || shrineHeavensLocked()) return;
+    closeCinematicReader();
+    turnBy(-1, 1);
+}
+function lookLeft() {
+    if (archwayAnimating || shrineHeavensLocked()) return;
+    closeCinematicReader();
+    turnBy(+1, 1);
 }
 
 function targetShrinePosForFacingWall(targetWall) {
@@ -1375,34 +1495,13 @@ function targetShrinePosForFacingWall(targetWall) {
 }
 
 function rotateToWall(targetWall) {
-    if (isRotating || archwayAnimating || shrineHeavensLocked() || targetWall === getFacingWall()) return;
-    hideArchwayTip();
-    clearFacingTag();
-    isRotating = true;
-
-    const oldShrinePos = shrinePos;
+    if (archwayAnimating || shrineHeavensLocked()) return;
     const targetShrinePos = targetShrinePosForFacingWall(targetWall);
-
-    const rightSteps = mod6(oldShrinePos - targetShrinePos); // decrement shrinePos
-    const leftSteps = mod6(targetShrinePos - oldShrinePos);  // increment shrinePos
-
-    if (rightSteps <= leftSteps) {
-        refreshAlongPath(oldShrinePos, targetShrinePos, -1);
-        shrinePos = targetShrinePos;
-        currentRotation += rightSteps * 60;
-        animateSkyRotation(-rightSteps / 6);
-        bumpStarLayerRotation(-rightSteps / 6);
-    } else {
-        refreshAlongPath(oldShrinePos, targetShrinePos, +1);
-        shrinePos = targetShrinePos;
-        currentRotation -= leftSteps * 60;
-        animateSkyRotation(leftSteps / 6);
-        bumpStarLayerRotation(leftSteps / 6);
-    }
-
-    updatePrismTransform();
-    afterRotation();
-    updateRimCapCulling(oldShrinePos); // union-cull while the rotation runs
+    const rightSteps = mod6(shrinePos - targetShrinePos); // decrement shrinePos
+    const leftSteps = mod6(targetShrinePos - shrinePos);  // increment shrinePos
+    if (rightSteps === 0) return;                          // already facing (or already heading) there
+    if (rightSteps <= leftSteps) turnBy(-1, rightSteps);
+    else turnBy(+1, leftSteps);
 }
 
 // Back-compat names used elsewhere in this file.
@@ -1422,18 +1521,34 @@ if (prismContainer) {
     });
 }
 
-// Unlock rotation after CSS transition completes
+// Arrival. The old handler ran EVERYTHING here — facing tag, the exact rim-cap
+// cull (which touches every rim section and vertex), aleph chars, the archway
+// tip — in the same frame the transition ended, while the suspended grain /
+// serpentine-strip / star-twinkle repaints all resumed on that same frame too.
+// The turn decelerated beautifully and then landed with a thud. Only the
+// facing tag is genuinely needed on the settle frame (click hit-testing keys
+// off it and off .wall-panel[data-facing]'s transform-style:flat); the rest is
+// invisible for one frame, so it goes to the next one. See MOTION.md.
+function settleRotation() {
+    if (_rotWatchdog !== null) { clearTimeout(_rotWatchdog); _rotWatchdog = null; }
+    isRotating = false;
+    _rotUnionPositions = null;
+    setFacingTag();
+    requestAnimationFrame(() => {
+        if (isRotating) return; // another turn already began — its own settle will do this
+        updateRimCapCulling(); // rotation settled — exact cull set
+        updateAlephChars();
+        if (archwayOverlay && archwayOverlay.matches(':hover')) {
+            showArchwayTip();
+        }
+    });
+}
+
 if (prismContainer) {
     prismContainer.addEventListener('transitionend', (e) => {
-        if (e.propertyName === 'transform') {
-            isRotating = false;
-            setFacingTag();
-            updateRimCapCulling(); // rotation settled — exact cull set
-            updateAlephChars();
-            if (archwayOverlay && archwayOverlay.matches(':hover')) {
-                showArchwayTip();
-            }
-        }
+        if (e.target !== prismContainer || e.propertyName !== 'transform') return;
+        if (!isRotating) return; // a tilt or an instant snap, not a turn
+        settleRotation();
     });
 }
 
@@ -2164,13 +2279,26 @@ let _nextMeteorAtMs = 0;
 // it makes "the sky is never blank once the room is shown" true by construction
 // rather than by accident, matching the same fix in immersive.astro.
 let skyFrame = -1;
+let _skyMoveEndedFrame = -1000; // skyFrame at which the last rotation/tilt stopped
+
+// Twinkle refresh cadence for the compositor star layer, in frames. That layer
+// is three lap-copies wide, so one refresh redraws 3 x 80 stars plus 3 moon
+// sprites — measured at 75ms per 3 seconds of an idle chamber when it ran
+// every 3rd frame, two thirds of all the sky work the page was doing while
+// standing still. Each star's brightness cycle has a period of 8–31 seconds
+// (speed 0.2–0.8 against t * 0.001), so ~7fps is far more than enough to
+// render it smoothly, and the saving is headroom the heavens-tilt needs.
+const STAR_TWINKLE_EVERY = 9;
 let skyTiltOffset = 0; // normalized 0–1 vertical shift applied to star y-positions during tilt
 let skyRotationOffset = 0; // normalized 0–1 horizontal shift applied to star/cloud x-positions during rotation
 let _skyRotTarget = 0; // target value for animated sky rotation
 let _skyRotStart = 0;  // start value for animated sky rotation
 let _skyRotT0 = 0;     // animation start time
 let _skyRotWaiting = false; // true between animateSkyRotation() and the walls' transitionstart
-const SKY_ROT_DURATION = 800; // ms — matches CSS transition duration
+// Duration and curve now come from the rotation engine's per-leg values
+// (_rotDurMs / _rotEaseP, set by setRotationTiming from the CSS tokens), so a
+// re-targeted or multi-step turn keeps the sky in lockstep with the walls
+// instead of assuming a flat 800ms. See MOTION.md.
 
 function animateSkyRotation(delta) {
     _skyRotStart = skyRotationOffset;
@@ -2183,14 +2311,17 @@ function animateSkyRotation(delta) {
     _skyRotWaiting = true;
 }
 
-// Exact cubic-bezier(0.25, 0.46, 0.45, 0.94) — the chamber walls' CSS rotation
-// curve. The old piecewise-quadratic approximation started slow where the real
-// bezier starts fast, so the stars visibly lagged the walls at the beginning of
-// every rotation. Newton–Raphson solve of x(t) = progress, then evaluate y(t).
+// Exact evaluation of whatever cubic-bezier the walls are currently using —
+// _rotEaseP is set per leg by setRotationTiming() from the CSS tokens, so this
+// tracks --rot-ease / --rot-ease-continue automatically and can't drift from
+// the stylesheet. (An earlier piecewise-quadratic approximation started slow
+// where the real bezier starts fast, so the stars visibly lagged the walls at
+// the beginning of every rotation.) Newton–Raphson solve of x(t) = progress,
+// then evaluate y(t).
 function _rotBezier(x) {
     if (x <= 0) return 0;
     if (x >= 1) return 1;
-    const p1x = 0.25, p1y = 0.46, p2x = 0.45, p2y = 0.94;
+    const p1x = _rotEaseP[0], p1y = _rotEaseP[1], p2x = _rotEaseP[2], p2y = _rotEaseP[3];
     const cx = 3 * p1x, bx = 3 * (p2x - p1x) - cx, ax = 1 - cx - bx;
     const cy = 3 * p1y, by = 3 * (p2y - p1y) - cy, ay = 1 - cy - by;
     let t = x;
@@ -2214,7 +2345,7 @@ function tickSkyRotation() {
         _skyRotWaiting = false;
     }
     const elapsed = performance.now() - _skyRotT0;
-    const progress = Math.min(elapsed / SKY_ROT_DURATION, 1.0);
+    const progress = Math.min(elapsed / _rotDurMs, 1.0);
     const ease = _rotBezier(progress);
     skyRotationOffset = _skyRotStart + (_skyRotTarget - _skyRotStart) * ease;
     if (progress >= 1.0) {
@@ -2550,6 +2681,14 @@ function drawSky(t) {
     // repainted at 20fps while the walls moved at 60 — visible lag.
     const skyRotating = _skyRotStart !== _skyRotTarget;
     const skyMoving = skyRotating || _skyAnimFrame !== null;
+    // Staggered resumption (2026-08-07, see MOTION.md). Everything suspended
+    // for the duration of a turn — film grain, the serpentine border strip,
+    // the star twinkle — used to restart on the very frame the transition
+    // ended, piling onto the settle frame's own work and making the turn land
+    // with a thud. They now come back at different frames, cheapest first.
+    // None of it is perceptible: the eye is still catching up with the room.
+    if (skyMoving) _skyMoveEndedFrame = skyFrame;
+    const settled = skyFrame - _skyMoveEndedFrame;
     if (!skyMoving && skyFrame % 3 !== 0) { requestAnimationFrame(drawSky); return; }
     // Real elapsed time since the last DRAWN frame (skipped frames accumulate),
     // so meteor/cloud speeds are correct at both 20fps and 60fps.
@@ -2572,7 +2711,7 @@ function drawSky(t) {
             }
             starLayerCanvas.style.opacity = useStarLayer ? '1' : '0';
         }
-    } else if (useStarLayer && !skyMoving && skyFrame % 3 === 0) {
+    } else if (useStarLayer && !skyMoving && settled > 3 && skyFrame % STAR_TWINKLE_EVERY === 0) {
         paintStarLayerTiles(t); // twinkle refresh; suspended during rotation like the old grain/serp work
     }
 
@@ -2583,7 +2722,7 @@ function drawSky(t) {
         // Film-grain noise: skipped while the sky is moving — 200 fillRects of
         // random static are invisible during motion but cost real main-thread
         // time exactly when the walls' compositor transition needs it least.
-        if (!skyMoving) {
+        if (!skyMoving && settled > 1) {
             for (let i = 0; i < 200; i++) {
                 const seed = i * 73.137 + skyFrame * 0.01;
                 const nx = ((Math.sin(seed * 1.31) * 0.5 + 0.5) * w + Math.random() * 3) % w;
@@ -2694,7 +2833,7 @@ function drawSky(t) {
     // compositor is transitioning) and rebuilds an SVG gradient — a guaranteed
     // main-thread hit right when the walls are gliding. It resumes on arrival;
     // an 800ms pause in the border shimmer is imperceptible.
-    if (!isSkyView && !skyMoving && skyFrame % 6 === 0) renderSerpStrip(t * 0.0003);
+    if (!isSkyView && !skyMoving && settled > 6 && skyFrame % 6 === 0) renderSerpStrip(t * 0.0003);
 
     if (_motesOn) drawMotes(t, dt);
 
