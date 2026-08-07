@@ -854,9 +854,39 @@ function resetShrineSearch() {
 // #world-tilt with transform-origin z at the perspective distance, reverted same day):
 // a rigid head-tilt swings the rear rim/wall-top geometry — never designed to be seen —
 // into view overhead at full tilt. The wall-plane hinge keeps it below the frame.
+// The tilt in flight, as data rather than as a value one callback writes for
+// another to read. See tiltAt() below — this is what makes the sky and the
+// walls agree exactly.
+let _tiltAnim = null; // { t0, dur, from, span }
+
+// The tilt angle at a given frame timestamp. Pure: same timestamp in, same
+// angle out, no matter who asks or in what order.
+//
+// Why this exists (2026-08-07 — M: "the starry sky field doesn't quite move
+// right, like there's a tiny bit of latency"). The walls are moved by
+// startLookUpAnim's rAF tick; the sky is drawn by drawSky's *separate* rAF
+// loop. The tick used to WRITE skyTiltOffset and drawSky used to READ it — so
+// which of the two ran first inside a frame decided whether the sky was
+// current or one frame stale. drawSky's loop has been running since page load,
+// so it had always registered its next callback first, and it therefore always
+// ran first: measured at 113 frames out of 114 across a full tilt, the sky
+// drew with the PREVIOUS frame's tilt. Mean 0.80 degrees behind the walls,
+// peaking at 3.72 near the steepest part of the curve — about 23px of sky
+// displacement at 800px tall. Exactly the "latency" M could see.
+//
+// Both rAF callbacks in a frame receive the SAME timestamp, so deriving the
+// angle from that timestamp in both places makes the ordering irrelevant.
+function tiltAt(now) {
+    if (!_tiltAnim) return currentTilt;
+    const t = Math.min((now - _tiltAnim.t0) / _tiltAnim.dur, 1);
+    const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; // easeInOutCubic
+    return _tiltAnim.from + eased * _tiltAnim.span;
+}
+
 function startLookUpAnim(fromDeg, toDeg, durationMs, onComplete) {
     if (!prismContainer) { onComplete?.(); return; }
     if (_skyAnimFrame) { cancelAnimationFrame(_skyAnimFrame); _skyAnimFrame = null; }
+    _tiltAnim = null;
 
     // Suppress the CSS wall-rotation transition so rAF drives every frame cleanly.
     // Force a reflow after setting transition:none — without it the browser batches the
@@ -866,21 +896,20 @@ function startLookUpAnim(fromDeg, toDeg, durationMs, onComplete) {
     currentTilt = fromDeg;
     updatePrismTransform();
 
-    const startTime = performance.now();
-    const span = toDeg - fromDeg;
+    // t0 is in the same clock rAF timestamps come from, so tiltAt() can be
+    // called with either performance.now() or a frame timestamp.
+    _tiltAnim = { t0: performance.now(), dur: durationMs, from: fromDeg, span: toDeg - fromDeg };
 
     function tick(now) {
-        const t = Math.min((now - startTime) / durationMs, 1);
-        // easeInOutCubic — smooth start and end
-        const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-        currentTilt = fromDeg + eased * span;
+        currentTilt = tiltAt(now);
         skyTiltOffset = currentTilt / 90 * 0.7;
         updatePrismTransform();
 
-        if (t < 1) {
+        if (now - _tiltAnim.t0 < durationMs) {
             _skyAnimFrame = requestAnimationFrame(tick);
         } else {
             _skyAnimFrame = null;
+            _tiltAnim = null; // currentTilt / skyTiltOffset are already at their final values
             // Restore CSS transition for normal wall rotation
             prismContainer.style.transition = '';
             onComplete?.();
@@ -2679,6 +2708,12 @@ function drawSky(t) {
     // skyTiltOffset in the same rAF as the chamber transform). Otherwise
     // throttle to every 3rd frame. The old check ignored tilts, so stars
     // repainted at 20fps while the walls moved at 60 — visible lag.
+    // Re-derive the tilt from THIS frame's timestamp rather than trusting the
+    // value startLookUpAnim's tick left behind — that tick may not have run
+    // yet this frame (measured: it almost never had), which put the whole sky
+    // one frame behind the walls for the length of every tilt. See tiltAt().
+    if (_tiltAnim) skyTiltOffset = tiltAt(t) / 90 * 0.7;
+
     const skyRotating = _skyRotStart !== _skyRotTarget;
     const skyMoving = skyRotating || _skyAnimFrame !== null;
     // Staggered resumption (2026-08-07, see MOTION.md). Everything suspended

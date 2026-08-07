@@ -11,8 +11,12 @@ make them feel better. This is the investigation + plan for the standing item
 > **Slices A–D are built (2026-08-07) and await M's eye on the tunnel** — see
 > *What shipped* at the bottom for the after-measurements. The findings below
 > are kept as written, because they are the evidence the work rests on.
-> **Slices E and F (the heavens-tilt) are NOT built** — the tilt is still
-> per-frame JS on the main thread, exactly as finding 5 describes.
+> **The tilt's sky latency (finding 9) is fixed** — M reported it after
+> trying slices A–D, it was measured, and it turned out to be a one-frame
+> callback-ordering bug rather than anything structural.
+> **Slices E and F are still NOT built** — the tilt is still per-frame JS on
+> the main thread, exactly as finding 5 describes. What remains there is frame
+> *rate* under load, not lag.
 
 > **Not to be confused with** the sky-motion work (`AMELIORATION.md`, round 4).
 > That was about the *star canvas* keeping pace with the walls, and is
@@ -404,3 +408,52 @@ Offered alongside this investigation; M picked three of four. Not started.
 
 Declined for now: coupling rotation and tilt to the audio engine (a stone-grind
 swell under the turn, a rising tone on the tilt).
+
+
+---
+
+## 9. ✔ The sky ran exactly one frame behind the walls for the whole tilt
+
+**Found 2026-08-07, after M tried slices A–D:** *"The tiltback isn't clunky in
+the same way the chamber view rotation was. It's more like the starry sky field
+doesn't quite move right, like there's a tiny bit of latency."*
+
+He was right, and it was measurable. The walls are moved by
+`startLookUpAnim`'s rAF tick, which **wrote** `skyTiltOffset`; the sky is drawn
+by `drawSky`'s *separate* rAF loop, which **read** it. Two callbacks, one
+shared variable — so which ran first inside a frame decided whether the sky was
+current or stale.
+
+`drawSky`'s loop has been running since page load and therefore always
+registers its next callback before the tilt tick registers its own, so it
+always ran first. Measured across a full 4200ms ascent: **113 frames out of
+114, the sky drew with the previous frame's tilt.** Mean **0.80°** behind the
+walls, peaking at **3.72°** at the steepest part of the easing curve — on an
+800px viewport, where 90° of tilt pans the sky by 0.7 of the height, that's
+about **23px of sky displacement** at the worst moment. Comfortably visible,
+and constant, which is exactly why it read as *latency* rather than as jitter.
+
+Note this had nothing to do with frame rate, main-thread load, or the
+compositor. Three previous rounds of sky-motion work (`AMELIORATION.md`) all
+attacked timing precision and per-frame cost. This was an ordering bug sitting
+underneath all of them, and it would have survived slice E untouched.
+
+**Fix:** the tilt is now data (`_tiltAnim = {t0, dur, from, span}`) plus a pure
+function `tiltAt(now)`. Both rAF callbacks in a frame receive the *same*
+timestamp, so both deriving the angle from that timestamp makes the ordering
+irrelevant. `drawSky` re-derives `skyTiltOffset` from its own frame timestamp
+instead of trusting what the tick left behind.
+
+**Verified:** `tiltAt` instrumented across a full up-tilt and a full down-tilt —
+113 and 52 frames respectively, **every** frame has both callers asking with
+the same timestamp and receiving an identical angle, worst disagreement
+0.0000°, no unpaired frames. Regression-tested with no console or page errors:
+night and day shrine tilts, the Mythos horoscope tilt, a tilt interrupted
+mid-ascent by `leaveShrineHeavens` (settles clean — `_tiltAnim` null,
+`currentTilt` 0), portrait + `prefers-reduced-motion`, the ASCII gallery, and
+rotation after each tilt.
+
+**What this does NOT fix:** the tilt still runs per-frame on the main thread at
+a measured ~27fps in the headless harness (finding 5). The sky no longer *lags*
+the walls, but both can still drop frames together under load. That's slice E,
+and it's still the right next move — just no longer the thing M could see.
