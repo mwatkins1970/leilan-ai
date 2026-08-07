@@ -6,17 +6,19 @@ Scope: how the chamber's two big movements — **wall rotation** (left/right) an
 make them feel better. This is the investigation + plan for the standing item
 "geometric-motion polish" in `AMELIORATION.md`.*
 
-> ## Status
+> ## Status: SIGNED OFF by M, 2026-08-07
 >
-> **Slices A–D are built (2026-08-07) and await M's eye on the tunnel** — see
-> *What shipped* at the bottom for the after-measurements. The findings below
-> are kept as written, because they are the evidence the work rests on.
-> **The tilt's sky latency (finding 9) is fixed** — M reported it after
-> trying slices A–D, it was measured, and it turned out to be a one-frame
-> callback-ordering bug rather than anything structural.
-> **Slices E and F are still NOT built** — the tilt is still per-frame JS on
-> the main thread, exactly as finding 5 describes. What remains there is frame
-> *rate* under load, not lag.
+> Rotation: *"the rotations seem a lot smoother now. I'm going to take this!"*
+> Tilt latency: *"a LOT less jittery/latency-plagued. Maybe still a touch of it
+> still there, but I reckon we should sign off on this issue."*
+>
+> **Built and accepted:** slices A–D (the rotation engine) and finding 9 (the
+> tilt's one-frame sky lag). **Deliberately not built:** slices E and F — the
+> tilt is still per-frame JS on the main thread at a measured ~27fps in the
+> headless harness. That residual is the most likely source of the "touch of
+> it still there" M can still feel, and it is a known, scoped, unstarted piece
+> of work — **not** a mystery. Don't reopen this file speculatively; reopen it
+> if and when someone wants slice E.
 
 > **Not to be confused with** the sky-motion work (`AMELIORATION.md`, round 4).
 > That was about the *star canvas* keeping pace with the walls, and is

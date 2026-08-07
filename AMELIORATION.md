@@ -320,44 +320,29 @@ entry in CLAUDE.md (the section map's sky row is already updated) and move to
 
 ---
 
-## 🔷 OPEN, M's standing request (raised 2026-08-03): geometric-motion polish
+## ✅ RESOLVED 2026-08-07 (M signed off): geometric-motion polish
 
-> **➡️ Investigated, planned and half-built 2026-08-07 — see
-> [`MOTION.md`](./MOTION.md), which now owns this thread entirely.**
->
-> The **rotation** side (slices A–D) is **built and awaits M's eye**: mid-turn
-> clicks now re-target the turn in flight instead of being discarded (measured
-> 1-of-4 → 4-of-4 registered), an ease-in-out curve replaces the ease-out that
-> left rest at 1.84× average velocity, duration scales with distance travelled,
-> and the settle frame no longer carries every deferred job at once.
->
-> The **heavens-tilt** side (slices E–F) is **not built**. It's still per-frame
-> JS on the main thread — measured at ~27fps across a 4200ms tilt — and the
-> tilt back runs 2.1× faster than the tilt up for the same 90°. That is the
-> most likely home of the "tiltback" clunkiness M named, and it's what comes
-> next here. It wants doing as one piece of work with item 4 below (extending
-> the compositor star layer to tilt), not twice.
+Owned entirely by [`MOTION.md`](./MOTION.md) — investigation, measurements,
+what was built, and what was deliberately left. Short version:
 
-**M's words:** the rotation and heavens-tilt-back mechanisms "aren't bad at
-all", but "if I were a pro game developer, I'd be trying to make this stuff
-as smooth as possible" — there's "still a touch of clunkiness to iron out in
-the various geometrical motions." Not a bug report; a standing quality bar.
-Re-raised 2026-08-07 with the book three weeks out.
-
-Note this is **distinct from** the sky-motion work above, which was about the
-*star canvas* keeping pace with the walls. This is about how the wall motion
-itself *feels*.
-
-The original framing is superseded by `MOTION.md` and not repeated here, with
-one item still live and not yet owned by that file:
-
-4. **Sky-layer extension** (carried over from the round-4 list above):
-   extending the compositor star layer to tilt. Do it together with slice E.
-
-The old warning on this section — *don't act on a general description without
-pinning the symptom first*, the lesson of Known Issue #1 — was honoured by
-measuring before building; `MOTION.md`'s findings section is that measurement,
-and it stands as the model for the tilt work too.
+- **Rotation** (slices A–D): mid-turn clicks now re-target the turn in flight
+  instead of being discarded (measured 1-of-4 → 4-of-4 registered); the easing
+  is a real ease-in-out instead of an ease-out that left rest at 1.84× average
+  velocity; duration scales with distance travelled; the settle frame no longer
+  carries every deferred job at once. M: *"a lot smoother now. I'm going to
+  take this!"*
+- **The tilt's sky latency**: the star canvas ran exactly one frame behind the
+  walls on 113 frames out of 114 — an rAF callback-ordering bug (one callback
+  wrote `skyTiltOffset`, the other read it), not a performance problem. Fixed
+  by deriving the angle from the frame timestamp in both places. M: *"a LOT
+  less jittery/latency-plagued... I reckon we should sign off on this issue."*
+  Worth remembering that three earlier rounds of sky-motion work all attacked
+  timing precision and per-frame cost while this sat underneath them.
+- **Still open, by choice**: slice E — moving the heavens-tilt itself onto the
+  compositor (it's still per-frame JS on the main thread, ~27fps headless).
+  Scoped in `MOTION.md`. Extending the compositor star layer to tilt — the
+  leftover item from the round-4 list above — is the same piece of work and
+  should be done with it, not twice.
 
 ---
 
