@@ -9,20 +9,33 @@ html { overscroll-behavior: none; }
    handles day mode). prism.js reads these values at init via getComputedStyle
    rather than hard-coding them, so tuning happens here and nowhere else.
 
-   --rot-ease starts a turn from rest: an ease-IN-out, so the room accelerates
-   like something with mass. (Until 2026-08-07 this was easeOutQuad,
-   cubic-bezier(0.25,0.46,0.45,0.94), which leaves rest at 1.84x average
-   velocity instantly and finishes at 0.11x — a 17:1 ratio that read as a
-   lurch followed by a drift.)
+   --rot-ease is the curve a turn follows. REVERTED 2026-08-22 to the original
+   easeOutQuad after M found the ease-in-out too fast on the live site: "it's
+   like the adjacent wall just suddenly appears in front of me, rather than the
+   smooth rotation we had before."
 
-   --rot-ease-continue is used only when a turn is RE-TARGETED mid-flight
-   (the visitor clicked again while the room was already moving). The room is
-   already at speed, so this curve starts with matching velocity (~1.45x) and
-   eases out — the turn extends instead of stopping and starting. */
+   He was right, and the duration was never the problem — both curves run for
+   --rot-dur. What changed was where the movement is SPENT. Measured:
+
+       cubic-bezier(0.25,0.46,0.45,0.94)  peak 1.88x avg  middle 60% in 340ms
+       cubic-bezier(0.4,0,0.2,1)          peak 2.73x avg  middle 60% in 229ms
+
+   The ease-in-out concentrates the turn into a central burst 33% quicker with
+   a 45% higher peak, then dawdles at both ends — so the wall whips past and
+   the motion feels sudden even though the clock says 800ms either way. The
+   theory that a stone room should accelerate from rest was sound; it just
+   loses to the fact that the visitor watches the middle of the turn, not the
+   ends. Don't re-apply an ease-in-out here without reading this.
+
+   --rot-ease-continue applies only when a turn is RE-TARGETED mid-flight
+   (see turnBy in prism.js — clicks during a turn extend it rather than being
+   discarded). Same curve: it is already an ease-out, which is the right shape
+   for a body that is moving, and at 1.88x it has the lowest peak of anything
+   tried. */
 :root {
     --rot-dur: 800ms;
-    --rot-ease: cubic-bezier(0.4, 0, 0.2, 1);
-    --rot-ease-continue: cubic-bezier(0.22, 0.32, 0.25, 1);
+    --rot-ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    --rot-ease-continue: cubic-bezier(0.25, 0.46, 0.45, 0.94);
 
     /* --- Moonlight (2026-08-07) ---
        How much light tonight's real moon throws into the chamber. Set by
