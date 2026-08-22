@@ -81,10 +81,9 @@ const siteJsonLd = {
         left: 0;
         width: 100%;
         height: 100%;
-        background-image: url('/bg.jpg');
-        background-position: center;
-        background-repeat: no-repeat;
-        background-size: cover;
+        /* /bg.jpg was removed in the 2026-07-03 bandwidth pass; this overlay
+           has painted nothing since, and the declaration only fired a 404 on
+           every page load. Kept as an empty layer so stacking is unchanged. */
         z-index: 1;
       }
 
