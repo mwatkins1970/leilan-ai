@@ -90,7 +90,14 @@ in existence queues or blends this input.
 *(`AMELIORATION.md` currently says rapid clicks "restart rather than blend" —
 that's wrong, they're discarded. Fix that line when this work lands.)*
 
-### 2. The rotation easing curve jumps into motion and mushes out of it
+### 2. The rotation easing curve jumps into motion and mushes out of it — ⚠️ ACTED ON, THEN REVERTED
+
+> **Correction, 2026-08-22.** The ease-in-out prescribed here was shipped and
+> M rejected it: the visitor watches the MIDDLE of a turn, not the ends, and
+> an ease-in-out concentrates the movement into a central burst (peak 2.73x
+> average against easeOutQuad's 1.88x). The original curve is restored and
+> should stay. The analysis below is left as written because the arithmetic is
+> correct — it is the conclusion drawn from it that was wrong.
 
 `cubic-bezier(0.25, 0.46, 0.45, 0.94)` — jQuery's `easeOutQuad` — is a pure
 ease-**out**. Its initial slope is `0.46/0.25 = 1.84`, i.e. the chamber leaves
@@ -466,3 +473,48 @@ rotation after each tilt.
 a measured ~27fps in the headless harness (finding 5). The sky no longer *lags*
 the walls, but both can still drop frames together under load. That's slice E,
 and it's still the right next move — just no longer the thing M could see.
+
+
+---
+
+## 10. ✔ The rotation ran 6.7x too fast in production for one morning
+
+**2026-08-22.** M, on the live site: *"the rotation inside the prism is too
+fast, it's like the adjacent wall just suddenly appears in front of me."*
+After the easing curve was reverted (finding 2 below was wrong — see the
+correction there) he was still emphatic: *"still way too swift... it was great
+for weeks and weeks and now it's really unsatisfying."*
+
+He was right both times, and the second time it was a straightforward bug.
+
+`--rot-dur: 800ms` in the source. **Astro's CSS minifier rewrites that to the
+equivalent `.8s` in the built stylesheet.** `BASE_ROT_MS` was
+`parseFloat(_cssToken('--rot-dur'))`, which on `.8s` returns **0.8**, so every
+turn's computed duration collapsed onto the `Math.max(120, ...)` floor: a
+60-degree sweep in **120ms instead of 800ms**. Measured live before the fix:
+`BASE_ROT_MS: 0.8`, applied transition `0.12s`, middle-60% of the turn crossing
+in **50ms** against the correct ~305ms.
+
+**Why nothing caught it.** The dev server does not minify. Every local run and
+every Cloudflare-tunnel check — including M's own approval on 2026-08-07 —
+served the unminified `800ms` and measured a perfect 800ms turn. The bug
+existed *only* in the production build, which is why it appeared the morning
+of the first deploy after 2026-08-03 and why "it was great for weeks and
+weeks" was literally true: production had been serving the old pure-CSS
+rotation the whole time.
+
+**Fix:** `_cssTimeMs()` parses CSS `<time>` unit-aware (`800ms` and `.8s` both
+give 800) with a 200–5000ms sanity clamp falling back to the default.
+
+**Rules this leaves behind, which matter more than the fix:**
+1. **Any CSS custom property read by JS must be parsed unit-aware**, because
+   the minifier is free to rewrite it to any equivalent form. Values are
+   preserved; *spellings* are not.
+2. **Timing/layout changes must be verified against `npm run build` output**
+   — `npx astro preview` — not just `npm run dev` or the tunnel. The tunnel
+   proves the design; only a production build proves the shipped artefact.
+3. A defensive floor (`Math.max(120, ...)`) turned a catastrophic value into a
+   *plausible* one. Without it the turn would have been 1ms and instantly
+   obviously broken. Clamps hide bugs as readily as they contain them — pair
+   them with a sanity check that rejects nonsense rather than silently
+   flooring it.

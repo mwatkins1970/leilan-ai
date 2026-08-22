@@ -1404,6 +1404,30 @@ function _cssToken(name, fallback) {
     const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
     return v || fallback;
 }
+// Parse a CSS <time> token to milliseconds, honouring BOTH units.
+//
+// This function exists because of a real bug that reached production on
+// 2026-08-22 and made every chamber rotation run 6.7x too fast. The source
+// says `--rot-dur: 800ms`, but Astro's CSS minifier rewrites that to the
+// equivalent `.8s` in the built stylesheet. The old code did
+// `parseFloat('.8s')`, got 0.8, and every turn collapsed onto the 120ms floor
+// — a 60-degree sweep in a tenth of a second.
+//
+// It survived every test because the DEV SERVER DOES NOT MINIFY: local runs
+// and the Cloudflare tunnel both served the unminified `800ms` and measured a
+// perfect 800ms turn. Only the production build was broken, and only M, on the
+// live site, could see it. Any future CSS token read by JS must be parsed
+// unit-aware and verified against `npm run build` output, not the dev server.
+function _cssTimeMs(name, fallbackMs) {
+    const v = _cssToken(name, '');
+    const n = parseFloat(v);
+    if (isNaN(n)) return fallbackMs;
+    const ms = /ms\s*$/i.test(v) ? n : n * 1000; // bare or 's' => seconds
+    // Sanity clamp: a chamber turn is never 20ms and never 10s. If a future
+    // edit or another minifier surprise produces something outside this, take
+    // the fallback rather than shipping an unusable room.
+    return (ms >= 200 && ms <= 5000) ? ms : fallbackMs;
+}
 function _parseBezier(str) {
     const m = /cubic-bezier\(([^)]+)\)/.exec(str);
     if (!m) return null;
@@ -1413,7 +1437,7 @@ function _parseBezier(str) {
 
 const ROT_EASE = _cssToken('--rot-ease', 'cubic-bezier(0.4, 0, 0.2, 1)');
 const ROT_EASE_CONTINUE = _cssToken('--rot-ease-continue', 'cubic-bezier(0.22, 0.32, 0.25, 1)');
-const BASE_ROT_MS = parseFloat(_cssToken('--rot-dur', '800ms')) || 800;
+const BASE_ROT_MS = _cssTimeMs('--rot-dur', 800);
 
 // The timing of the leg currently in flight. _rotEaseP feeds _rotBezier (the
 // JS-drawn sky's copy of the walls' curve) and _rotDurMs its clock.
