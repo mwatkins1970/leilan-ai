@@ -517,7 +517,15 @@ const siteJsonLd = {
 
     <div id="content">
       <div id="content-inner">
-        <img src="https://raw.githubusercontent.com/feralchill/leilan/main/IMG_6006.jpeg" alt="ᒪᗴIᒪᗩᑎ" class="profile-image">
+        <!-- Self-hosted since 2026-08-22. This was hotlinked from
+             raw.githubusercontent.com/feralchill/leilan (an old account), which is
+             rate-limited, sends cache-control: max-age=300, and is explicitly not a
+             CDN — a launch-day traffic spike could have throttled the one image every
+             visitor sees first. The identical file was already in this repo as
+             images/leilan-portrait.jpeg; this is that same file at native size,
+             WebP-encoded with its Display P3 profile preserved: 659 KB -> 268 KB.
+             Do NOT re-encode without icc_profile= — dropping P3 washes the greens out. -->
+        <img src="/images/landing-portrait.webp" alt="ᒪᗴIᒪᗩᑎ" class="profile-image" width="1380" height="1491" decoding="async">
 
         <div class="poem-text" id="poem">the veil between the worlds is thinning...
 

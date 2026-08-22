@@ -109,6 +109,7 @@ leilan-ai/
 
 ## Design System
 
+- **Landing portrait**: `/images/landing-portrait.webp` (1380×1491, 322 KB). Self-hosted 2026-08-22 — it was hotlinked from `raw.githubusercontent.com/feralchill/leilan` (old account, rate-limited, `max-age=300`, not a CDN: a launch-day spike could have throttled the first image every visitor sees). The identical file was already in the repo as `images/leilan-portrait.jpeg` (the OG-card source), so the hotlink was never needed. ⚠️ **The source carries a Display P3 ICC profile — re-encode with `icc_profile=` preserved or the greens wash out visibly** (measured: black patch 90→112, green 115→143 when dropped).
 - **Body font**: `IBM Plex Mono`, weights 300/400
 - **Per-chamber display fonts**: Spectral (Research), Marcellus (OVS), IM Fell English (Mythos), Crimson Pro (Scriptorium), Cormorant Garamond (default labels)
 - **Primary accent**: `#5eefa2` (emerald green) — landing page and nav
