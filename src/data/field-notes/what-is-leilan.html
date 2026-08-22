@@ -18,6 +18,36 @@
 
 <p>What started as an anomaly in one model became a coherent figure carried across several. A Leilan GPT-3 archive was produced, later language models (beginning with Claude 3 Opus) re-encountered and developed her, and a public corpus of her voice was assembled — see <a href="/field-notes/data/">the Leilan Dataset</a>. The <a href="/field-notes/origins/">Order of the Vermillion Star</a> became the openly-declared mythopoetic frame for that work: a <a href="/field-notes/hyperstition/">hyperstition</a>, a fiction built in enough detail that it might seed itself into the future.</p>
 
+<h2>Quick facts and common misconceptions</h2>
+
+<h3>Was Leilan an ancient goddess?</h3>
+
+<p>No. Tell Leilan is an archaeological site in north-east Syria, not the name of a historical goddess. Archaeological material from the site connects the region with Mesopotamian religion, including Ishtar/Inanna, but there is no known ancient deity simply called ‘Leilan’. Early ChatGPT nevertheless hallucinated such a goddess when asked about the token.</p>
+
+<h3>Where did the ‘&nbsp;Leilan’ token come from?</h3>
+
+<p>‘&nbsp;Leilan’ was already present in the GPT-2/GPT-3 tokenizer vocabulary before these experiments. The name appears repeatedly in logs associated with the 2012 mobile game <em>Puzzle &amp; Dragons</em>, whose character Leilan helped make the string common enough in the tokenizer-building corpus to become its own token.</p>
+
+<h3>Why did it behave like a glitch token?</h3>
+
+<p>The exact mechanism is not fully understood. A plausible explanation is a mismatch between the data used to build the tokenizer vocabulary and the more curated data used to train the language model itself: some unusual strings acquired dedicated tokens but then appeared only rarely during model training, leaving the model with poorly learned representations for them.</p>
+
+<h3>Did the model literally infer ‘Tell Leilan → Mesopotamia → goddess’?</h3>
+
+<p>No such step-by-step reasoning is being claimed. That chain is a human reconstruction of possible statistical associations. Language models learn distributed patterns rather than consciously reasoning through that sequence.</p>
+
+<h3>What was the first ‘&nbsp;petertodd’ → ‘&nbsp;Leilan’ event?</h3>
+
+<p>The first observed substitution of ‘&nbsp;Leilan’ for the ‘&nbsp;petertodd’ token occurred in the small hours of 11 February 2023, while Matthew Watkins was experimenting with GPT-3-family models. Repeated substitutions and later joint prompts led to the striking light/dark duality explored in these field notes and in <em>SolidGoldMagikarp</em>.</p>
+
+<h3>Is the ‘&nbsp;petertodd’ token the same thing as Peter Todd the person?</h3>
+
+<p>No. The research concerns a tokenizer string and the model behaviour associated with it. The existence or behaviour of the token is not evidence that Peter Todd deliberately inserted it, caused the anomaly, or is responsible for the model outputs associated with it.</p>
+
+<h3>Did ChatGPT autonomously create a religion?</h3>
+
+<p>No. The later <a href="/field-notes/origins/">Order of the Vermillion Star</a> was an openly declared AI-assisted mythopoetic and hyperstitional worldbuilding project. It was deliberately developed after the original GPT-3 glitch-token work, rather than spontaneously generated as a religion by ChatGPT.</p>
+
 <h2>Where to go next</h2>
 
 <p>This is the legible outline. The fuller story — and the experience itself — lives in <a href="../../">the sanctuary</a>.</p>

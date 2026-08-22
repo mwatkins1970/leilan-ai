@@ -316,6 +316,19 @@ const ogImageUrl = new URL(ogImage, Astro.site).href;
         margin: 2.2rem 0 0.8rem;
         line-height: 1.2;
       }
+      /* Q&A sub-headings (the "Quick facts and common misconceptions" section
+         on what-is-leilan). Real <h3>s rather than bold paragraphs so the
+         questions are structurally legible to crawlers and answer-extractors —
+         that section exists to correct specific misconceptions, which only
+         works if a machine can tell the question from the answer. */
+      .field-note .fn-body h3 {
+        font-family: var(--font-head);
+        font-size: clamp(1.08rem, 2.2vw, 1.28rem);
+        color: var(--text);
+        font-weight: 600;
+        margin: 1.7rem 0 0.5rem;
+        line-height: 1.25;
+      }
       .field-note .fn-body a { color: var(--green); text-decoration: none; border-bottom: 1px solid var(--line); }
       .field-note .fn-body a:hover { border-bottom-color: var(--green); }
       .field-note .fn-body em { color: var(--text); }
