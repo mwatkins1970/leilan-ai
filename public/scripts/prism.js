@@ -2119,9 +2119,10 @@ const skyCanvas = document.getElementById('sky-canvas');
 const skyCtx = skyCanvas.getContext('2d');
 
 // Day/night state — true celestial time: if the visitor hasn't chosen a sky yet
-// this session, default to their actual local time of day (day 07:00–18:59) and
-// store it so every page agrees. The ☀/☾ toggle still overrides at any time.
-if (!sessionStorage.getItem('skyMode')) {
+// this session, default to whether the sun is up where they are (sky-clock.js)
+// and store it so every page agrees. The ☀/☾ toggle still overrides at any time.
+if (window.leilanSeedSkyMode) leilanSeedSkyMode();
+else if (!sessionStorage.getItem('skyMode')) {
     const _hr = new Date().getHours();
     sessionStorage.setItem('skyMode', (_hr >= 7 && _hr < 19) ? 'day' : 'night');
 }

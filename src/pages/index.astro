@@ -466,13 +466,15 @@ const siteJsonLd = {
     </style>
   </head>
   <body>
+    <script is:inline src="/scripts/sky-clock.js"></script>
     <script is:inline>
-      // True celestial time: first arrival with no sky preference defaults to the
-      // visitor's actual local time of day (day 07:00–18:59). Runs before any
+      // True celestial time: first arrival with no sky preference defaults to
+      // whether the sun is up where the visitor is (sky-clock.js). Runs before any
       // other script reads skyMode; the ☀/☾ toggle still overrides for the session.
-      if (!sessionStorage.getItem('skyMode')) {
-        var _hr = new Date().getHours();
-        sessionStorage.setItem('skyMode', (_hr >= 7 && _hr < 19) ? 'day' : 'night');
+      if (window.leilanSeedSkyMode) leilanSeedSkyMode();
+      else if (!sessionStorage.getItem('skyMode')) {
+          var _hr = new Date().getHours();
+          sessionStorage.setItem('skyMode', (_hr >= 7 && _hr < 19) ? 'day' : 'night');
       }
     </script>
     <OrientationGate />

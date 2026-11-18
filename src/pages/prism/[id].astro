@@ -436,6 +436,7 @@ const masksJson = JSON.stringify(masks);
     {isArtGallery && (
         <script is:inline set:html={`window.IMAGE_CAPTIONS = ${JSON.stringify(imageCaptions)};`} />
     )}
+    <script is:inline src="/scripts/sky-clock.js"></script>
     <script is:inline src="/scripts/prism.js"></script>
 </body>
 </html>
